@@ -89,7 +89,19 @@ pub fn copy_to_clipboard(text: &str, display: &DisplayServer) -> Result<()> {
 }
 
 fn inject_wayland(text: &str) -> Result<()> {
-    // Copy to clipboard first
+    // Save current clipboard to restore later
+    let saved_clipboard = Command::new("wl-paste")
+        .output()
+        .ok()
+        .and_then(|output| {
+            if output.status.success() {
+                Some(output.stdout)
+            } else {
+                None
+            }
+        });
+
+    // Copy transcription to clipboard
     info!("Copying text to clipboard ({} chars)", text.len());
     copy_wayland(text)?;
     info!("Clipboard copy successful");
@@ -119,6 +131,21 @@ fn inject_wayland(text: &str) -> Result<()> {
 
     if !status.success() {
         anyhow::bail!("wtype exited with status: {}", status);
+    }
+
+    // Restore original clipboard
+    if let Some(saved) = saved_clipboard {
+        std::thread::sleep(std::time::Duration::from_millis(50)); // Wait for paste to complete
+        let mut child = Command::new("wl-copy")
+            .stdin(Stdio::piped())
+            .spawn()
+            .context("Failed to spawn wl-copy for clipboard restore")?;
+
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin.write_all(&saved).ok();
+        }
+        child.wait().ok();
+        info!("Restored original clipboard ({} bytes)", saved.len());
     }
 
     Ok(())
