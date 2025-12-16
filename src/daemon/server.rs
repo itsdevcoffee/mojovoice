@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use tracing::{debug, error, info};
 
-use crate::audio::capture::capture_toggle;
+use crate::audio::capture_toggle;
 use crate::daemon::protocol::{DaemonRequest, DaemonResponse};
 use crate::state;
 use crate::transcribe::Transcriber;
