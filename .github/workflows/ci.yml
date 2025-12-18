@@ -117,6 +117,12 @@ jobs:
       - name: Build with CUDA
         run: cargo build --release --features cuda
 
+      - name: Verify CUDA artifact
+        run: |
+          file target/release/dev-voice
+          ldd target/release/dev-voice | grep -E 'libcudart\.so\.12' || (echo "ERROR: CUDA artifact missing cudart.so.12 dependency" && exit 1)
+          echo "✓ CUDA artifact verified"
+
       - name: Upload CUDA artifact
         uses: actions/upload-artifact@v4
         with:
@@ -180,6 +186,17 @@ jobs:
 
       - name: Build release binary
         run: cargo build --release
+
+      - name: Verify artifact (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          file target/release/dev-voice
+          # CPU artifact should NOT depend on CUDA libraries
+          if ldd target/release/dev-voice | grep -E 'libcudart|libcublas'; then
+            echo "ERROR: CPU artifact has CUDA dependencies!"
+            exit 1
+          fi
+          echo "✓ CPU artifact verified (no CUDA dependencies)"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
