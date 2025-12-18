@@ -5,28 +5,67 @@
 #   ./scripts/run-cuda12-ollama.sh daemon
 #   ./scripts/run-cuda12-ollama.sh start --duration 10
 #
-# Or set DEVVOICE_BINARY environment variable:
-#   DEVVOICE_BINARY=./path/to/dev-voice ./scripts/run-cuda12-ollama.sh daemon
+# Environment variables:
+#   DEVVOICE_BINARY - Override binary location
+#   DEVVOICE_DEBUG  - Print library loading info
+#   DEVVOICE_STRICT - Use ONLY Ollama libs (ignore system LD_LIBRARY_PATH)
 
-# Add Ollama's CUDA 12 libs to library path
-export LD_LIBRARY_PATH=/usr/local/lib/ollama${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+# Set library path
+if [ "$DEVVOICE_STRICT" = "1" ]; then
+    # Strict mode: Only Ollama (prevents Python CUDA pollution)
+    export LD_LIBRARY_PATH=/usr/local/lib/ollama
+else
+    # Normal mode: Ollama first, then existing paths
+    export LD_LIBRARY_PATH=/usr/local/lib/ollama${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+fi
 
 # Find dev-voice binary
 BINARY="${DEVVOICE_BINARY:-./dev-voice}"
 
 if [ ! -x "$BINARY" ]; then
-    # Try common locations
+    # Try common locations (prefer artifacts/ over docs/tmp/)
     if [ -x "$HOME/.local/bin/dev-voice-cuda" ]; then
         BINARY="$HOME/.local/bin/dev-voice-cuda"
     elif [ -x "./target/release/dev-voice" ]; then
         BINARY="./target/release/dev-voice"
+    elif [ -x "./artifacts/dev-voice-linux-x64-cuda/dev-voice" ]; then
+        BINARY="./artifacts/dev-voice-linux-x64-cuda/dev-voice"
     elif [ -x "./docs/tmp/dev-voice-linux-x64-cuda/dev-voice" ]; then
         BINARY="./docs/tmp/dev-voice-linux-x64-cuda/dev-voice"
     else
-        echo "Error: Cannot find dev-voice binary"
-        echo "Set DEVVOICE_BINARY environment variable or install to ~/.local/bin/dev-voice-cuda"
+        echo "Error: Cannot find dev-voice binary" >&2
+        echo "Searched:" >&2
+        echo "  - ~/.local/bin/dev-voice-cuda" >&2
+        echo "  - ./target/release/dev-voice" >&2
+        echo "  - ./artifacts/dev-voice-linux-x64-cuda/dev-voice" >&2
+        echo "  - ./docs/tmp/dev-voice-linux-x64-cuda/dev-voice" >&2
+        echo "" >&2
+        echo "Set DEVVOICE_BINARY environment variable or install binary first" >&2
         exit 1
     fi
+fi
+
+# Debug mode: Show what's being loaded
+if [ "$DEVVOICE_DEBUG" = "1" ]; then
+    echo "=== dev-voice CUDA Debug Info ===" >&2
+    echo "Binary: $BINARY" >&2
+    echo "LD_LIBRARY_PATH: $LD_LIBRARY_PATH" >&2
+    echo "" >&2
+    echo "Libraries that will be loaded:" >&2
+    ldd "$BINARY" | grep -E 'cudart|cublas|cudnn|cuda' || true
+    echo "" >&2
+
+    # Warn about Python CUDA pollution
+    if ldd "$BINARY" | grep -q "site-packages/nvidia"; then
+        echo "⚠️  WARNING: Loading CUDA libraries from Python site-packages!" >&2
+        echo "This can cause version mismatches and subtle bugs." >&2
+        echo "Consider running with DEVVOICE_STRICT=1 to use only Ollama libs." >&2
+        echo "" >&2
+    fi
+
+    echo "Starting dev-voice..." >&2
+    echo "==============================" >&2
+    echo "" >&2
 fi
 
 # Run dev-voice with all arguments passed through
