@@ -103,21 +103,47 @@ sudo apt install xclip    # Ubuntu
 
 **Requirements:**
 - NVIDIA GPU (GTX 10xx series or newer)
-- CUDA Runtime 12.x ([download](https://developer.nvidia.com/cuda-downloads))
+- CUDA 12.x runtime libraries
 
-**Test CUDA is available:**
-```bash
-nvidia-smi
+**The CUDA binary expects CUDA 12 user-space libraries** (`libcudart.so.12`, `libcublas.so.12`). If you get an error like:
+```
+error while loading shared libraries: libcudart.so.12: cannot open shared object file
 ```
 
-**Run with CUDA libraries:**
+**Check which CUDA libraries you have:**
 ```bash
-# If CUDA not in system path:
-LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH ./dev-voice daemon
-
-# Or add to ~/.bashrc:
-export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+ls /usr/local/cuda*/lib64/libcudart.so* 2>/dev/null
+ls /usr/local/lib/ollama/libcudart.so* 2>/dev/null
 ```
+
+**Verify what the binary will load:**
+```bash
+ldd ./dev-voice | grep -E 'cudart|cublas|cudnn|cuda' || true
+```
+
+**Solution 1: Use wrapper script** (Recommended)
+```bash
+# If you have Ollama installed (ships with CUDA 12):
+./scripts/run-cuda12-ollama.sh daemon
+```
+
+**Solution 2: Set library path per-run**
+```bash
+# With Ollama's CUDA 12:
+LD_LIBRARY_PATH=/usr/local/lib/ollama:$LD_LIBRARY_PATH ./dev-voice daemon
+
+# Or with system CUDA 12 (if installed):
+LD_LIBRARY_PATH=/usr/local/cuda-12/lib64:$LD_LIBRARY_PATH ./dev-voice daemon
+```
+
+**Solution 3: Build from source against your CUDA version**
+```bash
+# If you have CUDA 13+ and want to use it:
+cargo build --release --features cuda
+./target/release/dev-voice daemon
+```
+
+**⚠️ Unsupported:** Symlinking CUDA 13 → 12 (`libcudart.so.13` → `libcudart.so.12`) may work but can cause subtle issues. Not recommended.
 
 **Performance:** ~5-10x faster transcription vs CPU
 
@@ -360,15 +386,12 @@ arecord -d 5 test.wav
 ### CUDA Issues
 
 **Library not found (`libcudart.so.12`):**
+
+See the CUDA setup section above for solutions. The CUDA binary requires CUDA 12.x runtime libraries.
+
+**Verify what libraries are being loaded:**
 ```bash
-# Add CUDA to library path
-export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
-
-# Or if using Ollama's CUDA:
-export LD_LIBRARY_PATH=/usr/local/lib/ollama:$LD_LIBRARY_PATH
-
-# Add to ~/.bashrc to make permanent
-echo 'export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
+ldd ./dev-voice | grep -E 'cudart|cublas|cudnn|cuda' || true
 ```
 
 **Verify GPU is being used:**
@@ -377,6 +400,24 @@ Look for this in daemon logs:
 whisper_backend_init_gpu: using CUDA0 backend
 INFO Model loaded and resident in GPU VRAM
 ```
+
+**Optional - Advanced: Use RUNPATH (avoids environment variables)**
+```bash
+# Install patchelf
+sudo dnf install patchelf  # Fedora
+sudo apt install patchelf  # Ubuntu
+
+# Set RUNPATH to Ollama's libs (machine-specific, not portable)
+patchelf --set-runpath /usr/local/lib/ollama ./dev-voice
+
+# Verify it worked:
+readelf -d ./dev-voice | grep -E 'RPATH|RUNPATH' || true
+
+# Now binary finds libs automatically:
+./dev-voice daemon
+```
+
+**Note:** RUNPATH bakes a path into the binary. Only do this for local installs, not for distributing binaries.
 
 ---
 
