@@ -207,7 +207,7 @@ edition = "2024"
 rust-version = "1.85"
 description = "Cross-platform voice dictation for developers"
 license = "MIT"
-repository = "https://github.com/yourusername/dev-voice"
+repository = "https://github.com/itsdevcoffee/dev-voice"
 
 [dependencies]
 # Speech recognition
@@ -937,7 +937,7 @@ brew install dev-voice
 cargo install dev-voice --features metal
 
 # From source
-git clone https://github.com/yourusername/dev-voice
+git clone https://github.com/itsdevcoffee/dev-voice
 cd dev-voice
 cargo build --release --features metal
 ```

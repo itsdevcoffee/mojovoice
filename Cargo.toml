@@ -5,7 +5,7 @@ edition = "2024"
 rust-version = "1.85"
 description = "Voice dictation for Linux developers"
 license = "MIT"
-repository = "https://github.com/yourusername/dev-voice"
+repository = "https://github.com/itsdevcoffee/dev-voice"
 
 [dependencies]
 # Speech recognition
