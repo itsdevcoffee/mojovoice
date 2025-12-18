@@ -192,8 +192,14 @@ jobs:
         run: |
           file target/release/dev-voice
           # CPU artifact should NOT depend on CUDA libraries
-          if ldd target/release/dev-voice | grep -E 'libcudart|libcublas'; then
-            echo "ERROR: CPU artifact has CUDA dependencies!"
+          echo "Checking ldd for CUDA libs (should be none):"
+          if ldd target/release/dev-voice | grep -E 'libcudart|libcublas|libcudnn'; then
+            echo "❌ ERROR: CPU artifact has CUDA dependencies!"
+            exit 1
+          fi
+          echo "Checking readelf for CUDA NEEDED entries (should be none):"
+          if readelf -d target/release/dev-voice | grep NEEDED | grep -E 'cudart|cublas|cudnn'; then
+            echo "❌ ERROR: CPU artifact has CUDA in NEEDED section!"
             exit 1
           fi
           echo "✓ CPU artifact verified (no CUDA dependencies)"
