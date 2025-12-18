@@ -50,7 +50,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: target
-          key: ${{ runner.os }}-${{ runner.arch }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-build-target-feat-default-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run cargo check
         run: cargo check
@@ -94,7 +94,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: target
-          key: ${{ runner.os }}-${{ runner.arch }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-build-target-feat-default-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run tests
         run: cargo test --lib
@@ -109,10 +109,28 @@ jobs:
       - name: Install build essentials
         run: |
           apt-get update
-          apt-get install -y curl build-essential cmake libclang-dev libasound2-dev pkg-config libxkbcommon-dev
+          apt-get install -y curl build-essential cmake libclang-dev libasound2-dev pkg-config libxkbcommon-dev file
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-feat-cuda-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build with CUDA
         run: cargo build --release --features cuda
@@ -120,7 +138,8 @@ jobs:
       - name: Verify CUDA artifact
         run: |
           file target/release/dev-voice
-          ldd target/release/dev-voice | grep -E 'libcudart\.so\.12' || (echo "ERROR: CUDA artifact missing cudart.so.12 dependency" && exit 1)
+          ldd target/release/dev-voice | grep -E 'libcudart\.so\.12' || (echo "ERROR: CUDA artifact missing cudart.so.12 dependency in ldd" && exit 1)
+          readelf -d target/release/dev-voice | grep -E 'NEEDED.*libcudart\.so\.12' || (echo "ERROR: CUDA artifact missing cudart.so.12 in NEEDED section" && exit 1)
           echo "✓ CUDA artifact verified"
 
       - name: Upload CUDA artifact
@@ -142,6 +161,24 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-build-target-feat-metal-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build with Metal
         run: cargo build --release --features metal
@@ -183,6 +220,24 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libclang-dev libasound2-dev pkg-config libxkbcommon-dev
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-build-target-feat-release-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build release binary
         run: cargo build --release
@@ -244,7 +299,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: target
-          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-build-target-feat-default-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run clippy
         run: cargo clippy -- -D warnings
