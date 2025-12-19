@@ -4,19 +4,16 @@
 
 This document serves as the source of truth for the model migration from standard Whisper models to optimized Turbo and Distilled variants, alongside performance optimizations like Speculative Decoding.
 
-## Phase 1: Registry Expansion & Quality Defaults
-The goal is to move from 2023-era Whisper weights to 2024-2025 optimized weights.
+## Phase 1: Registry Expansion & Quality Defaults (COMPLETED)
+The goal was to move from 2023-era Whisper weights to 2024-2025 optimized weights.
 
-- [ ] **Step 1.1: Map GGUF/Quantized Paths**
-    - Use `context7` and `WebSearch` to find official URLs for `large-v3-turbo` and `distil-large-v3` GGML binaries.
-    - Focus on Q4_K_M or Q5_0 quantizations for the best accuracy/size ratio.
-- [ ] **Step 1.2: Update `src/model/registry.rs`**
-    - Add `large-v3-turbo` (New recommended High-End).
-    - Add `distil-large-v3` (New recommended Mid-Range).
-    - Tag models with metadata (speed factor, recommended VRAM).
-- [ ] **Step 1.3: Update CLI/Installer Logic**
-    - Update `dev-voice download` to highlight the new models.
-    - Set `large-v3-turbo` as the suggested download for new users.
+- [x] **Step 1.1: Map GGUF/Quantized Paths**
+- [x] **Step 1.2: Update `src/model/registry.rs`**
+    - Added `large-v3-turbo` (New recommended High-End).
+    - Added `distil-large-v3` (New recommended Mid-Range).
+- [x] **Step 1.3: Update CLI/Installer Logic**
+    - Updated `dev-voice download` default to `large-v3-turbo`.
+    - Improved help text to reflect new model options.
 
 ## Phase 2: Inference Optimization (Speculative Decoding)
 Use a draft model to speed up the main transcription.

@@ -11,6 +11,20 @@ pub struct ModelInfo {
 /// Registry of known Whisper models with their checksums
 pub const MODEL_REGISTRY: &[ModelInfo] = &[
     ModelInfo {
+        name: "large-v3-turbo",
+        filename: "ggml-large-v3-turbo.bin",
+        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin",
+        sha256: "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69",
+        size_mb: 1625,
+    },
+    ModelInfo {
+        name: "distil-large-v3",
+        filename: "ggml-distil-large-v3.bin",
+        url: "https://huggingface.co/distil-whisper/distil-large-v3-ggml/resolve/main/ggml-distil-large-v3.bin",
+        sha256: "2883a11b90fb10ed592d826edeaee7d2929bf1ab985109fe9e1e7b4d2b69a298",
+        size_mb: 1520,
+    },
+    ModelInfo {
         name: "tiny.en",
         filename: "ggml-tiny.en.bin",
         url: concat!(

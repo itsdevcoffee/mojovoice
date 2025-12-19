@@ -53,8 +53,8 @@ enum Commands {
 
     /// Download a whisper model
     Download {
-        /// Model size: tiny.en, base.en, small.en, medium.en, large
-        #[arg(default_value = "base.en")]
+        /// Model name (e.g. large-v3-turbo, distil-large-v3, base.en)
+        #[arg(default_value = "large-v3-turbo")]
         model: String,
     },
 
