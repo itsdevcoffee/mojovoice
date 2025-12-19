@@ -33,7 +33,9 @@ fn estimate_frequency(samples: &[f32], sample_rate: u32) -> f32 {
 
     let mut zero_crossings = 0;
     for i in 0..samples.len() - 1 {
-        if (samples[i] >= 0.0 && samples[i + 1] < 0.0) || (samples[i] < 0.0 && samples[i + 1] >= 0.0) {
+        if (samples[i] >= 0.0 && samples[i + 1] < 0.0)
+            || (samples[i] < 0.0 && samples[i + 1] >= 0.0)
+        {
             zero_crossings += 1;
         }
     }
@@ -56,7 +58,8 @@ fn test_resampling_44100_to_16000() {
 
     // Use the public capture API isn't available, so we test the internal flow
     // by generating audio and checking length ratios
-    let expected_output_len = (original.len() as f32 * target_rate as f32 / original_rate as f32) as usize;
+    let expected_output_len =
+        (original.len() as f32 * target_rate as f32 / original_rate as f32) as usize;
 
     // Verify the expected length is reasonable
     assert!(
