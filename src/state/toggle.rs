@@ -75,6 +75,9 @@ pub fn start_recording() -> Result<()> {
         pid_file.display()
     );
 
+    // Ensure processing file is gone
+    let _ = cleanup_processing();
+
     // Refresh Waybar
     refresh_waybar();
 
@@ -82,7 +85,7 @@ pub fn start_recording() -> Result<()> {
 }
 
 /// Refresh Waybar status by sending SIGRTMIN+8
-fn refresh_waybar() {
+pub fn refresh_waybar() {
     // Run in background to avoid blocking the main thread
     let _ = std::process::Command::new("pkill")
         .args(["-RTMIN+8", "waybar"])
@@ -93,6 +96,24 @@ fn refresh_waybar() {
             let _ = child.stdout.take();
             let _ = child.stderr.take();
         });
+}
+
+/// Start processing state (create processing file)
+pub fn start_processing() -> Result<()> {
+    let processing_file = super::paths::get_state_dir()?.join("processing");
+    fs::write(&processing_file, "")?;
+    refresh_waybar();
+    Ok(())
+}
+
+/// Stop processing state (remove processing file)
+pub fn cleanup_processing() -> Result<()> {
+    let processing_file = super::paths::get_state_dir()?.join("processing");
+    if processing_file.exists() {
+        fs::remove_file(&processing_file)?;
+        refresh_waybar();
+    }
+    Ok(())
 }
 
 /// Stop a running recording by sending SIGUSR1
@@ -115,8 +136,8 @@ pub fn cleanup_recording() -> Result<()> {
     if pid_file.exists() {
         fs::remove_file(&pid_file)?;
         info!("Cleaned up PID file");
-        // Refresh Waybar
-        refresh_waybar();
+        // Start processing state visually
+        let _ = start_processing();
     }
     Ok(())
 }

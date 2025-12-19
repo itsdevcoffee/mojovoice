@@ -209,6 +209,9 @@ fn cmd_start_toggle(model_override: Option<String>, clipboard: bool) -> Result<(
         // Send stop request and wait for transcription
         let response = daemon::send_request(&daemon::DaemonRequest::StopRecording)?;
 
+        // End processing state in UI
+        let _ = state::cleanup_processing();
+
         match response {
             daemon::DaemonResponse::Success { text } => {
                 if text.is_empty() {
