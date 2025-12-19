@@ -128,10 +128,7 @@ mod tests {
     #[test]
     fn test_output_mode_parsing() {
         assert_eq!(OutputMode::from_str("type"), Ok(OutputMode::Type));
-        assert_eq!(
-            OutputMode::from_str("clipboard"),
-            Ok(OutputMode::Clipboard)
-        );
+        assert_eq!(OutputMode::from_str("clipboard"), Ok(OutputMode::Clipboard));
         assert_eq!(OutputMode::from_str("copy"), Ok(OutputMode::Clipboard));
         assert!(OutputMode::from_str("invalid").is_err());
     }
