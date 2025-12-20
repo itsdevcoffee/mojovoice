@@ -1,0 +1,29 @@
+/* dev-voice Waybar Module Styling */
+
+#custom-dev-voice {
+  padding: 0 10px;
+  margin: 0 4px;
+}
+
+#custom-dev-voice.recording {
+  color: #ff5555;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+#custom-dev-voice.processing {
+  color: #f1fa8c;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+#custom-dev-voice.idle {
+  color: #6272a4;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}

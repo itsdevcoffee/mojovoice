@@ -39,6 +39,8 @@ pub struct OutputConfig {
     pub display_server: Option<String>,
     /// Add a space after injected text
     pub append_space: bool,
+    /// Command to refresh status bar UI (e.g., "pkill -RTMIN+8 waybar")
+    pub refresh_command: Option<String>,
 }
 
 impl Default for Config {
@@ -61,6 +63,7 @@ impl Default for Config {
             output: OutputConfig {
                 display_server: None,
                 append_space: true,
+                refresh_command: Some("pkill -RTMIN+8 waybar".to_string()),
             },
         }
     }

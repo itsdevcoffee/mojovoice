@@ -84,18 +84,29 @@ pub fn start_recording() -> Result<()> {
     Ok(())
 }
 
-/// Refresh Waybar status by sending SIGRTMIN+8
+/// Refresh UI status bar (Waybar/Polybar/etc.) using configured command
 pub fn refresh_waybar() {
-    // Run in background to avoid blocking the main thread
-    let _ = std::process::Command::new("pkill")
-        .args(["-RTMIN+8", "waybar"])
-        .spawn()
-        .map(|mut child| {
-            // Immediately detach by not waiting on the child
-            let _ = child.stdin.take();
-            let _ = child.stdout.take();
-            let _ = child.stderr.take();
-        });
+    // Load config to get refresh command
+    let config = match crate::config::load() {
+        Ok(c) => c,
+        Err(_) => return, // Silently fail if config unavailable
+    };
+
+    if let Some(cmd) = config.output.refresh_command {
+        // Parse command string into program + args
+        let parts: Vec<&str> = cmd.split_whitespace().collect();
+        if let Some((program, args)) = parts.split_first() {
+            let _ = std::process::Command::new(program)
+                .args(args)
+                .spawn()
+                .map(|mut child| {
+                    // Immediately detach by not waiting on the child
+                    let _ = child.stdin.take();
+                    let _ = child.stdout.take();
+                    let _ = child.stderr.take();
+                });
+        }
+    }
 }
 
 /// Start processing state (create processing file)
