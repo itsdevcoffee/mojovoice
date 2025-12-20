@@ -428,6 +428,8 @@ fn cmd_config_check() -> Result<()> {
 
     println!("Configuration Validation\n");
 
+    let mut has_warnings = false;
+
     // Check model path
     let model_exists = current.model.path.exists();
     println!(
@@ -435,6 +437,9 @@ fn cmd_config_check() -> Result<()> {
         if model_exists { "✓" } else { "✗" },
         current.model.path.display()
     );
+    if !model_exists {
+        has_warnings = true;
+    }
 
     // Check draft model
     match &current.model.draft_model_path {
@@ -445,14 +450,23 @@ fn cmd_config_check() -> Result<()> {
                 if exists { "✓" } else { "⚠" },
                 path.display()
             );
+            if !exists {
+                has_warnings = true;
+            }
         },
-        None => println!("⚠ model.draft_model_path = (missing, speculative decoding disabled)"),
+        None => {
+            println!("⚠ model.draft_model_path = (missing, speculative decoding disabled)");
+            has_warnings = true;
+        },
     }
 
     // Check prompt
     match &current.model.prompt {
         Some(p) if !p.is_empty() => println!("✓ model.prompt = (set, {} chars)", p.len()),
-        _ => println!("⚠ model.prompt = (missing, using no technical biasing)"),
+        _ => {
+            println!("⚠ model.prompt = (missing, using no technical biasing)");
+            has_warnings = true;
+        },
     }
 
     // Check refresh_command
@@ -462,11 +476,17 @@ fn cmd_config_check() -> Result<()> {
             if let Some(default_cmd) = &defaults.output.refresh_command {
                 println!("⚠ output.refresh_command = (missing, no UI refresh)");
                 println!("  Suggestion: {}", default_cmd);
+                has_warnings = true;
             }
         },
     }
 
-    println!("\nRun 'dev-voice config --migrate' to auto-update missing fields.");
+    // Show appropriate message based on validation results
+    if has_warnings {
+        println!("\nRun 'dev-voice config --migrate' to auto-update missing fields.");
+    } else {
+        println!("\n✓ Your config is valid and up to date.");
+    }
 
     Ok(())
 }
