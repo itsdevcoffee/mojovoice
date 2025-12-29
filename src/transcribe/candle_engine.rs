@@ -341,10 +341,13 @@ impl CandleEngine {
 
         // 1. Run Encoder
         debug!("Running encoder forward pass on mel shape: {:?}", mel.shape());
+        info!("MEL SHAPE BEFORE ENCODER: {:?}", mel.shape());
         debug!("Calling encoder.forward()");
         let audio_features = self.model.encoder_forward(mel, true)?;
         debug!("encoder.forward() returned");
-        debug!("Encoder output shape: {:?}", audio_features.shape());
+        info!("ENCODER OUTPUT SHAPE: {:?}", audio_features.shape());
+        info!("ENCODER OUTPUT DIMS: batch={}, frames={}, d_model={}",
+            audio_features.dim(0)?, audio_features.dim(1)?, audio_features.dim(2)?);
 
         // 2. Build initial token sequence following Whisper spec:
         // <|startoftranscript|><|language|><|transcribe|><|notimestamps|>[optional_prompt_tokens]
@@ -398,6 +401,9 @@ impl CandleEngine {
 
             if iteration == 0 {
                 debug!("First decoder input shape: {:?}", input.shape());
+                info!("DECODER INPUT SHAPE (iter 0): {:?} (batch={}, seq_len={})",
+                    input.shape(), input.dim(0)?, input.dim(1)?);
+                info!("AUDIO FEATURES SHAPE PASSED TO DECODER: {:?}", audio_features.shape());
             }
 
             // Decoder forward pass produces hidden states [batch, seq_len, d_model=1280]
@@ -563,21 +569,53 @@ impl CandleEngine {
             return Ok(String::new());
         }
 
-        // 1. Convert audio to Mel Spectrogram
+        // Pad audio to exactly 30 seconds (480000 samples at 16kHz) as Whisper expects
+        const N_SAMPLES: usize = 480000;  // 30 seconds * 16000 Hz
+        let mut padded_audio = audio.to_vec();
+        if padded_audio.len() < N_SAMPLES {
+            info!("Padding audio from {} to {} samples", audio.len(), N_SAMPLES);
+            padded_audio.resize(N_SAMPLES, 0.0);  // Pad with silence
+        } else if padded_audio.len() > N_SAMPLES {
+            info!("Truncating audio from {} to {} samples", audio.len(), N_SAMPLES);
+            padded_audio.truncate(N_SAMPLES);  // Truncate if too long
+        }
+        info!("PADDED AUDIO LENGTH: {} samples", padded_audio.len());
+
+        // 1. Convert audio to Mel Spectrogram (will create exactly 3000 frames)
         debug!("Converting PCM to Mel spectrogram...");
-        let mel_data = whisper::audio::pcm_to_mel(&self.config, audio, &self.mel_filters);
+        let mel_data = whisper::audio::pcm_to_mel(&self.config, &padded_audio, &self.mel_filters);
+        info!("MEL DATA LENGTH: {} elements", mel_data.len());
 
         // Convert Vec<f32> to Tensor with proper shape
         let mel_len = mel_data.len();
         let n_mels = self.config.num_mel_bins;
         let frames = mel_len / n_mels;
 
+        info!("MEL SPECTROGRAM: mel_len={}, n_mels={}, frames={}", mel_len, n_mels, frames);
+
         if mel_len == 0 || frames == 0 || mel_len % n_mels != 0 {
             anyhow::bail!("Invalid mel spectrogram");
         }
 
         let mel = Tensor::from_vec(mel_data, (n_mels, frames), &self.device)?;
+        info!("MEL TENSOR SHAPE (before batch dim): {:?}", mel.shape());
+
+        // CRITICAL FIX: Whisper Large V3 Turbo has max_source_positions=1500
+        // After 2x encoder downsampling, this means mel can have max 3000 frames
+        // But pcm_to_mel produces 4500 frames for 480000 samples (bug in Candle?)
+        // Truncate to exactly 3000 frames to match model's max_source_positions
+        const MAX_MEL_FRAMES: usize = 3000;
+        let mel = if frames > MAX_MEL_FRAMES {
+            warn!("Mel has {} frames, truncating to {} to match model's max_source_positions",
+                frames, MAX_MEL_FRAMES);
+            mel.narrow(1, 0, MAX_MEL_FRAMES)?
+        } else {
+            mel
+        };
+        info!("MEL TENSOR SHAPE (after truncation): {:?}", mel.shape());
+
         let mel = mel.unsqueeze(0)?; // Add batch dimension
+        info!("MEL TENSOR SHAPE (after batch dim): {:?}", mel.shape());
 
         // 2. Decode with temperature fallback
         self.decode_with_fallback(&mel)
