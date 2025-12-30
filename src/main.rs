@@ -15,6 +15,8 @@ mod output;
 mod state;
 mod transcribe;
 
+use transcribe::Transcriber;
+
 /// Maximum recording duration in toggle mode (5 minutes)
 const TOGGLE_MODE_TIMEOUT_SECS: u32 = 300;
 
@@ -323,7 +325,12 @@ fn cmd_start_fixed(model_override: Option<String>, duration: u32, clipboard: boo
     info!("Output mode: {:?}", output_mode);
 
     info!("Loading whisper model...");
-    let transcriber = transcribe::Transcriber::new(&cfg.model.path)?;
+    // Use CandleEngine (new Candle-based implementation)
+    let mut transcriber = transcribe::candle_engine::CandleEngine::with_options(
+        cfg.model.path.to_str().ok_or_else(|| anyhow::anyhow!("Invalid model path"))?,
+        &cfg.model.language,
+        cfg.model.prompt.clone(),
+    )?;
     info!("Model loaded successfully");
 
     info!("Recording for {} seconds...", duration);
@@ -430,6 +437,14 @@ fn cmd_config_check() -> Result<()> {
 
     let mut has_warnings = false;
 
+    // Check model_id (required for Candle engine)
+    if current.model.model_id.is_empty() {
+        println!("✗ model.model_id = (missing, required for Candle engine)");
+        has_warnings = true;
+    } else {
+        println!("✓ model.model_id = \"{}\"", current.model.model_id);
+    }
+
     // Check model path
     let model_exists = current.model.path.exists();
     println!(
@@ -514,6 +529,11 @@ fn cmd_config_migrate() -> Result<()> {
     let defaults = config::Config::default();
 
     // Merge: Keep user values, add missing fields from defaults
+    if current.model.model_id.is_empty() {
+        current.model.model_id = "openai/whisper-large-v3-turbo".to_string();
+        println!("✓ Added model.model_id");
+    }
+
     if current.model.draft_model_path.is_none() {
         current.model.draft_model_path = defaults.model.draft_model_path;
         println!("✓ Added model.draft_model_path");

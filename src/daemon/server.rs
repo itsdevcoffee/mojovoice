@@ -6,12 +6,12 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::audio::capture_toggle;
 use crate::daemon::protocol::{DaemonRequest, DaemonResponse};
 use crate::state;
-use crate::transcribe::Transcriber;
+// Transcriber trait is now used via Box<dyn ...>
 
 /// Get the path to the daemon socket
 pub fn get_socket_path() -> Result<PathBuf> {
@@ -72,32 +72,68 @@ struct RecordingState {
 
 /// Daemon server state
 struct DaemonServer {
-    transcriber: Arc<Mutex<Transcriber>>,
+    transcriber: Arc<Mutex<Box<dyn crate::transcribe::Transcriber>>>,
     recording_state: Arc<Mutex<RecordingState>>,
     shutdown: Arc<AtomicBool>,
 }
 
 impl DaemonServer {
-    fn new(model_path: &Path) -> Result<Self> {
+    fn new(_model_path: &Path) -> Result<Self> {
         let config = crate::config::load()?;
 
         info!("Loading whisper model into GPU memory...");
-        let transcriber = Transcriber::with_draft(
-            model_path,
-            config.model.draft_model_path.as_deref(),
+
+        // Use CandleEngine (new Candle-based implementation)
+        let transcriber = crate::transcribe::candle_engine::CandleEngine::with_options(
+            config.model.path.to_str().ok_or_else(|| anyhow::anyhow!("Invalid model path"))?,
+            &config.model.language,
             config.model.prompt.clone(),
-        )
-        .context("Failed to load whisper model")?;
+        )?;
+
         info!("Model loaded and resident in GPU VRAM");
 
         Ok(Self {
-            transcriber: Arc::new(Mutex::new(transcriber)),
+            transcriber: Arc::new(Mutex::new(Box::new(transcriber))),
             recording_state: Arc::new(Mutex::new(RecordingState {
                 handle: None,
                 audio: None,
             })),
             shutdown: Arc::new(AtomicBool::new(false)),
         })
+    }
+
+    /// Save audio recording as WAV file with timestamp
+    fn save_audio_recording(samples: &[f32], output_dir: &Path, sample_rate: u32) -> Result<()> {
+        // Create output directory if it doesn't exist
+        std::fs::create_dir_all(output_dir)
+            .context("Failed to create audio clips directory")?;
+
+        // Generate filename with timestamp
+        let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+        let filename = format!("recording_{}.wav", timestamp);
+        let filepath = output_dir.join(filename);
+
+        // Write WAV file
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate,
+            bits_per_sample: 32,
+            sample_format: hound::SampleFormat::Float,
+        };
+
+        let mut writer = hound::WavWriter::create(&filepath, spec)
+            .context("Failed to create WAV file")?;
+
+        for &sample in samples {
+            writer.write_sample(sample)
+                .context("Failed to write sample")?;
+        }
+
+        writer.finalize()
+            .context("Failed to finalize WAV file")?;
+
+        info!("Audio saved to: {}", filepath.display());
+        Ok(())
     }
 
     fn handle_client(&self, mut stream: UnixStream) -> Result<()> {
@@ -206,15 +242,34 @@ impl DaemonServer {
             });
         }
 
+        // Save audio if enabled in config
+        let config = crate::config::load()?;
+        if config.audio.save_audio_clips {
+            if let Err(e) = Self::save_audio_recording(&samples, &config.audio.audio_clips_path, config.audio.sample_rate) {
+                warn!("Failed to save audio recording: {}", e);
+            }
+        }
+
         // Transcribe with the persistent model
         info!("Transcribing {} samples...", samples.len());
-        let transcriber = self
+        let mut transcriber = self
             .transcriber
             .lock()
             .map_err(|e| anyhow::anyhow!("Transcriber mutex poisoned: {}", e))?;
-        let text = transcriber
-            .transcribe(&samples)
-            .context("Transcription failed")?;
+
+        let text = match transcriber.transcribe(&samples) {
+            Ok(t) => {
+                info!("Transcription completed successfully");
+                t
+            },
+            Err(e) => {
+                error!("Transcription failed with error: {}", e);
+                error!("Error chain: {:?}", e);
+                return Ok(DaemonResponse::Error {
+                    message: format!("Transcription error: {}", e),
+                });
+            }
+        };
 
         if text.is_empty() {
             return Ok(DaemonResponse::Error {

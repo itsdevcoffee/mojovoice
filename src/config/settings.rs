@@ -15,8 +15,10 @@ pub struct Config {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ModelConfig {
-    /// Path to whisper model file
+    /// Path to whisper model file (legacy, kept for backwards compatibility)
     pub path: PathBuf,
+    /// HuggingFace model ID for Candle engine (e.g., "openai/whisper-large-v3-turbo")
+    pub model_id: String,
     /// Path to optional draft model file for speculative decoding
     pub draft_model_path: Option<PathBuf>,
     /// Language code (e.g., "en")
@@ -31,6 +33,18 @@ pub struct AudioConfig {
     pub sample_rate: u32,
     /// Recording timeout in seconds (0 = no timeout)
     pub timeout_secs: u32,
+    /// Save audio recordings to disk
+    #[serde(default)]
+    pub save_audio_clips: bool,
+    /// Directory to save audio clips (WAV format with timestamps)
+    #[serde(default = "default_audio_clips_path")]
+    pub audio_clips_path: PathBuf,
+}
+
+fn default_audio_clips_path() -> PathBuf {
+    directories::BaseDirs::new()
+        .map(|dirs| dirs.data_local_dir().join(APP_NAME).join("recordings"))
+        .unwrap_or_else(|| PathBuf::from("./recordings"))
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -51,14 +65,17 @@ impl Default for Config {
 
         Self {
             model: ModelConfig {
-                path: data_dir.join("models/ggml-large-v3-turbo.bin"),
+                path: data_dir.join("models/whisper-large-v3-turbo-safetensors"),
+                model_id: "openai/whisper-large-v3-turbo".to_string(),
                 draft_model_path: Some(data_dir.join("models/ggml-tiny.en.bin")),
                 language: "en".to_string(),
-                prompt: Some(DEFAULT_PROMPT.to_string()),
+                prompt: None,  // Disabled by default - causes decoder issues when enabled
             },
             audio: AudioConfig {
                 sample_rate: 16000,
                 timeout_secs: 30,
+                save_audio_clips: false,
+                audio_clips_path: default_audio_clips_path(),
             },
             output: OutputConfig {
                 display_server: None,
