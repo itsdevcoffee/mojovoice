@@ -266,20 +266,22 @@ pub async fn restart_daemon() -> Result<(), String> {
         }
     }
 
-    // 3. Start new daemon process
-    // Find hyprvoice binary (prefer -test, -cuda, or default)
-    let binary = if let Ok(home) = std::env::var("HOME") {
-        let bin_dir = format!("{}/.local/bin", home);
-        ["hyprvoice-test", "hyprvoice-cuda", "hyprvoice"]
-            .iter()
-            .map(|name| format!("{}/{}", bin_dir, name))
-            .find(|path| std::path::Path::new(path).exists())
-            .unwrap_or_else(|| "hyprvoice".to_string())
-    } else {
-        "hyprvoice".to_string()
-    };
+    // 3. Detect which binary was actually running (check process list)
+    let binary = detect_running_binary().unwrap_or_else(|| {
+        // Fallback: try to find any hyprvoice binary
+        if let Ok(home) = std::env::var("HOME") {
+            let bin_dir = format!("{}/.local/bin", home);
+            ["hyprvoice-gpu", "hyprvoice-cuda", "hyprvoice-test", "hyprvoice"]
+                .iter()
+                .map(|name| format!("{}/{}", bin_dir, name))
+                .find(|path| std::path::Path::new(path).exists())
+                .unwrap_or_else(|| "hyprvoice".to_string())
+        } else {
+            "hyprvoice".to_string()
+        }
+    });
 
-    eprintln!("Starting daemon with binary: {}", binary);
+    eprintln!("Restarting daemon with detected binary: {}", binary);
 
     std::process::Command::new(&binary)
         .arg("daemon")
@@ -355,4 +357,41 @@ pub struct PathValidation {
     pub is_directory: bool,
     pub expanded_path: String,
     pub message: String,
+}
+
+/// Detect which hyprvoice binary is currently running
+fn detect_running_binary() -> Option<String> {
+    // Run: ps aux | grep hyprvoice | grep daemon
+    let output = std::process::Command::new("ps")
+        .args(["aux"])
+        .output()
+        .ok()?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    // Find lines with "hyprvoice" and "daemon"
+    for line in stdout.lines() {
+        if line.contains("hyprvoice") && line.contains("daemon") && !line.contains("grep") {
+            // Extract the command path (usually in the later columns)
+            let parts: Vec<&str> = line.split_whitespace().collect();
+
+            // Find the part that looks like a path to hyprvoice
+            for part in &parts {
+                if part.contains("hyprvoice") && (part.starts_with('/') || part.starts_with("./")) {
+                    eprintln!("Detected running binary: {}", part);
+                    return Some(part.to_string());
+                }
+            }
+
+            // Fallback: look for just the binary name
+            for part in &parts {
+                if part.contains("hyprvoice") {
+                    eprintln!("Detected running binary name: {}", part);
+                    return Some(part.to_string());
+                }
+            }
+        }
+    }
+
+    None
 }
