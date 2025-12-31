@@ -177,3 +177,221 @@ pub async fn get_system_info() -> Result<SystemInfo, String> {
         platform: std::env::consts::OS.to_string(),
     })
 }
+
+/// Configuration structure matching config.toml
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AppConfig {
+    pub model: ModelConfig,
+    pub audio: AudioConfig,
+    pub output: OutputConfig,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ModelConfig {
+    pub path: String,
+    pub model_id: String,
+    pub draft_model_path: Option<String>,
+    pub language: String,
+    pub prompt: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AudioConfig {
+    pub sample_rate: u32,
+    pub timeout_secs: u32,
+    pub save_audio_clips: bool,
+    pub audio_clips_path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct OutputConfig {
+    pub append_space: bool,
+    pub refresh_command: Option<String>,
+}
+
+/// Get current configuration
+#[tauri::command]
+pub async fn get_config() -> Result<AppConfig, String> {
+    let config_path = dirs::config_dir()
+        .ok_or("Could not determine config directory")?
+        .join("hyprvoice")
+        .join("config.toml");
+
+    let config_str = std::fs::read_to_string(&config_path)
+        .map_err(|e| format!("Failed to read config: {}", e))?;
+
+    let config: AppConfig = toml::from_str(&config_str)
+        .map_err(|e| format!("Failed to parse config: {}", e))?;
+
+    Ok(config)
+}
+
+/// Save configuration
+#[tauri::command]
+pub async fn save_config(config: AppConfig) -> Result<(), String> {
+    let config_path = dirs::config_dir()
+        .ok_or("Could not determine config directory")?
+        .join("hyprvoice")
+        .join("config.toml");
+
+    let config_str = toml::to_string_pretty(&config)
+        .map_err(|e| format!("Failed to serialize config: {}", e))?;
+
+    std::fs::write(&config_path, config_str)
+        .map_err(|e| format!("Failed to write config: {}", e))?;
+
+    Ok(())
+}
+
+/// Restart the hyprvoice daemon with new configuration
+#[tauri::command]
+pub async fn restart_daemon() -> Result<(), String> {
+    // 1. Send shutdown command to daemon
+    let shutdown_request = daemon_client::DaemonRequest::Shutdown;
+    match daemon_client::send_request(shutdown_request) {
+        Ok(_) => {
+            eprintln!("Shutdown command sent to daemon");
+        }
+        Err(e) => {
+            eprintln!("Failed to send shutdown (daemon might be down): {}", e);
+        }
+    }
+
+    // 2. Wait for daemon to fully shut down (max 3 seconds)
+    for i in 0..30 {
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        if !daemon_client::is_daemon_running() {
+            eprintln!("Daemon shut down after {}ms", i * 100);
+            break;
+        }
+    }
+
+    // 3. Detect which binary was actually running (check process list)
+    let binary = detect_running_binary().unwrap_or_else(|| {
+        // Fallback: try to find any hyprvoice binary
+        if let Ok(home) = std::env::var("HOME") {
+            let bin_dir = format!("{}/.local/bin", home);
+            ["hyprvoice-gpu", "hyprvoice-cuda", "hyprvoice-test", "hyprvoice"]
+                .iter()
+                .map(|name| format!("{}/{}", bin_dir, name))
+                .find(|path| std::path::Path::new(path).exists())
+                .unwrap_or_else(|| "hyprvoice".to_string())
+        } else {
+            "hyprvoice".to_string()
+        }
+    });
+
+    eprintln!("Restarting daemon with detected binary: {}", binary);
+
+    std::process::Command::new(&binary)
+        .arg("daemon")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| format!("Failed to start daemon: {}", e))?;
+
+    // 4. Wait for daemon to be ready (max 5 seconds)
+    for i in 0..50 {
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        if daemon_client::is_daemon_running() {
+            eprintln!("Daemon started successfully after {}ms", i * 100);
+            return Ok(());
+        }
+    }
+
+    Err("Daemon failed to start within 5 seconds".to_string())
+}
+
+/// Validate if a path exists and return its type
+#[tauri::command]
+pub async fn validate_path(path: String) -> Result<PathValidation, String> {
+    // Expand ~ to home directory
+    let expanded_path = if path.starts_with('~') {
+        if let Ok(home) = std::env::var("HOME") {
+            path.replacen('~', &home, 1)
+        } else {
+            path.clone()
+        }
+    } else {
+        path.clone()
+    };
+
+    let path_obj = std::path::Path::new(&expanded_path);
+
+    if !path_obj.exists() {
+        return Ok(PathValidation {
+            valid: false,
+            exists: false,
+            is_file: false,
+            is_directory: false,
+            expanded_path: expanded_path.clone(),
+            message: "Path does not exist".to_string(),
+        });
+    }
+
+    let is_file = path_obj.is_file();
+    let is_directory = path_obj.is_dir();
+
+    Ok(PathValidation {
+        valid: true,
+        exists: true,
+        is_file,
+        is_directory,
+        expanded_path: expanded_path.clone(),
+        message: if is_file {
+            "Valid file path".to_string()
+        } else if is_directory {
+            "Valid directory path".to_string()
+        } else {
+            "Path exists".to_string()
+        },
+    })
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PathValidation {
+    pub valid: bool,
+    pub exists: bool,
+    pub is_file: bool,
+    pub is_directory: bool,
+    pub expanded_path: String,
+    pub message: String,
+}
+
+/// Detect which hyprvoice binary is currently running
+fn detect_running_binary() -> Option<String> {
+    // Run: ps aux | grep hyprvoice | grep daemon
+    let output = std::process::Command::new("ps")
+        .args(["aux"])
+        .output()
+        .ok()?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    // Find lines with "hyprvoice" and "daemon"
+    for line in stdout.lines() {
+        if line.contains("hyprvoice") && line.contains("daemon") && !line.contains("grep") {
+            // Extract the command path (usually in the later columns)
+            let parts: Vec<&str> = line.split_whitespace().collect();
+
+            // Find the part that looks like a path to hyprvoice
+            for part in &parts {
+                if part.contains("hyprvoice") && (part.starts_with('/') || part.starts_with("./")) {
+                    eprintln!("Detected running binary: {}", part);
+                    return Some(part.to_string());
+                }
+            }
+
+            // Fallback: look for just the binary name
+            for part in &parts {
+                if part.contains("hyprvoice") {
+                    eprintln!("Detected running binary name: {}", part);
+                    return Some(part.to_string());
+                }
+            }
+        }
+    }
+
+    None
+}

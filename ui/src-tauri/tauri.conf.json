@@ -21,11 +21,23 @@
         "fullscreen": false,
         "decorations": true,
         "transparent": true,
-        "center": true
+        "center": true,
+        "label": "main"
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "capabilities": [
+        {
+          "identifier": "main-window",
+          "windows": ["main"],
+          "permissions": [
+            "dialog:allow-open",
+            "dialog:default",
+            "shell:allow-execute"
+          ]
+        }
+      ]
     }
   },
   "bundle": {

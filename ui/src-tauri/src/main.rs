@@ -9,6 +9,7 @@ use tauri::Manager;
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             #[cfg(debug_assertions)]
             {
@@ -24,6 +25,10 @@ fn main() {
             commands::get_transcription_history,
             commands::download_model,
             commands::get_system_info,
+            commands::get_config,
+            commands::save_config,
+            commands::restart_daemon,
+            commands::validate_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
