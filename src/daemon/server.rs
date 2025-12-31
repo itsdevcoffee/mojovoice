@@ -250,6 +250,9 @@ impl DaemonServer {
             }
         }
 
+        // Create processing state file for Waybar
+        state::toggle::start_processing()?;
+
         // Transcribe with the persistent model
         info!("Transcribing {} samples...", samples.len());
         let mut transcriber = self
@@ -279,8 +282,9 @@ impl DaemonServer {
 
         info!("Transcribed: {}", text);
 
-        // Clean up PID file (recording complete)
+        // Clean up state files (recording and processing complete)
         state::toggle::cleanup_recording()?;
+        state::toggle::cleanup_processing()?;
 
         Ok(DaemonResponse::Success { text })
     }
