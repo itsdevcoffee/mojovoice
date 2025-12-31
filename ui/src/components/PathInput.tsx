@@ -103,7 +103,9 @@ export default function PathInput({ value, onChange, type, placeholder, label }:
 
     const { exists, is_file, is_directory } = validation;
     const typeMatches =
-      (type === 'file' && is_file) || (type === 'directory' && is_directory);
+      type === 'any' ||
+      (type === 'file' && is_file) ||
+      (type === 'directory' && is_directory);
 
     if (exists && typeMatches) {
       return (
