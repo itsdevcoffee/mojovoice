@@ -144,14 +144,28 @@ function LogLine({ log }: LogLineProps) {
 
   const timestamp = new Date(log.timestamp).toLocaleTimeString();
 
+  // Check if log is new (within last 3 seconds)
+  const isNew = Date.now() - log.timestamp < 3000;
+
   return (
-    <div className="flex gap-2 hover:bg-white/5 px-2 py-1 rounded">
+    <motion.div
+      initial={{ backgroundColor: 'rgba(0, 212, 255, 0.2)', x: -10 }}
+      animate={{
+        backgroundColor: isNew ? 'rgba(0, 212, 255, 0.1)' : 'rgba(0, 0, 0, 0)',
+        x: 0
+      }}
+      transition={{ duration: 0.5, backgroundColor: { duration: 2 } }}
+      className="flex gap-2 hover:bg-white/5 px-2 py-1 rounded border-l-2 border-transparent"
+      style={{
+        borderLeftColor: isNew ? 'rgba(0, 212, 255, 0.6)' : 'transparent',
+      }}
+    >
       <span className="text-gray-500">{timestamp}</span>
       <span className={cn('font-semibold uppercase text-xs', levelColors[log.level as keyof typeof levelColors])}>
         [{log.level}]
       </span>
       <span className="text-gray-300">{log.message}</span>
-    </div>
+    </motion.div>
   );
 }
 
@@ -201,17 +215,43 @@ function IPCCallCard({ call }: IPCCallCardProps) {
   const [expanded, setExpanded] = useState(false);
   const timestamp = new Date(call.timestamp).toLocaleTimeString();
 
+  // Check if call is new (within last 3 seconds)
+  const isNew = Date.now() - call.timestamp < 3000;
+
   return (
-    <div className="glass-card p-4">
+    <motion.div
+      initial={{ scale: 0.98, opacity: 0, y: -10 }}
+      animate={{
+        scale: 1,
+        opacity: 1,
+        y: 0,
+        boxShadow: isNew
+          ? '0 0 20px rgba(0, 212, 255, 0.4)'
+          : '0 0 0px rgba(0, 212, 255, 0)'
+      }}
+      transition={{
+        scale: { duration: 0.3 },
+        opacity: { duration: 0.3 },
+        boxShadow: { duration: 2, ease: 'easeOut' }
+      }}
+      className={cn(
+        'glass-card p-4 border-2 transition-colors duration-2000',
+        isNew ? 'border-cyan-500/50' : 'border-white/10'
+      )}
+    >
       <div
         className="flex items-center justify-between cursor-pointer"
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex items-center gap-3">
-          <div className={cn(
-            'w-2 h-2 rounded-full',
-            call.error ? 'bg-red-500' : 'bg-green-500'
-          )} />
+          <motion.div
+            className={cn(
+              'w-2 h-2 rounded-full',
+              call.error ? 'bg-red-500' : 'bg-green-500'
+            )}
+            animate={isNew ? { scale: [1, 1.5, 1] } : {}}
+            transition={{ duration: 0.6, repeat: isNew ? 2 : 0 }}
+          />
           <span className="text-cyan-400 font-mono text-sm">{call.command}</span>
           <span className="text-gray-500 text-xs">{timestamp}</span>
           <span className="text-gray-600 text-xs">{call.durationMs}ms</span>
