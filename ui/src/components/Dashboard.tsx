@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { invoke } from '../lib/ipc';
 import { motion } from 'framer-motion';
-import { Mic, Square, Zap, Cpu, Database } from 'lucide-react';
+import { Mic, Square, Zap, Cpu, Database, Loader2 } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { cn } from '../lib/utils';
 
@@ -85,28 +85,56 @@ export default function Dashboard() {
 
           {/* Record Button */}
           <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+            whileHover={!isProcessing ? { scale: 1.05 } : {}}
+            whileTap={!isProcessing ? { scale: 0.95 } : {}}
             onClick={isRecording ? handleStopRecording : handleStartRecording}
             disabled={isProcessing}
             className={cn(
               'relative w-24 h-24 rounded-full flex items-center justify-center',
               'backdrop-blur-md border-2 transition-all duration-300',
-              isRecording
+              isProcessing
+                ? 'bg-purple-500/20 border-purple-500 cursor-wait'
+                : isRecording
                 ? 'bg-red-500/20 border-red-500 animate-pulse-glow'
-                : 'bg-cyan-500/20 border-cyan-500 hover:bg-cyan-500/30',
-              isProcessing && 'opacity-50 cursor-not-allowed'
+                : 'bg-cyan-500/20 border-cyan-500 hover:bg-cyan-500/30'
             )}
           >
-            {isRecording ? (
+            {isProcessing ? (
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+              >
+                <Loader2 className="w-10 h-10 text-purple-400" />
+              </motion.div>
+            ) : isRecording ? (
               <Square className="w-10 h-10 text-red-500" />
             ) : (
               <Mic className="w-10 h-10 text-cyan-500" />
             )}
+
+            {/* Pulsing ring effect while processing */}
+            {isProcessing && (
+              <motion.div
+                className="absolute inset-0 rounded-full border-2 border-purple-400"
+                animate={{
+                  scale: [1, 1.3, 1],
+                  opacity: [0.6, 0, 0.6],
+                }}
+                transition={{
+                  duration: 2,
+                  repeat: Infinity,
+                  ease: 'easeInOut',
+                }}
+              />
+            )}
           </motion.button>
 
           <p className="mt-4 text-gray-400 text-sm">
-            {isRecording ? 'Click to stop' : 'Click to start recording'}
+            {isProcessing
+              ? 'Transcribing...'
+              : isRecording
+              ? 'Click to stop'
+              : 'Click to start recording'}
           </p>
 
           {/* Last Transcription */}
