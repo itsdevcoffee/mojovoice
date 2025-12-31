@@ -4,6 +4,7 @@ import { useAppStore } from './stores/appStore';
 import Navigation from './components/Navigation';
 import Dashboard from './components/Dashboard';
 import DevTools from './components/DevTools';
+import Settings from './components/Settings';
 import './styles/globals.css';
 
 function App() {
@@ -50,7 +51,7 @@ function App() {
       {activeView === 'dashboard' && <Dashboard />}
       {activeView === 'devtools' && <DevTools />}
       {activeView === 'history' && <PlaceholderView title="Transcription History" />}
-      {activeView === 'settings' && <PlaceholderView title="Settings" />}
+      {activeView === 'settings' && <Settings />}
     </div>
   );
 }

@@ -177,3 +177,68 @@ pub async fn get_system_info() -> Result<SystemInfo, String> {
         platform: std::env::consts::OS.to_string(),
     })
 }
+
+/// Configuration structure matching config.toml
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AppConfig {
+    pub model: ModelConfig,
+    pub audio: AudioConfig,
+    pub output: OutputConfig,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ModelConfig {
+    pub path: String,
+    pub model_id: String,
+    pub draft_model_path: Option<String>,
+    pub language: String,
+    pub prompt: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AudioConfig {
+    pub sample_rate: u32,
+    pub timeout_secs: u32,
+    pub save_audio_clips: bool,
+    pub audio_clips_path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct OutputConfig {
+    pub append_space: bool,
+    pub refresh_command: Option<String>,
+}
+
+/// Get current configuration
+#[tauri::command]
+pub async fn get_config() -> Result<AppConfig, String> {
+    let config_path = dirs::config_dir()
+        .ok_or("Could not determine config directory")?
+        .join("hyprvoice")
+        .join("config.toml");
+
+    let config_str = std::fs::read_to_string(&config_path)
+        .map_err(|e| format!("Failed to read config: {}", e))?;
+
+    let config: AppConfig = toml::from_str(&config_str)
+        .map_err(|e| format!("Failed to parse config: {}", e))?;
+
+    Ok(config)
+}
+
+/// Save configuration
+#[tauri::command]
+pub async fn save_config(config: AppConfig) -> Result<(), String> {
+    let config_path = dirs::config_dir()
+        .ok_or("Could not determine config directory")?
+        .join("hyprvoice")
+        .join("config.toml");
+
+    let config_str = toml::to_string_pretty(&config)
+        .map_err(|e| format!("Failed to serialize config: {}", e))?;
+
+    std::fs::write(&config_path, config_str)
+        .map_err(|e| format!("Failed to write config: {}", e))?;
+
+    Ok(())
+}

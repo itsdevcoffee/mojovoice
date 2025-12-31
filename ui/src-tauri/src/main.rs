@@ -24,6 +24,8 @@ fn main() {
             commands::get_transcription_history,
             commands::download_model,
             commands::get_system_info,
+            commands::get_config,
+            commands::save_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
