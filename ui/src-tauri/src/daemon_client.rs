@@ -12,6 +12,8 @@ pub enum DaemonRequest {
     StartRecording { max_duration: u32 },
     #[serde(rename = "stop_recording")]
     StopRecording,
+    #[serde(rename = "cancel_recording")]
+    CancelRecording,
     #[serde(rename = "shutdown")]
     Shutdown,
     #[serde(rename = "ping")]

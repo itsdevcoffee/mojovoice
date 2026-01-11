@@ -22,6 +22,7 @@ fn main() {
             commands::get_daemon_status,
             commands::start_recording,
             commands::stop_recording,
+            commands::cancel_recording,
             commands::get_transcription_history,
             commands::download_model,
             commands::get_system_info,

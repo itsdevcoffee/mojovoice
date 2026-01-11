@@ -62,3 +62,22 @@ pub fn daemon_stop_recording() -> Result<()> {
         _ => anyhow::bail!("Unexpected response: {:?}", response),
     }
 }
+
+/// Cancel recording via daemon (discard without transcribing)
+pub fn daemon_cancel_recording() -> Result<()> {
+    if !is_daemon_running() {
+        // Silently succeed if daemon not running
+        return Ok(());
+    }
+
+    let request = DaemonRequest::CancelRecording;
+    let response = send_request(&request)?;
+
+    match response {
+        DaemonResponse::Ok { .. } => Ok(()),
+        DaemonResponse::Error { message } => {
+            anyhow::bail!("Cancel failed: {}", message)
+        },
+        _ => anyhow::bail!("Unexpected response: {:?}", response),
+    }
+}

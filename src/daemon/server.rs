@@ -159,6 +159,7 @@ impl DaemonServer {
                 self.handle_start_recording(max_duration)?
             },
             DaemonRequest::StopRecording => self.handle_stop_recording()?,
+            DaemonRequest::CancelRecording => self.handle_cancel_recording()?,
             DaemonRequest::Shutdown => {
                 info!("Shutdown requested");
                 self.shutdown.store(true, Ordering::SeqCst);
@@ -205,6 +206,58 @@ impl DaemonServer {
         state.audio = None;
 
         Ok(DaemonResponse::Recording)
+    }
+
+    fn handle_cancel_recording(&self) -> Result<DaemonResponse> {
+        let mut state = self
+            .recording_state
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Recording state mutex poisoned: {}", e))?;
+
+        // Check if recording - if not, silently succeed
+        let handle = match state.handle.take() {
+            Some(h) => h,
+            None => {
+                // Not recording - silently succeed
+                return Ok(DaemonResponse::Ok {
+                    message: "cancelled".to_string(),
+                });
+            },
+        };
+
+        info!("Cancel requested - discarding recording");
+
+        // Send stop signal
+        state::toggle::STOP_RECORDING.store(true, Ordering::SeqCst);
+
+        // Wait for recording thread to finish and discard samples
+        drop(state); // Release lock while waiting
+        let _ = handle
+            .join()
+            .map_err(|_| anyhow::anyhow!("Recording thread panicked"))?;
+
+        // Reset stop flag for next recording
+        state::toggle::STOP_RECORDING.store(false, Ordering::SeqCst);
+
+        // CRITICAL: Clean up state files so waybar returns to idle
+        // Remove recording.pid file (waybar checks this first)
+        let pid_file = state::paths::get_pid_file()?;
+        if pid_file.exists() {
+            std::fs::remove_file(&pid_file)?;
+            info!("Removed recording.pid file");
+        }
+
+        // Clean up any processing state
+        let _ = state::toggle::cleanup_processing();
+
+        // Trigger waybar refresh to return to idle
+        state::toggle::refresh_waybar();
+
+        info!("Recording cancelled");
+
+        Ok(DaemonResponse::Ok {
+            message: "cancelled".to_string(),
+        })
     }
 
     fn handle_stop_recording(&self) -> Result<DaemonResponse> {

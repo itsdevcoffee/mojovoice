@@ -96,6 +96,28 @@ pub async fn stop_recording() -> Result<String, String> {
     }
 }
 
+/// Cancel recording without transcribing (silent, no-op if not recording)
+#[tauri::command]
+pub async fn cancel_recording() -> Result<(), String> {
+    let request = daemon_client::DaemonRequest::CancelRecording;
+
+    match daemon_client::send_request(request) {
+        Ok(response) => match response {
+            daemon_client::DaemonResponse::Ok { .. } => {
+                // Trigger status bar refresh so waybar returns to idle state
+                refresh_statusbar();
+                Ok(())
+            }
+            daemon_client::DaemonResponse::Error { message } => {
+                Err(format!("Daemon error: {}", message))
+            }
+            _ => Err("Unexpected response from daemon".to_string()),
+        },
+        // Silently succeed even on connection errors (daemon might not be running)
+        Err(_) => Ok(()),
+    }
+}
+
 /// Refresh status bar (execute user-configured refresh_command)
 fn refresh_statusbar() {
     // Read config to get refresh_command
@@ -184,6 +206,8 @@ pub struct AppConfig {
     pub model: ModelConfig,
     pub audio: AudioConfig,
     pub output: OutputConfig,
+    #[serde(default)]
+    pub ui: UiConfig,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -207,6 +231,21 @@ pub struct AudioConfig {
 pub struct OutputConfig {
     pub append_space: bool,
     pub refresh_command: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct UiConfig {
+    pub scale_preset: String,
+    pub custom_scale: f32,
+}
+
+impl Default for UiConfig {
+    fn default() -> Self {
+        Self {
+            scale_preset: "medium".to_string(),
+            custom_scale: 1.0,
+        }
+    }
 }
 
 /// Get current configuration

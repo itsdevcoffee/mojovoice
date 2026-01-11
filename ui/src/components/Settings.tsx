@@ -25,10 +25,14 @@ interface Config {
     append_space: boolean;
     refresh_command: string | null;
   };
+  ui: {
+    scale_preset: 'small' | 'medium' | 'large' | 'custom';
+    custom_scale: number;
+  };
 }
 
 export default function Settings() {
-  const { isRecording } = useAppStore();
+  const { isRecording, setUIScale, uiScale } = useAppStore();
   const [config, setConfig] = useState<Config | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -37,16 +41,29 @@ export default function Settings() {
   const [restarting, setRestarting] = useState(false);
   const [restartSuccess, setRestartSuccess] = useState(false);
   const [restartError, setRestartError] = useState<string | null>(null);
+  const [previewScale, setPreviewScale] = useState<number | null>(null);
 
   useEffect(() => {
     loadConfig();
   }, []);
+
+  // Apply preview scale in real-time
+  useEffect(() => {
+    if (previewScale !== null) {
+      document.documentElement.style.setProperty('--ui-scale', previewScale.toString());
+    } else if (config) {
+      const scaleMap = { small: 0.85, medium: 1.0, large: 1.15, custom: config.ui.custom_scale };
+      const scale = scaleMap[config.ui.scale_preset as keyof typeof scaleMap];
+      document.documentElement.style.setProperty('--ui-scale', scale.toString());
+    }
+  }, [previewScale, config]);
 
   const loadConfig = async () => {
     try {
       setLoading(true);
       const cfg = await invoke<Config>('get_config');
       setConfig(cfg);
+      setPreviewScale(null);
     } catch (error) {
       console.error('Failed to load config:', error);
     } finally {
@@ -60,8 +77,13 @@ export default function Settings() {
     try {
       setSaving(true);
       await invoke('save_config', { config });
+
+      // Apply scale permanently
+      setUIScale(config.ui.scale_preset as any, config.ui.custom_scale);
+      setPreviewScale(null);
+
       setSaved(true);
-      setNeedsRestart(true); // Show restart banner
+      setNeedsRestart(true); // Show restart banner (note: UI changes don't need daemon restart)
       setRestartSuccess(false);
       setRestartError(null);
       setTimeout(() => setSaved(false), 3000);
@@ -107,6 +129,7 @@ export default function Settings() {
   const handleReset = () => {
     if (confirm('Reset all settings to loaded values?')) {
       loadConfig();
+      setPreviewScale(null);
     }
   };
 
@@ -289,6 +312,73 @@ export default function Settings() {
               className="glass-input font-mono text-xs"
               placeholder="pkill -RTMIN+8 waybar"
             />
+          </SettingRow>
+        </SettingsSection>
+
+        {/* Appearance Settings */}
+        <SettingsSection title="Appearance">
+          <SettingRow label="UI Scale Preset" description="Choose a predefined size for the interface">
+            <div className="flex gap-2">
+              {(['small', 'medium', 'large', 'custom'] as const).map((preset) => (
+                <button
+                  key={preset}
+                  onClick={() => {
+                    const newConfig = {
+                      ...config,
+                      ui: { ...config.ui, scale_preset: preset }
+                    };
+                    setConfig(newConfig);
+
+                    const scaleMap = { small: 0.85, medium: 1.0, large: 1.15, custom: config.ui.custom_scale };
+                    setPreviewScale(scaleMap[preset]);
+                  }}
+                  className={cn(
+                    'px-4 py-2 rounded-lg border transition-all duration-200 capitalize',
+                    config.ui.scale_preset === preset
+                      ? 'bg-cyan-500/20 border-cyan-500 text-cyan-400'
+                      : 'bg-white/5 border-white/20 text-gray-400 hover:bg-white/10'
+                  )}
+                >
+                  {preset}
+                </button>
+              ))}
+            </div>
+          </SettingRow>
+
+          {config.ui.scale_preset === 'custom' && (
+            <SettingRow label="Custom Scale" description="Fine-tune the UI size (50% to 200%)">
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min="0.5"
+                  max="2.0"
+                  step="0.05"
+                  value={config.ui.custom_scale}
+                  onChange={(e) => {
+                    const newScale = parseFloat(e.target.value);
+                    const newConfig = {
+                      ...config,
+                      ui: { ...config.ui, custom_scale: newScale }
+                    };
+                    setConfig(newConfig);
+                    setPreviewScale(newScale);
+                  }}
+                  className="flex-1"
+                />
+                <span className="text-white font-mono text-sm w-16">
+                  {Math.round(config.ui.custom_scale * 100)}%
+                </span>
+              </div>
+            </SettingRow>
+          )}
+
+          <SettingRow label="Preview" description="Changes apply in real-time. Click Save to persist.">
+            <div className="glass-card p-3 text-center">
+              <p className="text-gray-400 text-xs mb-1">Current Scale</p>
+              <p className="text-white font-mono text-lg">
+                {Math.round((previewScale || uiScale) * 100)}%
+              </p>
+            </div>
           </SettingRow>
         </SettingsSection>
       </div>

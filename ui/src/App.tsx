@@ -8,7 +8,7 @@ import Settings from './components/Settings';
 import './styles/globals.css';
 
 function App() {
-  const { activeView, setDaemonStatus, addLog } = useAppStore();
+  const { activeView, setDaemonStatus, addLog, setUIScale } = useAppStore();
 
   useEffect(() => {
     // Add initial log
@@ -19,6 +19,31 @@ function App() {
       message: 'hyprvoice UI started',
       source: 'ui',
     });
+
+    // Load UI scale from config
+    const loadUIScale = async () => {
+      try {
+        const config = await invoke<any>('get_config');
+        const preset = config.ui?.scale_preset || 'medium';
+        const customScale = config.ui?.custom_scale || 1.0;
+
+        setUIScale(preset as any, customScale);
+
+        addLog({
+          id: Date.now().toString(),
+          timestamp: Date.now(),
+          level: 'info',
+          message: `UI scale loaded: ${preset} (${customScale}x)`,
+          source: 'ui',
+        });
+      } catch (error) {
+        console.error('Failed to load UI scale:', error);
+        // Fallback to default medium
+        setUIScale('medium');
+      }
+    };
+
+    loadUIScale();
 
     // Check daemon status on mount
     const checkStatus = async () => {
@@ -42,7 +67,7 @@ function App() {
     const interval = setInterval(checkStatus, 2000);
 
     return () => clearInterval(interval);
-  }, [setDaemonStatus, addLog]);
+  }, [setDaemonStatus, addLog, setUIScale]);
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] grid-background p-6">

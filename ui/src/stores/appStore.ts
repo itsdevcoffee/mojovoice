@@ -49,6 +49,11 @@ interface AppState {
   // UI state
   activeView: 'dashboard' | 'settings' | 'history' | 'devtools';
 
+  // UI scaling
+  uiScale: number;
+  scalePreset: 'small' | 'medium' | 'large' | 'custom';
+  customScale: number;
+
   // Actions
   setDaemonStatus: (status: DaemonStatus) => void;
   setRecording: (recording: boolean) => void;
@@ -59,9 +64,11 @@ interface AppState {
   addLog: (log: LogEntry) => void;
   clearLogs: () => void;
   clearIPCCalls: () => void;
+  setUIScale: (preset: 'small' | 'medium' | 'large' | 'custom', customValue?: number) => void;
+  getEffectiveScale: () => number;
 }
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => ({
   // Initial state
   daemonStatus: {
     running: false,
@@ -74,6 +81,11 @@ export const useAppStore = create<AppState>((set) => ({
   ipcCalls: [],
   logs: [],
   activeView: 'dashboard',
+
+  // UI scaling defaults
+  uiScale: 1.0,
+  scalePreset: 'medium',
+  customScale: 1.0,
 
   // Actions
   setDaemonStatus: (status) => set({ daemonStatus: status }),
@@ -94,4 +106,32 @@ export const useAppStore = create<AppState>((set) => ({
     })),
   clearLogs: () => set({ logs: [] }),
   clearIPCCalls: () => set({ ipcCalls: [] }),
+
+  // UI scaling actions
+  setUIScale: (preset, customValue) => {
+    const scaleMap = {
+      small: 0.85,
+      medium: 1.0,
+      large: 1.15,
+      custom: customValue || 1.0,
+    };
+
+    const currentState = get();
+    const effectiveScale = preset === 'custom'
+      ? (customValue || currentState.customScale)
+      : scaleMap[preset];
+
+    set({
+      scalePreset: preset,
+      customScale: preset === 'custom' ? (customValue || 1.0) : currentState.customScale,
+      uiScale: effectiveScale,
+    });
+
+    // Apply CSS variable immediately
+    document.documentElement.style.setProperty('--ui-scale', effectiveScale.toString());
+  },
+
+  getEffectiveScale: (): number => {
+    return get().uiScale;
+  },
 }));

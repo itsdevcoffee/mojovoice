@@ -53,6 +53,9 @@ enum Commands {
     /// Stop a running recording
     Stop,
 
+    /// Cancel a running recording (discard without transcribing)
+    Cancel,
+
     /// Download a whisper model
     Download {
         /// Model name (e.g. large-v3-turbo, distil-large-v3, base.en)
@@ -117,6 +120,9 @@ fn main() -> Result<()> {
         },
         Commands::Stop => {
             cmd_stop()?;
+        },
+        Commands::Cancel => {
+            cmd_cancel()?;
         },
         Commands::Download { model } => {
             cmd_download(&model)?;
@@ -380,6 +386,16 @@ fn cmd_stop() -> Result<()> {
     } else {
         println!("No recording in progress");
     }
+    Ok(())
+}
+
+fn cmd_cancel() -> Result<()> {
+    // Send cancel signal via daemon (silent, no-op if not recording)
+    daemon::daemon_cancel_recording()?;
+
+    // Refresh waybar to return to idle state
+    state::toggle::refresh_waybar();
+
     Ok(())
 }
 

@@ -33,6 +33,33 @@
     --ring: 195 100% 50%;
 
     --radius: 0.75rem;
+
+    /* UI Scaling System */
+    --ui-scale: 1.0;
+
+    /* Scaled spacing */
+    --space-1: calc(0.25rem * var(--ui-scale));
+    --space-2: calc(0.5rem * var(--ui-scale));
+    --space-3: calc(0.75rem * var(--ui-scale));
+    --space-4: calc(1rem * var(--ui-scale));
+    --space-6: calc(1.5rem * var(--ui-scale));
+    --space-8: calc(2rem * var(--ui-scale));
+    --space-12: calc(3rem * var(--ui-scale));
+
+    /* Scaled font sizes */
+    --text-xs: calc(0.75rem * var(--ui-scale));
+    --text-sm: calc(0.875rem * var(--ui-scale));
+    --text-base: calc(1rem * var(--ui-scale));
+    --text-lg: calc(1.125rem * var(--ui-scale));
+    --text-xl: calc(1.25rem * var(--ui-scale));
+    --text-2xl: calc(1.5rem * var(--ui-scale));
+    --text-3xl: calc(1.875rem * var(--ui-scale));
+    --text-4xl: calc(2.25rem * var(--ui-scale));
+
+    /* Scaled dimensions */
+    --height-button: calc(2.5rem * var(--ui-scale));
+    --height-input: calc(2.5rem * var(--ui-scale));
+    --radius-scaled: calc(var(--radius) * var(--ui-scale));
   }
 }
 
@@ -40,26 +67,40 @@
   * {
     @apply border-border;
   }
+
+  html {
+    font-size: calc(16px * var(--ui-scale));
+    transition: font-size 0.2s ease;
+  }
+
   body {
     @apply bg-background text-foreground;
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    transition: font-size 0.2s ease;
   }
 }
 
 /* Glassmorphism utility classes */
 @layer components {
   .glass-panel {
-    @apply backdrop-blur-xl bg-white/5 border border-white/10 rounded-xl shadow-2xl;
+    @apply backdrop-blur-xl bg-white/5 border border-white/10 shadow-2xl;
+    padding: var(--space-6);
+    border-radius: var(--radius-scaled);
   }
 
   .glass-card {
-    @apply backdrop-blur-md bg-white/5 border border-white/10 rounded-lg;
+    @apply backdrop-blur-md bg-white/5 border border-white/10;
+    padding: var(--space-4);
+    border-radius: calc(var(--radius-scaled) * 0.75);
   }
 
   .glass-button {
-    @apply backdrop-blur-sm bg-white/10 border border-white/20 rounded-md
+    @apply backdrop-blur-sm bg-white/10 border border-white/20
            hover:bg-white/20 hover:border-white/30
            transition-all duration-200;
+    padding: var(--space-2) var(--space-4);
+    border-radius: calc(var(--radius-scaled) * 0.5);
+    height: var(--height-button);
   }
 
   .glow-primary {
@@ -71,11 +112,14 @@
   }
 
   .glass-input {
-    @apply w-full backdrop-blur-md bg-white/5 border border-white/20 rounded-lg
-           px-3 py-2 text-white text-sm
+    @apply w-full backdrop-blur-md bg-white/5 border border-white/20 text-white
            focus:outline-none focus:border-cyan-500/50 focus:bg-white/10
            transition-all duration-200
            placeholder:text-gray-500;
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--text-sm);
+    border-radius: calc(var(--radius-scaled) * 0.75);
+    height: var(--height-input);
   }
 
   .glass-input:disabled {

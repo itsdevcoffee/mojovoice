@@ -11,6 +11,8 @@ pub struct Config {
     pub model: ModelConfig,
     pub audio: AudioConfig,
     pub output: OutputConfig,
+    #[serde(default)]
+    pub ui: UiConfig,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -57,6 +59,33 @@ pub struct OutputConfig {
     pub refresh_command: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UiConfig {
+    /// UI scale preset: "small", "medium", "large", or "custom"
+    #[serde(default = "default_scale_preset")]
+    pub scale_preset: String,
+    /// Custom scale multiplier (0.5 to 2.0)
+    #[serde(default = "default_custom_scale")]
+    pub custom_scale: f32,
+}
+
+fn default_scale_preset() -> String {
+    "medium".to_string()
+}
+
+fn default_custom_scale() -> f32 {
+    1.0
+}
+
+impl Default for UiConfig {
+    fn default() -> Self {
+        Self {
+            scale_preset: default_scale_preset(),
+            custom_scale: default_custom_scale(),
+        }
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         let data_dir = directories::BaseDirs::new()
@@ -81,6 +110,10 @@ impl Default for Config {
                 display_server: None,
                 append_space: true,
                 refresh_command: Some("pkill -RTMIN+8 waybar".to_string()),
+            },
+            ui: UiConfig {
+                scale_preset: default_scale_preset(),
+                custom_scale: default_custom_scale(),
             },
         }
     }
@@ -113,5 +146,7 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.audio.sample_rate, 16000);
         assert_eq!(config.model.language, "en");
+        assert_eq!(config.ui.scale_preset, "medium");
+        assert_eq!(config.ui.custom_scale, 1.0);
     }
 }
