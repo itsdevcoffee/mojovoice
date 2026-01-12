@@ -6,6 +6,7 @@ import { cn } from '../lib/utils';
 import { useAppStore } from '../stores/appStore';
 import RestartBanner from './RestartBanner';
 import PathInput from './PathInput';
+import { type ScalePreset, getScaleValue, applyScale, clampScale, isValidPreset, PRESET_OPTIONS } from '../lib/scale';
 
 interface Config {
   model: {
@@ -26,7 +27,7 @@ interface Config {
     refresh_command: string | null;
   };
   ui: {
-    scale_preset: 'small' | 'medium' | 'large' | 'custom';
+    scale_preset: ScalePreset;
     custom_scale: number;
   };
 }
@@ -50,11 +51,9 @@ export default function Settings() {
   // Apply preview scale in real-time
   useEffect(() => {
     if (previewScale !== null) {
-      document.documentElement.style.setProperty('--ui-scale', previewScale.toString());
+      applyScale(previewScale);
     } else if (config) {
-      const scaleMap = { small: 0.85, medium: 1.0, large: 1.15, custom: config.ui.custom_scale };
-      const scale = scaleMap[config.ui.scale_preset as keyof typeof scaleMap];
-      document.documentElement.style.setProperty('--ui-scale', scale.toString());
+      applyScale(getScaleValue(config.ui.scale_preset, config.ui.custom_scale));
     }
   }, [previewScale, config]);
 
@@ -74,12 +73,21 @@ export default function Settings() {
   const handleSave = async () => {
     if (!config) return;
 
+    // Validate and clamp scale values before saving
+    const validatedConfig = {
+      ...config,
+      ui: {
+        scale_preset: isValidPreset(config.ui.scale_preset) ? config.ui.scale_preset : 'medium',
+        custom_scale: clampScale(config.ui.custom_scale),
+      },
+    };
+
     try {
       setSaving(true);
-      await invoke('save_config', { config });
+      await invoke('save_config', { config: validatedConfig });
 
       // Apply scale permanently
-      setUIScale(config.ui.scale_preset as any, config.ui.custom_scale);
+      setUIScale(validatedConfig.ui.scale_preset, validatedConfig.ui.custom_scale);
       setPreviewScale(null);
 
       setSaved(true);
@@ -319,18 +327,12 @@ export default function Settings() {
         <SettingsSection title="Appearance">
           <SettingRow label="UI Scale Preset" description="Choose a predefined size for the interface">
             <div className="flex gap-2">
-              {(['small', 'medium', 'large', 'custom'] as const).map((preset) => (
+              {PRESET_OPTIONS.map((preset) => (
                 <button
                   key={preset}
                   onClick={() => {
-                    const newConfig = {
-                      ...config,
-                      ui: { ...config.ui, scale_preset: preset }
-                    };
-                    setConfig(newConfig);
-
-                    const scaleMap = { small: 0.85, medium: 1.0, large: 1.15, custom: config.ui.custom_scale };
-                    setPreviewScale(scaleMap[preset]);
+                    setConfig({ ...config, ui: { ...config.ui, scale_preset: preset } });
+                    setPreviewScale(getScaleValue(preset, config.ui.custom_scale));
                   }}
                   className={cn(
                     'px-4 py-2 rounded-lg border transition-all duration-200 capitalize',
@@ -353,20 +355,16 @@ export default function Settings() {
                   min="0.5"
                   max="2.0"
                   step="0.05"
-                  value={config.ui.custom_scale}
+                  value={clampScale(config.ui.custom_scale)}
                   onChange={(e) => {
-                    const newScale = parseFloat(e.target.value);
-                    const newConfig = {
-                      ...config,
-                      ui: { ...config.ui, custom_scale: newScale }
-                    };
-                    setConfig(newConfig);
+                    const newScale = clampScale(parseFloat(e.target.value));
+                    setConfig({ ...config, ui: { ...config.ui, custom_scale: newScale } });
                     setPreviewScale(newScale);
                   }}
                   className="flex-1"
                 />
                 <span className="text-white font-mono text-sm w-16">
-                  {Math.round(config.ui.custom_scale * 100)}%
+                  {Math.round(clampScale(config.ui.custom_scale) * 100)}%
                 </span>
               </div>
             </SettingRow>

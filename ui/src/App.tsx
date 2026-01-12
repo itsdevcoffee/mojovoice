@@ -6,6 +6,7 @@ import Dashboard from './components/Dashboard';
 import DevTools from './components/DevTools';
 import Settings from './components/Settings';
 import './styles/globals.css';
+import { type ScalePreset, isValidPreset, clampScale } from './lib/scale';
 
 function App() {
   const { activeView, setDaemonStatus, addLog, setUIScale } = useAppStore();
@@ -23,11 +24,16 @@ function App() {
     // Load UI scale from config
     const loadUIScale = async () => {
       try {
-        const config = await invoke<any>('get_config');
-        const preset = config.ui?.scale_preset || 'medium';
-        const customScale = config.ui?.custom_scale || 1.0;
+        const config = await invoke<{ ui?: { scale_preset?: string; custom_scale?: number } }>('get_config');
 
-        setUIScale(preset as any, customScale);
+        // Validate preset and fallback to medium if invalid
+        const presetValue = config.ui?.scale_preset ?? 'medium';
+        const preset: ScalePreset = isValidPreset(presetValue) ? presetValue : 'medium';
+
+        // Clamp custom scale to valid bounds
+        const customScale = clampScale(config.ui?.custom_scale ?? 1.0);
+
+        setUIScale(preset, customScale);
 
         addLog({
           id: Date.now().toString(),

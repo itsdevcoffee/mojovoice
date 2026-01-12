@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { type ScalePreset, getScaleValue, applyScale } from '../lib/scale';
 
 interface DaemonStatus {
   running: boolean;
@@ -51,7 +52,7 @@ interface AppState {
 
   // UI scaling
   uiScale: number;
-  scalePreset: 'small' | 'medium' | 'large' | 'custom';
+  scalePreset: ScalePreset;
   customScale: number;
 
   // Actions
@@ -64,8 +65,7 @@ interface AppState {
   addLog: (log: LogEntry) => void;
   clearLogs: () => void;
   clearIPCCalls: () => void;
-  setUIScale: (preset: 'small' | 'medium' | 'large' | 'custom', customValue?: number) => void;
-  getEffectiveScale: () => number;
+  setUIScale: (preset: ScalePreset, customValue?: number) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -109,29 +109,18 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // UI scaling actions
   setUIScale: (preset, customValue) => {
-    const scaleMap = {
-      small: 0.85,
-      medium: 1.0,
-      large: 1.15,
-      custom: customValue || 1.0,
-    };
-
     const currentState = get();
-    const effectiveScale = preset === 'custom'
-      ? (customValue || currentState.customScale)
-      : scaleMap[preset];
+    const newCustomScale = preset === 'custom'
+      ? (customValue ?? currentState.customScale)
+      : currentState.customScale;
+    const effectiveScale = getScaleValue(preset, newCustomScale);
 
     set({
       scalePreset: preset,
-      customScale: preset === 'custom' ? (customValue || 1.0) : currentState.customScale,
+      customScale: newCustomScale,
       uiScale: effectiveScale,
     });
 
-    // Apply CSS variable immediately
-    document.documentElement.style.setProperty('--ui-scale', effectiveScale.toString());
-  },
-
-  getEffectiveScale: (): number => {
-    return get().uiScale;
+    applyScale(effectiveScale);
   },
 }));
