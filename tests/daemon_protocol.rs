@@ -55,6 +55,23 @@ fn test_request_shutdown_serialization() {
 }
 
 #[test]
+fn test_request_transcribe_audio_serialization() {
+    let samples = vec![0.1f32, -0.2, 0.3, -0.4, 0.5];
+    let request = DaemonRequest::TranscribeAudio { samples: samples.clone() };
+    let json = serde_json::to_string(&request).unwrap();
+    let parsed: DaemonRequest = serde_json::from_str(&json).unwrap();
+
+    match parsed {
+        DaemonRequest::TranscribeAudio { samples: parsed_samples } => {
+            assert_eq!(parsed_samples.len(), 5);
+            assert!((parsed_samples[0] - 0.1).abs() < 1e-6);
+            assert!((parsed_samples[1] - (-0.2)).abs() < 1e-6);
+        },
+        _ => panic!("Expected TranscribeAudio variant"),
+    }
+}
+
+#[test]
 fn test_response_ok_serialization() {
     let response = DaemonResponse::Ok {
         message: "pong".to_string(),

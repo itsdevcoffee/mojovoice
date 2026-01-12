@@ -57,13 +57,25 @@ pub struct MojoMelConfig {
 
 impl Default for MojoMelConfig {
     fn default() -> Self {
-        // Whisper Large V3 Turbo defaults (128 mel bins, Whisper normalization)
+        // Default Whisper config (80 mel bins for most models)
         Self {
             sample_rate: 16000,
             n_fft: 400,
             hop_length: 160,
-            n_mels: 128,
+            n_mels: 80,
             normalization: MojoNormalization::Whisper as i32,
+        }
+    }
+}
+
+impl MojoMelConfig {
+    /// Create config with custom number of mel bins
+    /// - Use 80 for most Whisper models (tiny, base, small, medium, large-v1, large-v2)
+    /// - Use 128 for Whisper Large V3 and Large V3 Turbo
+    pub fn with_n_mels(n_mels: usize) -> Self {
+        Self {
+            n_mels: n_mels as i32,
+            ..Default::default()
         }
     }
 }
@@ -251,12 +263,29 @@ impl MojoAudio {
     }
 }
 
-/// Convenience function to compute mel spectrogram with default Whisper config
+/// Compute mel spectrogram with specified number of mel bins
 ///
 /// Uses mojo-audio's native Whisper normalization (NORM_WHISPER)
+///
+/// # Arguments
+/// * `audio` - Audio samples (16kHz mono f32)
+/// * `n_mels` - Number of mel bins (80 for most models, 128 for large-v3/turbo)
+pub fn compute_mel_spectrogram_with_n_mels(
+    audio: &[f32],
+    n_mels: usize,
+) -> Result<(usize, usize, Vec<f32>)> {
+    let mojo = MojoAudio::get()?;
+    let config = MojoMelConfig::with_n_mels(n_mels);
+    mojo.compute_mel(audio, &config)
+}
+
+/// Convenience function to compute mel spectrogram with default config (80 mel bins)
+///
+/// Uses mojo-audio's native Whisper normalization (NORM_WHISPER)
+/// Note: For Whisper Large V3/Turbo, use `compute_mel_spectrogram_with_n_mels(audio, 128)`
 pub fn compute_mel_spectrogram(audio: &[f32]) -> Result<(usize, usize, Vec<f32>)> {
     let mojo = MojoAudio::get()?;
-    let config = MojoMelConfig::default(); // Uses NORM_WHISPER
+    let config = MojoMelConfig::default();
     mojo.compute_mel(audio, &config)
 }
 
@@ -270,6 +299,16 @@ mod tests {
         assert_eq!(config.sample_rate, 16000);
         assert_eq!(config.n_fft, 400);
         assert_eq!(config.hop_length, 160);
-        assert_eq!(config.n_mels, 80);
+        assert_eq!(config.n_mels, 80); // Default for most Whisper models
+        assert_eq!(config.normalization, MojoNormalization::Whisper as i32);
+    }
+
+    #[test]
+    fn test_config_with_n_mels() {
+        let config = MojoMelConfig::with_n_mels(128);
+        assert_eq!(config.n_mels, 128); // For Whisper Large V3/Turbo
+        // Other params should use defaults
+        assert_eq!(config.sample_rate, 16000);
+        assert_eq!(config.n_fft, 400);
     }
 }

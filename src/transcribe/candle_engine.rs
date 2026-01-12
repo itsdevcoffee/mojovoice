@@ -65,6 +65,7 @@ pub struct CandleEngine {
     language: String,
     initial_prompt: Option<String>,
     suppress_tokens: Tensor,
+    num_mel_bins: usize, // 128 for large-v3/turbo, 80 for others
 }
 
 impl CandleEngine {
@@ -90,7 +91,7 @@ impl CandleEngine {
         let is_quantized =
             is_local_file && (model_id.ends_with(".gguf") || model_id.ends_with(".bin"));
 
-        let (_config, tokenizer, model) = if is_local_file {
+        let (config, tokenizer, model) = if is_local_file {
             info!("Loading model from local file: {}", model_id);
 
             if is_quantized {
@@ -216,7 +217,10 @@ impl CandleEngine {
             suppress_list.len()
         );
 
-        info!("CandleEngine initialization complete - ready for transcription");
+        info!(
+            "CandleEngine initialization complete - ready for transcription (num_mel_bins={})",
+            config.num_mel_bins
+        );
 
         Ok(Self {
             device,
@@ -225,6 +229,7 @@ impl CandleEngine {
             language: language.to_string(),
             initial_prompt,
             suppress_tokens,
+            num_mel_bins: config.num_mel_bins,
         })
     }
 
@@ -645,8 +650,10 @@ impl CandleEngine {
 
         // 1. Convert audio to Mel Spectrogram using mojo-audio FFI
         // (Produces correct frame count unlike Candle's pcm_to_mel)
-        debug!("Converting PCM to Mel spectrogram via mojo-audio...");
-        let (n_mels, frames, mel_data) = mojo_ffi::compute_mel_spectrogram(&padded_audio)?;
+        // Uses model's num_mel_bins (128 for large-v3/turbo, 80 for others)
+        debug!("Converting PCM to Mel spectrogram via mojo-audio (n_mels={})...", self.num_mel_bins);
+        let (n_mels, frames, mel_data) =
+            mojo_ffi::compute_mel_spectrogram_with_n_mels(&padded_audio, self.num_mel_bins)?;
 
         // Debug: Log mel spectrogram statistics
         let mel_min = mel_data.iter().cloned().fold(f32::INFINITY, f32::min);
