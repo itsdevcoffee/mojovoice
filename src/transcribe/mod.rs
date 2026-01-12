@@ -1,6 +1,7 @@
 use anyhow::Result;
 
 pub mod candle_engine;
+pub mod mojo_ffi;
 pub mod whisper;
 
 /// Trait to abstract transcription engines

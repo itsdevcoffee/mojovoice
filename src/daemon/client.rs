@@ -27,7 +27,15 @@ pub fn send_request(request: &DaemonRequest) -> Result<DaemonResponse> {
 
     // Send request
     let request_json = serde_json::to_string(request)?;
-    info!("Sending to daemon: {}", request_json);
+    // Log request type and size (not full content for large payloads)
+    match request {
+        DaemonRequest::TranscribeAudio { samples } => {
+            info!("Sending TranscribeAudio request ({} samples, {} bytes)", samples.len(), request_json.len());
+        }
+        _ => {
+            info!("Sending to daemon: {}", request_json);
+        }
+    }
     stream.write_all(request_json.as_bytes())?;
     stream.write_all(b"\n")?;
     stream.flush()?;

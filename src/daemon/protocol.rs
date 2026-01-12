@@ -10,6 +10,11 @@ pub enum DaemonRequest {
     StopRecording,
     #[serde(rename = "cancel_recording")]
     CancelRecording,
+    #[serde(rename = "transcribe_audio")]
+    TranscribeAudio {
+        /// Audio samples (16kHz mono f32)
+        samples: Vec<f32>,
+    },
     #[serde(rename = "shutdown")]
     Shutdown,
     #[serde(rename = "ping")]

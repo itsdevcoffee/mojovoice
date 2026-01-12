@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 
 use crate::audio::capture_toggle;
 use crate::daemon::protocol::{DaemonRequest, DaemonResponse};
@@ -144,12 +144,19 @@ impl DaemonServer {
         let mut line = String::new();
 
         reader.read_line(&mut line)?;
-        info!("Received from client: {}", line.trim());
 
         let request: DaemonRequest =
             serde_json::from_str(line.trim()).context("Failed to parse request")?;
 
-        debug!("Parsed request: {:?}", request);
+        // Log request type (not full content for large payloads like TranscribeAudio)
+        match &request {
+            DaemonRequest::TranscribeAudio { samples } => {
+                info!("Received TranscribeAudio request ({} samples)", samples.len());
+            }
+            _ => {
+                info!("Received from client: {}", line.trim());
+            }
+        }
 
         let response = match request {
             DaemonRequest::Ping => DaemonResponse::Ok {
@@ -160,6 +167,9 @@ impl DaemonServer {
             },
             DaemonRequest::StopRecording => self.handle_stop_recording()?,
             DaemonRequest::CancelRecording => self.handle_cancel_recording()?,
+            DaemonRequest::TranscribeAudio { samples } => {
+                self.handle_transcribe_audio(samples)?
+            },
             DaemonRequest::Shutdown => {
                 info!("Shutdown requested");
                 self.shutdown.store(true, Ordering::SeqCst);
@@ -349,6 +359,45 @@ impl DaemonServer {
         // Clean up processing state file (recording.pid already removed above)
         state::toggle::cleanup_processing()?;
 
+        Ok(DaemonResponse::Success { text })
+    }
+
+    /// Handle transcribe audio request (for file transcription)
+    fn handle_transcribe_audio(&self, samples: Vec<f32>) -> Result<DaemonResponse> {
+        info!("Transcribing {} samples from file...", samples.len());
+
+        if samples.is_empty() {
+            return Ok(DaemonResponse::Error {
+                message: "No audio samples provided".to_string(),
+            });
+        }
+
+        // Transcribe with the persistent model
+        let mut transcriber = self
+            .transcriber
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Transcriber mutex poisoned: {}", e))?;
+
+        let text = match transcriber.transcribe(&samples) {
+            Ok(t) => {
+                info!("Transcription completed successfully");
+                t
+            },
+            Err(e) => {
+                error!("Transcription failed: {}", e);
+                return Ok(DaemonResponse::Error {
+                    message: format!("Transcription error: {}", e),
+                });
+            },
+        };
+
+        if text.is_empty() {
+            return Ok(DaemonResponse::Success {
+                text: "(no speech detected)".to_string(),
+            });
+        }
+
+        info!("Transcribed: {}", text);
         Ok(DaemonResponse::Success { text })
     }
 }

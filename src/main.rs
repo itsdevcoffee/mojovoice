@@ -102,6 +102,16 @@ enum Commands {
         #[arg(short, long)]
         clipboard: bool,
     },
+
+    /// Transcribe a WAV file (for testing/debugging)
+    TranscribeFile {
+        /// Path to WAV file to transcribe
+        path: std::path::PathBuf,
+
+        /// Override model path
+        #[arg(short, long)]
+        model: Option<String>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -143,6 +153,9 @@ fn main() -> Result<()> {
         },
         Commands::EnigoTest { text, clipboard } => {
             commands::enigo_test(&text, clipboard)?;
+        },
+        Commands::TranscribeFile { path, model } => {
+            cmd_transcribe_file(&path, model)?;
         },
     }
 
@@ -651,5 +664,120 @@ fn cmd_doctor() -> Result<()> {
     }
 
     println!();
+    Ok(())
+}
+
+/// Transcribe a WAV file via daemon (for testing/debugging)
+fn cmd_transcribe_file(path: &std::path::Path, _model_override: Option<String>) -> Result<()> {
+    use hound::WavReader;
+    use rubato::{Resampler, SincFixedIn, SincInterpolationType, SincInterpolationParameters, WindowFunction};
+
+    const TARGET_SAMPLE_RATE: u32 = 16000;
+
+    // Check daemon is running
+    if !daemon::is_daemon_running() {
+        anyhow::bail!("Daemon is not running. Start it first with: hyprvoice daemon &");
+    }
+
+    // Check file exists
+    if !path.exists() {
+        anyhow::bail!("File not found: {}", path.display());
+    }
+
+    info!("Loading WAV file: {}", path.display());
+
+    // Open WAV file
+    let mut reader = WavReader::open(path)?;
+    let spec = reader.spec();
+
+    info!(
+        "WAV spec: {} channels, {}Hz, {}-bit {:?}",
+        spec.channels, spec.sample_rate, spec.bits_per_sample, spec.sample_format
+    );
+
+    // Read samples based on format
+    let samples: Vec<f32> = match spec.sample_format {
+        hound::SampleFormat::Float => reader.samples::<f32>().map(|s| s.unwrap()).collect(),
+        hound::SampleFormat::Int => {
+            let max_val = (1 << (spec.bits_per_sample - 1)) as f32;
+            reader
+                .samples::<i32>()
+                .map(|s| s.unwrap() as f32 / max_val)
+                .collect()
+        }
+    };
+
+    info!("Loaded {} raw samples", samples.len());
+
+    // Convert stereo to mono if needed
+    let mono_samples: Vec<f32> = if spec.channels == 2 {
+        info!("Converting stereo to mono...");
+        samples
+            .chunks(2)
+            .map(|chunk| (chunk[0] + chunk[1]) / 2.0)
+            .collect()
+    } else {
+        samples
+    };
+
+    info!("Mono samples: {}", mono_samples.len());
+
+    // Resample to 16kHz if needed
+    let audio_16k: Vec<f32> = if spec.sample_rate != TARGET_SAMPLE_RATE {
+        info!(
+            "Resampling from {}Hz to {}Hz...",
+            spec.sample_rate, TARGET_SAMPLE_RATE
+        );
+
+        let params = SincInterpolationParameters {
+            sinc_len: 256,
+            f_cutoff: 0.95,
+            interpolation: SincInterpolationType::Linear,
+            oversampling_factor: 256,
+            window: WindowFunction::BlackmanHarris2,
+        };
+
+        let mut resampler = SincFixedIn::<f32>::new(
+            TARGET_SAMPLE_RATE as f64 / spec.sample_rate as f64,
+            2.0,
+            params,
+            mono_samples.len(),
+            1,
+        )?;
+
+        let waves_in = vec![mono_samples];
+        let mut waves_out = resampler.process(&waves_in, None)?;
+        waves_out.remove(0)
+    } else {
+        mono_samples
+    };
+
+    let duration_secs = audio_16k.len() as f32 / TARGET_SAMPLE_RATE as f32;
+    info!(
+        "Final audio: {} samples ({:.2}s at {}Hz)",
+        audio_16k.len(),
+        duration_secs,
+        TARGET_SAMPLE_RATE
+    );
+
+    // Send to daemon for transcription
+    info!("Sending to daemon for transcription...");
+    let response = daemon::send_request(&daemon::DaemonRequest::TranscribeAudio {
+        samples: audio_16k,
+    })?;
+
+    // Handle response
+    match response {
+        daemon::DaemonResponse::Success { text } => {
+            println!("\n=== Transcription ===\n{}\n", text);
+        },
+        daemon::DaemonResponse::Error { message } => {
+            anyhow::bail!("Transcription failed: {}", message);
+        },
+        _ => {
+            anyhow::bail!("Unexpected response from daemon");
+        },
+    }
+
     Ok(())
 }

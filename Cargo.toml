@@ -50,6 +50,9 @@ hex = "0.4"
 # Better resampling
 rubato = "0.16"
 
+# Dynamic library loading for mojo-audio FFI
+libloading = "0.8"
+
 # Clipboard - always available
 arboard = "3.6"
 

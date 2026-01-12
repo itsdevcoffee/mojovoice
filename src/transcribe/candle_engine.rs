@@ -5,8 +5,9 @@ use candle_transformers::models::whisper::{self, Config};
 use hf_hub::{Repo, api::sync::Api};
 use std::path::Path;
 use tokenizers::Tokenizer;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
+use crate::transcribe::mojo_ffi;
 use crate::transcribe::Transcriber;
 
 // Temperature fallback constants (from official Candle Whisper example)
@@ -61,10 +62,8 @@ pub struct CandleEngine {
     device: Device,
     model: Model,
     tokenizer: Tokenizer,
-    config: Config,
     language: String,
     initial_prompt: Option<String>,
-    mel_filters: Vec<f32>,
     suppress_tokens: Tensor,
 }
 
@@ -91,7 +90,7 @@ impl CandleEngine {
         let is_quantized =
             is_local_file && (model_id.ends_with(".gguf") || model_id.ends_with(".bin"));
 
-        let (config, tokenizer, model) = if is_local_file {
+        let (_config, tokenizer, model) = if is_local_file {
             info!("Loading model from local file: {}", model_id);
 
             if is_quantized {
@@ -195,10 +194,6 @@ impl CandleEngine {
 
         info!("Model loaded successfully");
 
-        // Create mel filterbank from pre-computed bytes
-        let mel_filters_vec = Self::load_mel_filters(config.num_mel_bins)?;
-        info!("Mel filters loaded: {} filters", mel_filters_vec.len());
-
         // Build suppress tokens mask to prevent unwanted tokens (like 199)
         let vocab_size = tokenizer.get_vocab_size(true);
         let no_ts_token = tokenizer
@@ -227,10 +222,8 @@ impl CandleEngine {
             device,
             model,
             tokenizer,
-            config,
             language: language.to_string(),
             initial_prompt,
-            mel_filters: mel_filters_vec,
             suppress_tokens,
         })
     }
@@ -256,33 +249,6 @@ impl CandleEngine {
         // Fallback to CPU
         warn!("No GPU accelerator found, falling back to CPU");
         Ok(Device::Cpu)
-    }
-
-    /// Load mel filterbank coefficients
-    ///
-    /// These are pre-computed filter banks included from the Candle whisper example
-    fn load_mel_filters(num_mel_bins: usize) -> Result<Vec<f32>> {
-        let mel_bytes: &[u8] = match num_mel_bins {
-            80 => include_bytes!("../../assets/melfilters80.bytes"),
-            128 => include_bytes!("../../assets/melfilters128.bytes"),
-            _ => anyhow::bail!(
-                "Unsupported num_mel_bins: {}. Only 80 and 128 are supported.",
-                num_mel_bins
-            ),
-        };
-
-        let mut mel_filters = vec![0f32; mel_bytes.len() / 4];
-
-        // Convert bytes to f32 using little-endian byte order
-        use std::io::Read;
-        let mut cursor = std::io::Cursor::new(mel_bytes);
-        for filter in mel_filters.iter_mut() {
-            let mut bytes = [0u8; 4];
-            cursor.read_exact(&mut bytes)?;
-            *filter = f32::from_le_bytes(bytes);
-        }
-
-        Ok(mel_filters)
     }
 
     /// Get special token IDs from the tokenizer
@@ -677,43 +643,26 @@ impl CandleEngine {
         }
         info!("PADDED AUDIO LENGTH: {} samples", padded_audio.len());
 
-        // 1. Convert audio to Mel Spectrogram (will create exactly 3000 frames)
-        debug!("Converting PCM to Mel spectrogram...");
-        let mel_data = whisper::audio::pcm_to_mel(&self.config, &padded_audio, &self.mel_filters);
-        info!("MEL DATA LENGTH: {} elements", mel_data.len());
+        // 1. Convert audio to Mel Spectrogram using mojo-audio FFI
+        // (Produces correct frame count unlike Candle's pcm_to_mel)
+        debug!("Converting PCM to Mel spectrogram via mojo-audio...");
+        let (n_mels, frames, mel_data) = mojo_ffi::compute_mel_spectrogram(&padded_audio)?;
 
-        // Convert Vec<f32> to Tensor with proper shape
-        let mel_len = mel_data.len();
-        let n_mels = self.config.num_mel_bins;
-        let frames = mel_len / n_mels;
-
+        // Debug: Log mel spectrogram statistics
+        let mel_min = mel_data.iter().cloned().fold(f32::INFINITY, f32::min);
+        let mel_max = mel_data.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+        let mel_mean = mel_data.iter().sum::<f32>() / mel_data.len() as f32;
         info!(
-            "MEL SPECTROGRAM: mel_len={}, n_mels={}, frames={}",
-            mel_len, n_mels, frames
+            "MEL SPECTROGRAM (mojo): n_mels={}, frames={}, total={}, min={:.3}, max={:.3}, mean={:.3}",
+            n_mels, frames, mel_data.len(), mel_min, mel_max, mel_mean
         );
 
-        if mel_len == 0 || frames == 0 || mel_len % n_mels != 0 {
-            anyhow::bail!("Invalid mel spectrogram");
+        if mel_data.is_empty() || frames == 0 {
+            anyhow::bail!("Invalid mel spectrogram from mojo-audio");
         }
 
         let mel = Tensor::from_vec(mel_data, (n_mels, frames), &self.device)?;
-        info!("MEL TENSOR SHAPE (before batch dim): {:?}", mel.shape());
-
-        // CRITICAL FIX: Whisper Large V3 Turbo has max_source_positions=1500
-        // After 2x encoder downsampling, this means mel can have max 3000 frames
-        // But pcm_to_mel produces 4500 frames for 480000 samples (bug in Candle?)
-        // Truncate to exactly 3000 frames to match model's max_source_positions
-        const MAX_MEL_FRAMES: usize = 3000;
-        let mel = if frames > MAX_MEL_FRAMES {
-            warn!(
-                "Mel has {} frames, truncating to {} to match model's max_source_positions",
-                frames, MAX_MEL_FRAMES
-            );
-            mel.narrow(1, 0, MAX_MEL_FRAMES)?
-        } else {
-            mel
-        };
-        info!("MEL TENSOR SHAPE (after truncation): {:?}", mel.shape());
+        info!("MEL TENSOR SHAPE: {:?}", mel.shape());
 
         let mel = mel.unsqueeze(0)?; // Add batch dimension
         info!("MEL TENSOR SHAPE (after batch dim): {:?}", mel.shape());

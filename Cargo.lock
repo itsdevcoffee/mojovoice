@@ -1641,6 +1641,7 @@ dependencies = [
  "hex",
  "hf-hub",
  "hound",
+ "libloading",
  "mockall",
  "nix",
  "rubato",
