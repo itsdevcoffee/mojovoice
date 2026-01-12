@@ -1,0 +1,77 @@
+{
+  "description": "Audio samples for transcription testing",
+  "samples": [
+    {
+      "file": "sample-hyprvoice-clip.wav",
+      "transcript": "Alright, testing 1, 2, 3, testing 1, 2, 3 to see if this works.",
+      "source": "local-recording",
+      "sample_rate": 16000,
+      "duration_secs": 7.08
+    },
+    {
+      "file": "sample-hyprvoice-clip-1.wav",
+      "transcript": "Alright, testing 1, 2, 3, testing 1, 2, 3 to see if this works.",
+      "source": "local-recording",
+      "sample_rate": 16000,
+      "duration_secs": 7.08
+    },
+    {
+      "file": "sample-hyprvoice-clip-2.wav",
+      "transcript": "Alright, with this change, I just want to ensure that you push it and trigger a new release.",
+      "source": "local-recording",
+      "sample_rate": 16000,
+      "duration_secs": 7.88
+    },
+    {
+      "file": "sample-hyprvoice-clip-3.wav",
+      "transcript": "Okay, I just tested.",
+      "source": "local-recording",
+      "sample_rate": 16000,
+      "duration_secs": 5.08
+    },
+    {
+      "file": "sample-hyprvoice-clip-4.wav",
+      "transcript": "So I'm testing this one more time to see if it works. Testing it one more time.",
+      "source": "local-recording",
+      "sample_rate": 16000,
+      "duration_secs": 6.10
+    },
+    {
+      "file": "sample-hyprvoice-clip-5.wav",
+      "transcript": "What I think is generally agreed upon is with no spectrogram, it is logically how we figured it is the best job to analyze.",
+      "source": "local-recording",
+      "sample_rate": 16000,
+      "duration_secs": 12.60
+    },
+    {
+      "file": "harvard-list01-female.wav",
+      "transcript": "The birch canoe slid on the smooth planks. Glue the sheet to the dark blue background. It's easy to tell the depth of a well. These days a chicken leg is a rare dish. Rice is often served in round bowls. The juice of lemons makes fine punch. The box was thrown beside the parked truck. The hogs were fed chopped corn and garbage. Four hours of steady work faced us. A large size in stockings is hard to sell.",
+      "source": "open-speech-repository",
+      "source_url": "http://www.voiptroubleshooter.com/open_speech/american.html",
+      "harvard_list": 1,
+      "sample_rate": 8000,
+      "duration_secs": 33.6,
+      "notes": "Harvard Sentences List 1, female American English speaker"
+    },
+    {
+      "file": "harvard-list02-female.wav",
+      "transcript": "The boy was there when the sun rose. A rod is used to catch pink salmon. The source of the huge river is the clear spring. Kick the ball straight and follow through. Help the woman get back to her feet. A pot of tea helps to pass the evening. Smoky fires lack flame and heat. The soft cushion broke the man's fall. The salt breeze came across from the sea. The girl at the booth sold fifty bonds.",
+      "source": "open-speech-repository",
+      "source_url": "http://www.voiptroubleshooter.com/open_speech/american.html",
+      "harvard_list": 2,
+      "sample_rate": 8000,
+      "duration_secs": 32.8,
+      "notes": "Harvard Sentences List 2, female American English speaker"
+    },
+    {
+      "file": "harvard-list57-male.wav",
+      "transcript": "Paint the sockets in the wall dull green. The child crawled into the dense grass. Bribes fail where honest men work. Trample the spark, else the flames will spread. The hilt of the sword was carved with fine designs. A round hole was drilled through the thin board. Footprints showed the path he took up the beach. She was waiting at my front lawn. A vent near the edge brought in fresh air. Prod the old mule with a crooked stick.",
+      "source": "open-speech-repository",
+      "source_url": "http://www.voiptroubleshooter.com/open_speech/american.html",
+      "harvard_list": 57,
+      "sample_rate": 8000,
+      "duration_secs": 46.9,
+      "notes": "Harvard Sentences List 57, male American English speaker"
+    }
+  ]
+}

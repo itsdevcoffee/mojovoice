@@ -79,7 +79,7 @@ fn test_transcribe_sample_audio() {
     );
 
     // Load sample audio file
-    let audio_path = Path::new("assets/audio/sample-hyprvoice-clip.wav");
+    let audio_path = Path::new("assets/audio/samples/sample-hyprvoice-clip.wav");
     assert!(
         audio_path.exists(),
         "Sample audio file not found: {}",
