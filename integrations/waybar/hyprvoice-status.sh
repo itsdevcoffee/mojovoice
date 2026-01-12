@@ -4,11 +4,21 @@
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/hyprvoice"
 PID_FILE="${STATE_DIR}/recording.pid"
 PROCESSING_FILE="${STATE_DIR}/processing"
+SOCKET_FILE="${STATE_DIR}/daemon.sock"
 
 # Icons (Nerd Fonts required)
-ICON_IDLE="󰔊"
+ICON_IDLE="󰍬"
 ICON_RECORDING="󰑋"
 ICON_PROCESSING="󱐋"
+ICON_OFFLINE="󱘖"
+
+# Check if daemon is running (socket exists AND daemon process is alive)
+if [[ ! -S "$SOCKET_FILE" ]] || ! pgrep -f "hyprvoice daemon" &>/dev/null; then
+    # Clean up stale socket if process isn't running
+    [[ -S "$SOCKET_FILE" ]] && rm -f "$SOCKET_FILE"
+    echo "{\"text\": \"${ICON_OFFLINE}\", \"tooltip\": \"Daemon not running\", \"class\": \"offline\"}"
+    exit 0
+fi
 
 # Check if recording
 if [[ -f "$PID_FILE" ]]; then

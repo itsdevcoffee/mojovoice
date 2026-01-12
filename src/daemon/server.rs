@@ -342,6 +342,7 @@ impl DaemonServer {
             Err(e) => {
                 error!("Transcription failed with error: {}", e);
                 error!("Error chain: {:?}", e);
+                let _ = state::toggle::cleanup_processing();
                 return Ok(DaemonResponse::Error {
                     message: format!("Transcription error: {}", e),
                 });
@@ -349,6 +350,7 @@ impl DaemonServer {
         };
 
         if text.is_empty() {
+            let _ = state::toggle::cleanup_processing();
             return Ok(DaemonResponse::Error {
                 message: "No speech detected".to_string(),
             });

@@ -20,6 +20,11 @@
   animation: none;
 }
 
+#custom-hyprvoice.offline {
+  color: #44475a;
+  animation: none;
+}
+
 @keyframes pulse {
   from {
     opacity: 1;

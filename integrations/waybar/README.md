@@ -3,7 +3,7 @@
 Real-time voice dictation status module for Waybar.
 
 ## Features
-- Three-state visual feedback (Idle, Recording, Thinking)
+- Four-state visual feedback (Offline, Idle, Recording, Thinking)
 - Signal-based instant updates (no polling lag)
 - Recording timer display
 - Click to start/stop recording
@@ -74,6 +74,10 @@ Add to your `~/.config/waybar/style.css`:
   color: #6272a4;
 }
 
+#custom-hyprvoice.offline {
+  color: #44475a;
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
@@ -96,7 +100,8 @@ pkill -SIGUSR2 waybar
 
 | State | Icon | Color | Trigger |
 |-------|------|-------|---------|
-| Idle | 󰔊 | Gray | No activity |
+| Offline | 󱘖 | Dark gray | Daemon not running |
+| Idle | 󰍬 | Gray | Daemon running, no activity |
 | Recording | 󰑋 | Red (pulsing) | `hyprvoice start` |
 | Thinking | 󱐋 | Yellow (pulsing) | Processing audio |
 
@@ -105,7 +110,8 @@ pkill -SIGUSR2 waybar
 ### Change Icons
 Edit `~/.config/waybar/scripts/hyprvoice-status.sh`:
 ```bash
-ICON_IDLE="󰔊"
+ICON_OFFLINE="󱘖"
+ICON_IDLE="󰍬"
 ICON_RECORDING="󰑋"
 ICON_PROCESSING="󱐋"
 ```
