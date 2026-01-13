@@ -4,8 +4,6 @@ use std::path::PathBuf;
 
 const APP_NAME: &str = "hyprvoice";
 
-const DEFAULT_PROMPT: &str = "async, await, impl, struct, enum, pub, static, btreemap, hashmap, kubernetes, k8s, docker, container, pod, lifecycle, workflow, ci/cd, yaml, json, rustlang, python, javascript, typescript, bash, git, repo, branch, commit, push, pull, merge, rebase, upstream, downstream, middleware, database, sql, postgres, redis, api, endpoint, graphql, rest, grpc, protobuf, systemd, journalctl, flatpak, wayland, nix, cargo.";
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub model: ModelConfig,

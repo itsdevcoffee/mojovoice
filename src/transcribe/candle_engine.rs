@@ -316,32 +316,13 @@ impl CandleEngine {
         temperature: f64,
     ) -> Result<(String, f64, f64)> {
         debug!(
-            "decode_at_temperature() called with mel shape: {:?}, temp: {}",
+            "decode_at_temperature: mel shape {:?}, temp {}",
             mel.shape(),
             temperature
         );
-        debug!("Starting decode process with temperature {}", temperature);
 
-        debug!("Getting special tokens");
         let special_tokens = self.get_special_tokens()?;
-        debug!("Got special tokens");
-
-        // Validate special tokens are reasonable (Whisper tokenizer uses 51k vocab)
-        let validate_token = |name: &str, token: u32| {
-            if token > 51865 {
-                warn!(
-                    "Special token {} = {} seems invalid (> vocab size)",
-                    name, token
-                );
-            }
-        };
-        validate_token("SOT", special_tokens.sot_token);
-        validate_token("EOT", special_tokens.eot_token);
-        validate_token("Language", special_tokens.language_token);
-        validate_token("Transcribe", special_tokens.transcribe_token);
-        validate_token("NoTimestamps", special_tokens.no_timestamps_token);
-
-        info!(
+        debug!(
             "Special tokens: SOT={}, EOT={}, Lang={}, Transcribe={}, NoTS={}",
             special_tokens.sot_token,
             special_tokens.eot_token,
@@ -353,170 +334,90 @@ impl CandleEngine {
         let prompt_tokens = self.encode_initial_prompt()?;
         debug!("Got {} prompt tokens", prompt_tokens.len());
 
-        // 1. Run Encoder
-        debug!(
-            "Running encoder forward pass on mel shape: {:?}",
-            mel.shape()
-        );
-        info!("MEL SHAPE BEFORE ENCODER: {:?}", mel.shape());
-        debug!("Calling encoder.forward()");
+        // Run encoder
+        debug!("Running encoder forward pass on mel shape: {:?}", mel.shape());
         let audio_features = self.model.encoder_forward(mel, true)?;
-        debug!("encoder.forward() returned");
-        info!("ENCODER OUTPUT SHAPE: {:?}", audio_features.shape());
-        info!(
-            "ENCODER OUTPUT DIMS: batch={}, frames={}, d_model={}",
+        debug!(
+            "Encoder output: batch={}, frames={}, d_model={}",
             audio_features.dim(0)?,
             audio_features.dim(1)?,
             audio_features.dim(2)?
         );
 
-        // 2. Build initial token sequence following Whisper spec:
-        // <|startoftranscript|><|language|><|transcribe|><|notimestamps|>[optional_prompt_tokens]
-        let mut current_tokens = vec![special_tokens.sot_token];
-        current_tokens.push(special_tokens.language_token);
-        current_tokens.push(special_tokens.transcribe_token);
-        current_tokens.push(special_tokens.no_timestamps_token);
-
-        // Add initial prompt tokens for technical vocabulary biasing
-        if !prompt_tokens.is_empty() {
-            debug!(
-                "Using initial prompt with {} tokens for biasing",
-                prompt_tokens.len()
-            );
-            current_tokens.extend_from_slice(&prompt_tokens);
-        }
-
-        info!(
-            "Initial token sequence: {} special tokens + {} prompt tokens = {} total",
+        // Build initial token sequence: <|sot|><|lang|><|transcribe|><|notimestamps|>[prompt]
+        let mut current_tokens = vec![
+            special_tokens.sot_token,
+            special_tokens.language_token,
+            special_tokens.transcribe_token,
+            special_tokens.no_timestamps_token,
+        ];
+        current_tokens.extend_from_slice(&prompt_tokens);
+        debug!(
+            "Initial tokens: {} special + {} prompt = {} total",
             4,
             prompt_tokens.len(),
             current_tokens.len()
         );
 
-        // 3. Greedy decoding loop with quality metrics
+        // Greedy decoding loop with quality metrics
         let mut result_tokens = Vec::new();
-        let start_result_idx = current_tokens.len(); // Track where actual transcription starts
+        let start_result_idx = current_tokens.len();
 
-        // Calculate max tokens accounting for initial sequence (special + prompt tokens)
         // Decoder has hard limit of 448 total positions
         let max_tokens = 448_usize.saturating_sub(start_result_idx);
-
-        info!(
-            "Will start collecting result tokens after index {} (max {} new tokens)",
-            start_result_idx, max_tokens
-        );
+        debug!("Max new tokens: {} (start_idx={})", max_tokens, start_result_idx);
 
         // Quality metrics tracking
         let mut sum_logprob = 0.0f64;
         let mut logprob_count = 0;
 
-        // Safety: track repeated tokens to detect infinite loops
+        // Track repeated tokens to detect infinite loops
         let mut last_token: Option<u32> = None;
         let mut repeat_count = 0;
-        const MAX_REPEATS: usize = 3; // Reduced from 10 - catch loops earlier
-
-        info!(
-            "Starting greedy decoding loop (max {} tokens, temp {})",
-            max_tokens, temperature
-        );
+        const MAX_REPEATS: usize = 3;
 
         for iteration in 0..max_tokens {
-            // Progress logging every 10 iterations
-            if iteration % 10 == 0 {
-                info!(
-                    "Decode iteration {}/{}, generated {} tokens so far",
-                    iteration,
-                    max_tokens,
-                    result_tokens.len()
-                );
-            }
-
             let input = Tensor::new(current_tokens.as_slice(), &self.device)?.unsqueeze(0)?;
 
-            if iteration == 0 {
-                debug!("First decoder input shape: {:?}", input.shape());
-                info!(
-                    "DECODER INPUT SHAPE (iter 0): {:?} (batch={}, seq_len={})",
-                    input.shape(),
-                    input.dim(0)?,
-                    input.dim(1)?
-                );
-                info!(
-                    "AUDIO FEATURES SHAPE PASSED TO DECODER: {:?}",
-                    audio_features.shape()
-                );
-            }
-
-            // Decoder forward pass produces hidden states [batch, seq_len, d_model=1280]
-            // CRITICAL: Only flush KV cache on first iteration to maintain context
+            // Flush KV cache only on first iteration
             let decoder_output =
                 self.model
                     .decoder_forward(&input, &audio_features, iteration == 0)?;
 
-            // Project hidden states to vocabulary logits [batch, seq_len, vocab_size=51866]
             let logits = self.model.decoder_final_linear(&decoder_output)?;
-
-            // Get logits for the last token position across full vocabulary
             let logits = logits.squeeze(0)?;
-
-            // Verify shapes on first iteration
-            if iteration == 0 {
-                debug!("Decoder output shape after squeeze: {:?}", logits.shape());
-                debug!("Dim 0 = {}, Dim 1 = {}", logits.dim(0)?, logits.dim(1)?);
-            }
-
             let seq_len = logits.dim(0)?;
-            let mut last_logit = logits.i((seq_len - 1, ..))?; // Shape: [vocab_size]
+            let mut last_logit = logits.i((seq_len - 1, ..))?;
 
-            if iteration == 0 {
-                debug!("last_logit shape: {:?}", last_logit.shape());
-            }
-
-            // Apply suppress mask BEFORE temperature/argmax (prevents token 199 and other unwanted tokens)
+            // Apply suppress mask and temperature
             last_logit = last_logit.broadcast_add(&self.suppress_tokens)?;
-
-            // Apply temperature (if temp > 0)
             if temperature > 0.0 {
                 last_logit = (last_logit / temperature)?;
             }
 
-            // Convert to log probabilities for quality metrics
+            // Compute log probabilities for quality metrics
             let log_probs = candle_nn::ops::softmax(&last_logit, 0)?;
-
-            // Greedy selection: argmax
             let next_token = last_logit.argmax(0)?.to_scalar::<u32>()?;
 
-            // Track log probability of selected token for quality metrics
             let token_logprob = log_probs.get(next_token as usize)?.to_scalar::<f32>()? as f64;
             if token_logprob > 0.0 {
                 sum_logprob += token_logprob.ln();
                 logprob_count += 1;
             }
 
-            // Log first 10 tokens to see what's being generated
-            if iteration < 10 {
-                info!("Iteration {}: next_token = {}", iteration, next_token);
-            }
-
-            // Check for end of text
             if next_token == special_tokens.eot_token {
-                info!("EOT token detected at iteration {}", iteration);
+                debug!("EOT at iteration {}", iteration);
                 break;
             }
 
-            // Safety check: detect infinite loops with repeated tokens
+            // Detect infinite loops from repeated tokens
             if let Some(last) = last_token {
                 if last == next_token {
                     repeat_count += 1;
                     if repeat_count >= MAX_REPEATS {
                         warn!(
-                            "Token {} repeated {} times consecutively, likely infinite loop - breaking early",
-                            next_token, repeat_count
-                        );
-                        warn!(
-                            "Generated {} tokens before loop: {:?}",
-                            result_tokens.len(),
-                            &result_tokens[..result_tokens.len().min(20)]
+                            "Token {} repeated {} times, breaking loop ({} tokens generated)",
+                            next_token, repeat_count, result_tokens.len()
                         );
                         break;
                     }
@@ -525,41 +426,23 @@ impl CandleEngine {
                 }
             }
             last_token = Some(next_token);
-
-            // Check for no-speech condition (optional enhancement)
-            // In a production implementation, you'd check if the first token after prompt
-            // has high probability of being a no-speech token and return empty string
-
             current_tokens.push(next_token);
 
-            // Only add tokens after the initial sequence to result
             if current_tokens.len() > start_result_idx {
                 result_tokens.push(next_token);
             }
         }
 
-        // 4. Decode tokens to text
-        // skip_special_tokens = true to remove any remaining special tokens
-        info!("Decoding {} result tokens to text", result_tokens.len());
-        if result_tokens.len() <= 20 {
-            info!("Result tokens: {:?}", result_tokens);
-        } else {
-            info!("First 20 result tokens: {:?}", &result_tokens[..20]);
-        }
-
+        // Decode tokens to text (skip_special_tokens=true)
         let decoded = self
             .tokenizer
             .decode(&result_tokens, true)
             .map_err(|e| anyhow::anyhow!("Decoding error: {}", e))?;
 
         let text = decoded.trim().to_string();
-        info!(
-            "Decoded {} tokens to text: \"{}\"",
-            result_tokens.len(),
-            text
-        );
+        debug!("Decoded {} tokens: \"{}\"", result_tokens.len(), text);
 
-        // 5. Calculate quality metrics
+        // Calculate quality metrics
         let avg_logprob = if logprob_count > 0 {
             sum_logprob / logprob_count as f64
         } else {
@@ -572,47 +455,39 @@ impl CandleEngine {
             0.0
         };
 
-        info!(
-            "Quality metrics: avg_logprob={:.3}, compression_ratio={:.3}",
+        debug!(
+            "Quality: avg_logprob={:.3}, compression={:.3}",
             avg_logprob, compression_ratio
         );
 
         Ok((text, avg_logprob, compression_ratio))
     }
 
-    /// Decode with temperature fallback for improved quality
-    ///
-    /// Tries temperatures [0.0, 0.2, 0.4, 0.6, 0.8, 1.0] until quality thresholds are met
+    /// Decode with temperature fallback until quality thresholds are met
     fn decode_with_fallback(&mut self, mel: &Tensor) -> Result<String> {
         for (i, &temp) in TEMPERATURES.iter().enumerate() {
+            let is_last = i == TEMPERATURES.len() - 1;
+
             match self.decode_at_temperature(mel, temp) {
                 Ok((text, avg_logprob, compression_ratio)) => {
-                    // Last temperature - accept whatever we get
-                    if i == TEMPERATURES.len() - 1 {
-                        info!("Using last temperature {} (no fallback left)", temp);
-                        return Ok(text);
-                    }
+                    let quality_ok = compression_ratio <= COMPRESSION_RATIO_THRESHOLD
+                        && avg_logprob >= LOGPROB_THRESHOLD;
 
-                    // Check quality metrics
-                    let needs_fallback = compression_ratio > COMPRESSION_RATIO_THRESHOLD
-                        || avg_logprob < LOGPROB_THRESHOLD;
-
-                    if !needs_fallback {
-                        info!(
-                            "Decoding succeeded at temperature {} (logprob={:.3}, compression={:.3})",
+                    if is_last || quality_ok {
+                        debug!(
+                            "Decode at temp {}: logprob={:.3}, compression={:.3}",
                             temp, avg_logprob, compression_ratio
                         );
                         return Ok(text);
                     }
 
-                    warn!(
-                        "Quality check failed at temp {} (logprob={:.3}, compression={:.3}), trying next temperature",
-                        temp, avg_logprob, compression_ratio
+                    debug!(
+                        "Quality check failed at temp {}, trying next",
+                        temp
                     );
                 },
                 Err(e) => {
-                    warn!("Decoding failed at temperature {}: {}", temp, e);
-                    continue;
+                    warn!("Decoding failed at temp {}: {}", temp, e);
                 },
             }
         }
@@ -622,59 +497,31 @@ impl CandleEngine {
 
     /// Transcribe a single chunk of audio (max 30 seconds)
     fn transcribe_chunk(&mut self, audio: &[f32]) -> Result<String> {
-        debug!("transcribe_chunk() called with {} samples", audio.len());
-
         if audio.is_empty() {
             return Ok(String::new());
         }
 
-        // Pad audio to exactly 30 seconds (480000 samples at 16kHz) as Whisper expects
-        const N_SAMPLES: usize = 480000; // 30 seconds * 16000 Hz
+        // Pad/truncate audio to exactly 30 seconds (Whisper requirement)
+        const N_SAMPLES: usize = 480000; // 30s * 16kHz
         let mut padded_audio = audio.to_vec();
-        if padded_audio.len() < N_SAMPLES {
-            info!(
-                "Padding audio from {} to {} samples",
-                audio.len(),
-                N_SAMPLES
-            );
-            padded_audio.resize(N_SAMPLES, 0.0); // Pad with silence
-        } else if padded_audio.len() > N_SAMPLES {
-            info!(
-                "Truncating audio from {} to {} samples",
-                audio.len(),
-                N_SAMPLES
-            );
-            padded_audio.truncate(N_SAMPLES); // Truncate if too long
-        }
-        info!("PADDED AUDIO LENGTH: {} samples", padded_audio.len());
+        padded_audio.resize(N_SAMPLES, 0.0);
 
-        // 1. Convert audio to Mel Spectrogram using mojo-audio FFI
-        // (Produces correct frame count unlike Candle's pcm_to_mel)
-        // Uses model's num_mel_bins (128 for large-v3/turbo, 80 for others)
-        debug!("Converting PCM to Mel spectrogram via mojo-audio (n_mels={})...", self.num_mel_bins);
+        // Convert audio to mel spectrogram via mojo-audio FFI
         let (n_mels, frames, mel_data) =
             mojo_ffi::compute_mel_spectrogram_with_n_mels(&padded_audio, self.num_mel_bins)?;
-
-        // Debug: Log mel spectrogram statistics
-        let mel_min = mel_data.iter().cloned().fold(f32::INFINITY, f32::min);
-        let mel_max = mel_data.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-        let mel_mean = mel_data.iter().sum::<f32>() / mel_data.len() as f32;
-        info!(
-            "MEL SPECTROGRAM (mojo): n_mels={}, frames={}, total={}, min={:.3}, max={:.3}, mean={:.3}",
-            n_mels, frames, mel_data.len(), mel_min, mel_max, mel_mean
-        );
 
         if mel_data.is_empty() || frames == 0 {
             anyhow::bail!("Invalid mel spectrogram from mojo-audio");
         }
 
+        debug!(
+            "Mel spectrogram: {}x{} (n_mels={})",
+            n_mels, frames, self.num_mel_bins
+        );
+
         let mel = Tensor::from_vec(mel_data, (n_mels, frames), &self.device)?;
-        info!("MEL TENSOR SHAPE: {:?}", mel.shape());
+        let mel = mel.unsqueeze(0)?;
 
-        let mel = mel.unsqueeze(0)?; // Add batch dimension
-        info!("MEL TENSOR SHAPE (after batch dim): {:?}", mel.shape());
-
-        // 2. Decode with temperature fallback
         self.decode_with_fallback(&mel)
     }
 }
@@ -687,33 +534,27 @@ impl Transcriber for CandleEngine {
 
         let duration_secs = audio.len() as f32 / SAMPLE_RATE as f32;
         info!(
-            "Transcribing {} samples ({:.2}s) [Language: {}, Prompt: {}]",
+            "Transcribing {} samples ({:.2}s) [lang={}, prompt={}]",
             audio.len(),
             duration_secs,
             self.language,
-            if self.initial_prompt.is_some() {
-                "true"
-            } else {
-                "false"
-            }
+            self.initial_prompt.is_some()
         );
 
-        // Check if we need chunking (audio > 30 seconds)
+        // Short audio - process directly
         if duration_secs <= CHUNK_LENGTH_SECS {
-            // Short audio - process directly
-            debug!("Audio <= 30s, processing without chunking");
             return self.transcribe_chunk(audio);
         }
 
         // Long audio - split into overlapping chunks
-        info!(
-            "Audio is {:.1}s, splitting into {:.0}s chunks with {:.0}s overlap",
+        debug!(
+            "Splitting {:.1}s audio into {:.0}s chunks with {:.0}s overlap",
             duration_secs, CHUNK_LENGTH_SECS, CHUNK_OVERLAP_SECS
         );
 
         let chunk_samples = (CHUNK_LENGTH_SECS * SAMPLE_RATE as f32) as usize;
         let overlap_samples = (CHUNK_OVERLAP_SECS * SAMPLE_RATE as f32) as usize;
-        let stride = chunk_samples - overlap_samples; // Step size between chunks
+        let stride = chunk_samples - overlap_samples;
 
         let mut results = Vec::new();
         let mut offset = 0;
@@ -721,40 +562,19 @@ impl Transcriber for CandleEngine {
         while offset < audio.len() {
             let end = (offset + chunk_samples).min(audio.len());
             let chunk = &audio[offset..end];
-            let chunk_duration = chunk.len() as f32 / SAMPLE_RATE as f32;
-
-            info!(
-                "Processing chunk {}: {:.1}s-{:.1}s ({:.1}s duration, {} samples)",
-                results.len() + 1,
-                offset as f32 / SAMPLE_RATE as f32,
-                end as f32 / SAMPLE_RATE as f32,
-                chunk_duration,
-                chunk.len()
-            );
 
             match self.transcribe_chunk(chunk) {
-                Ok(text) => {
-                    if !text.is_empty() {
-                        results.push(text);
-                    }
-                },
-                Err(e) => {
-                    warn!(
-                        "Chunk {} failed: {}, continuing with next chunk",
-                        results.len() + 1,
-                        e
-                    );
-                },
+                Ok(text) if !text.is_empty() => results.push(text),
+                Ok(_) => {},
+                Err(e) => warn!("Chunk {} failed: {}", results.len() + 1, e),
             }
 
-            // Move to next chunk (with overlap)
             offset += stride;
 
-            // If we're close to the end, process the remainder and stop
+            // Process remainder if close to end
             if offset + chunk_samples > audio.len() && offset < audio.len() {
                 let remaining = &audio[offset..];
                 if remaining.len() > overlap_samples {
-                    info!("Processing final chunk: {} samples", remaining.len());
                     if let Ok(text) = self.transcribe_chunk(remaining) {
                         if !text.is_empty() {
                             results.push(text);
@@ -765,10 +585,9 @@ impl Transcriber for CandleEngine {
             }
         }
 
-        // Concatenate all chunks with space separator
         let final_text = results.join(" ");
-        info!(
-            "Long-form transcription complete: {} chunks, {} characters",
+        debug!(
+            "Long-form transcription: {} chunks, {} chars",
             results.len(),
             final_text.len()
         );
@@ -777,7 +596,6 @@ impl Transcriber for CandleEngine {
     }
 }
 
-/// Special token IDs used in Whisper decoding
 struct SpecialTokens {
     sot_token: u32,
     eot_token: u32,
@@ -790,22 +608,12 @@ struct SpecialTokens {
 mod tests {
     #[test]
     fn test_empty_audio() {
-        // This test verifies the engine handles empty audio gracefully
-        // We can't test full transcription without downloading models
         let empty_audio: Vec<f32> = vec![];
-
-        // For a real engine, we'd need to:
-        // let engine = CandleEngine::new("openai/whisper-tiny").unwrap();
-        // let result = engine.transcribe(&empty_audio).unwrap();
-        // assert_eq!(result, "");
-
-        // For now, just verify empty input returns empty string conceptually
         assert_eq!(empty_audio.len(), 0);
     }
 
     #[test]
     fn test_special_tokens_format() {
-        // Verify the language token format is correct
         let language = "en";
         let expected_format = format!("<|{}|>", language);
         assert_eq!(expected_format, "<|en|>");

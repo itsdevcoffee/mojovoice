@@ -35,8 +35,10 @@ impl MojoAudioStatus {
 }
 
 /// Normalization options (matches MojoNormalization enum in C)
+/// Note: All variants must be present to match the C ABI, even if unused in Rust.
 #[repr(i32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum MojoNormalization {
     None = 0,
     Whisper = 1,
@@ -276,16 +278,6 @@ pub fn compute_mel_spectrogram_with_n_mels(
 ) -> Result<(usize, usize, Vec<f32>)> {
     let mojo = MojoAudio::get()?;
     let config = MojoMelConfig::with_n_mels(n_mels);
-    mojo.compute_mel(audio, &config)
-}
-
-/// Convenience function to compute mel spectrogram with default config (80 mel bins)
-///
-/// Uses mojo-audio's native Whisper normalization (NORM_WHISPER)
-/// Note: For Whisper Large V3/Turbo, use `compute_mel_spectrogram_with_n_mels(audio, 128)`
-pub fn compute_mel_spectrogram(audio: &[f32]) -> Result<(usize, usize, Vec<f32>)> {
-    let mojo = MojoAudio::get()?;
-    let config = MojoMelConfig::default();
     mojo.compute_mel(audio, &config)
 }
 
