@@ -15,10 +15,38 @@ mod output;
 mod state;
 mod transcribe;
 
-use transcribe::Transcriber;
-
 /// Maximum recording duration in toggle mode (5 minutes)
 const TOGGLE_MODE_TIMEOUT_SECS: u32 = 300;
+
+/// Validate that the model file exists, returning a helpful error if not
+fn validate_model_path(cfg: &config::Config) -> Result<()> {
+    if !cfg.model.path.exists() {
+        anyhow::bail!(
+            "Model not found: {}\nRun: hyprvoice download {}",
+            cfg.model.path.display(),
+            cfg.model.path.file_stem().unwrap_or_default().to_string_lossy()
+        );
+    }
+    Ok(())
+}
+
+/// Truncate text to 80 chars with ellipsis for notification preview
+fn truncate_preview(text: &str) -> String {
+    if text.len() > 80 {
+        format!("{}...", text.chars().take(77).collect::<String>())
+    } else {
+        text.to_string()
+    }
+}
+
+/// Convert clipboard flag to OutputMode
+fn output_mode_from_clipboard(clipboard: bool) -> output::OutputMode {
+    if clipboard {
+        output::OutputMode::Clipboard
+    } else {
+        output::OutputMode::Type
+    }
+}
 
 #[derive(Parser)]
 #[command(name = "hyprvoice")]
@@ -121,42 +149,15 @@ fn main() -> Result<()> {
     init_logging(cli.verbose)?;
 
     match cli.command {
-        Commands::Start {
-            model,
-            duration,
-            clipboard,
-        } => {
-            cmd_start(model, duration, clipboard)?;
-        },
-        Commands::Stop => {
-            cmd_stop()?;
-        },
-        Commands::Cancel => {
-            cmd_cancel()?;
-        },
-        Commands::Download { model } => {
-            cmd_download(&model)?;
-        },
-        Commands::Config {
-            path,
-            reset,
-            check,
-            migrate,
-        } => {
-            cmd_config(path, reset, check, migrate)?;
-        },
-        Commands::Doctor => {
-            cmd_doctor()?;
-        },
-        Commands::Daemon { model } => {
-            cmd_daemon(model)?;
-        },
-        Commands::EnigoTest { text, clipboard } => {
-            commands::enigo_test(&text, clipboard)?;
-        },
-        Commands::TranscribeFile { path, model } => {
-            cmd_transcribe_file(&path, model)?;
-        },
+        Commands::Start { model, duration, clipboard } => cmd_start(model, duration, clipboard)?,
+        Commands::Stop => cmd_stop()?,
+        Commands::Cancel => cmd_cancel()?,
+        Commands::Download { model } => cmd_download(&model)?,
+        Commands::Config { path, reset, check, migrate } => cmd_config(path, reset, check, migrate)?,
+        Commands::Doctor => cmd_doctor()?,
+        Commands::Daemon { model } => cmd_daemon(model)?,
+        Commands::EnigoTest { text, clipboard } => commands::enigo_test(&text, clipboard)?,
+        Commands::TranscribeFile { path, model } => cmd_transcribe_file(&path, model)?,
     }
 
     Ok(())
@@ -204,152 +205,99 @@ fn cmd_start(model_override: Option<String>, duration: u32, clipboard: bool) -> 
 
 /// Toggle mode: first call starts, second call stops
 fn cmd_start_toggle(model_override: Option<String>, clipboard: bool) -> Result<()> {
-    // Load config
     let mut cfg = config::load()?;
     if let Some(model_path) = model_override {
         cfg.model.path = model_path.into();
     }
+    validate_model_path(&cfg)?;
 
-    if !cfg.model.path.exists() {
-        anyhow::bail!(
-            "Model not found: {}\nRun: hyprvoice download {}",
-            cfg.model.path.display(),
-            cfg.model
-                .path
-                .file_stem()
-                .unwrap_or_default()
-                .to_string_lossy()
-        );
+    if state::is_recording()?.is_some() {
+        cmd_stop_recording(clipboard)
+    } else {
+        cmd_start_recording()
+    }
+}
+
+/// Stop recording and transcribe (called from toggle mode)
+fn cmd_stop_recording(clipboard: bool) -> Result<()> {
+    info!("Recording in progress, requesting transcription from daemon...");
+    println!("Stopping recording and transcribing...");
+
+    if !daemon::is_daemon_running() {
+        anyhow::bail!("Daemon is not running. Start it first with: hyprvoice daemon &");
     }
 
-    // Check if daemon is recording (check PID file created by daemon's thread)
-    if state::is_recording()?.is_some() {
-        // STOP mode: send stop request to daemon and wait for transcription
-        info!("Recording in progress, requesting transcription from daemon...");
-        println!("Stopping recording and transcribing...");
+    let processing_file = state::get_state_dir()?.join("processing");
+    std::fs::write(&processing_file, "")?;
+    let _processing_cleanup = scopeguard::guard((), |_| {
+        let _ = std::fs::remove_file(&processing_file);
+    });
 
-        // Check if daemon is running
-        if !daemon::is_daemon_running() {
-            anyhow::bail!("Daemon is not running. Start it first with: hyprvoice daemon &");
+    let response = daemon::send_request(&daemon::DaemonRequest::StopRecording)?;
+    let _ = state::cleanup_processing();
+
+    match response {
+        daemon::DaemonResponse::Success { text } => {
+            if text.is_empty() {
+                info!("No speech detected");
+                return Ok(());
+            }
+
+            let output_mode = output_mode_from_clipboard(clipboard);
+            info!("Transcribed: {}", text);
+            output::inject_text(&text, output_mode)?;
+            info!("Text output via {:?}", output_mode);
+
+            send_notification("Transcription Complete", &truncate_preview(&text), "normal");
+            Ok(())
         }
+        daemon::DaemonResponse::Error { message } => anyhow::bail!("Daemon error: {}", message),
+        _ => anyhow::bail!("Unexpected response from daemon"),
+    }
+}
 
-        // Create processing state file for UI feedback
-        let processing_file = state::get_state_dir()?.join("processing");
-        std::fs::write(&processing_file, "")?;
-        let _processing_cleanup = scopeguard::guard((), |_| {
-            let _ = std::fs::remove_file(&processing_file);
-        });
+/// Start recording (called from toggle mode)
+fn cmd_start_recording() -> Result<()> {
+    info!("Starting recording via daemon (max {} seconds)", TOGGLE_MODE_TIMEOUT_SECS);
+    println!("Recording started. Run 'hyprvoice start' again or 'hyprvoice stop' to finish.");
 
-        // Send stop request and wait for transcription
-        let response = daemon::send_request(&daemon::DaemonRequest::StopRecording)?;
+    if !daemon::is_daemon_running() {
+        anyhow::bail!("Daemon is not running. Start it first with: hyprvoice daemon &");
+    }
 
-        // End processing state in UI
-        let _ = state::cleanup_processing();
+    let response = daemon::send_request(&daemon::DaemonRequest::StartRecording {
+        max_duration: TOGGLE_MODE_TIMEOUT_SECS,
+    })?;
 
-        match response {
-            daemon::DaemonResponse::Success { text } => {
-                if text.is_empty() {
-                    info!("No speech detected");
-                    return Ok(());
-                }
-
-                // Output the transcribed text
-                let output_mode = if clipboard {
-                    output::OutputMode::Clipboard
-                } else {
-                    output::OutputMode::Type
-                };
-
-                info!("Transcribed: {}", text);
-                output::inject_text(&text, output_mode)?;
-                info!("Text output via {:?}", output_mode);
-
-                // Send notification
-                let preview = if text.len() > 80 {
-                    format!("{}...", text.chars().take(77).collect::<String>())
-                } else {
-                    text.clone()
-                };
-                send_notification("Transcription Complete", &preview, "normal");
-
-                Ok(())
-            },
-            daemon::DaemonResponse::Error { message } => {
-                anyhow::bail!("Daemon error: {}", message)
-            },
-            _ => anyhow::bail!("Unexpected response from daemon"),
+    match response {
+        daemon::DaemonResponse::Recording => {
+            info!("Daemon started recording");
+            println!("Recording... Press Super+V again to stop and transcribe.");
+            Ok(())
         }
-    } else {
-        // START mode: send start request to daemon and return immediately
-        info!(
-            "Starting recording via daemon (max {} seconds)",
-            TOGGLE_MODE_TIMEOUT_SECS
-        );
-        println!("Recording started. Run 'hyprvoice start' again or 'hyprvoice stop' to finish.");
-
-        // Check if daemon is running
-        if !daemon::is_daemon_running() {
-            anyhow::bail!("Daemon is not running. Start it first with: hyprvoice daemon &");
-        }
-
-        // Send start request
-        let response = daemon::send_request(&daemon::DaemonRequest::StartRecording {
-            max_duration: TOGGLE_MODE_TIMEOUT_SECS,
-        })?;
-
-        match response {
-            daemon::DaemonResponse::Recording => {
-                info!("Daemon started recording");
-                println!("Recording... Press Super+V again to stop and transcribe.");
-                Ok(())
-            },
-            daemon::DaemonResponse::Error { message } => {
-                anyhow::bail!("Failed to start recording: {}", message)
-            },
-            _ => {
-                anyhow::bail!("Unexpected response from daemon")
-            },
-        }
+        daemon::DaemonResponse::Error { message } => anyhow::bail!("Failed to start recording: {}", message),
+        _ => anyhow::bail!("Unexpected response from daemon"),
     }
 }
 
 /// Fixed duration recording mode
 fn cmd_start_fixed(model_override: Option<String>, duration: u32, clipboard: bool) -> Result<()> {
+    use transcribe::Transcriber;
+
     info!("Loading configuration...");
     let mut cfg = config::load()?;
-
     if let Some(model_path) = model_override {
         cfg.model.path = model_path.into();
     }
-
     info!("Model: {}", cfg.model.path.display());
+    validate_model_path(&cfg)?;
 
-    if !cfg.model.path.exists() {
-        anyhow::bail!(
-            "Model not found: {}\nRun: hyprvoice download {}",
-            cfg.model.path.display(),
-            cfg.model
-                .path
-                .file_stem()
-                .unwrap_or_default()
-                .to_string_lossy()
-        );
-    }
-
-    let output_mode = if clipboard {
-        output::OutputMode::Clipboard
-    } else {
-        output::OutputMode::Type
-    };
+    let output_mode = output_mode_from_clipboard(clipboard);
     info!("Output mode: {:?}", output_mode);
 
     info!("Loading whisper model...");
-    // Use CandleEngine (new Candle-based implementation)
     let mut transcriber = transcribe::candle_engine::CandleEngine::with_options(
-        cfg.model
-            .path
-            .to_str()
-            .ok_or_else(|| anyhow::anyhow!("Invalid model path"))?,
+        cfg.model.path.to_str().ok_or_else(|| anyhow::anyhow!("Invalid model path"))?,
         &cfg.model.language,
         cfg.model.prompt.clone(),
     )?;
@@ -359,7 +307,6 @@ fn cmd_start_fixed(model_override: Option<String>, duration: u32, clipboard: boo
     let audio_data = audio::capture(duration, cfg.audio.sample_rate)?;
     info!("Captured {} samples", audio_data.len());
 
-    // Create processing state file
     let processing_file = state::get_state_dir()?.join("processing");
     std::fs::write(&processing_file, "")?;
     let _processing_cleanup = scopeguard::guard((), |_| {
@@ -378,14 +325,7 @@ fn cmd_start_fixed(model_override: Option<String>, duration: u32, clipboard: boo
     output::inject_text(&text, output_mode)?;
     info!("Text output via {:?}", output_mode);
 
-    // Send notification with preview
-    let preview = if text.len() > 80 {
-        format!("{}...", text.chars().take(77).collect::<String>())
-    } else {
-        text
-    };
-    send_notification("Transcription Complete", &preview, "normal");
-
+    send_notification("Transcription Complete", &truncate_preview(&text), "normal");
     Ok(())
 }
 
@@ -606,30 +546,16 @@ fn send_notification(title: &str, body: &str, urgency: &str) {
 }
 
 fn cmd_daemon(model_override: Option<String>) -> Result<()> {
-    // Load config
     let mut cfg = config::load()?;
     if let Some(model_path) = model_override {
         cfg.model.path = model_path.into();
     }
-
-    if !cfg.model.path.exists() {
-        anyhow::bail!(
-            "Model not found: {}\nRun: hyprvoice download {}",
-            cfg.model.path.display(),
-            cfg.model
-                .path
-                .file_stem()
-                .unwrap_or_default()
-                .to_string_lossy()
-        );
-    }
+    validate_model_path(&cfg)?;
 
     info!("Starting daemon with model: {}", cfg.model.path.display());
     println!("Starting daemon...");
 
-    // Run the daemon server
     daemon::run_daemon(&cfg.model.path)?;
-
     Ok(())
 }
 
@@ -670,23 +596,19 @@ fn cmd_doctor() -> Result<()> {
 /// Transcribe a WAV file via daemon (for testing/debugging)
 fn cmd_transcribe_file(path: &std::path::Path, _model_override: Option<String>) -> Result<()> {
     use hound::WavReader;
-    use rubato::{Resampler, SincFixedIn, SincInterpolationType, SincInterpolationParameters, WindowFunction};
+    use rubato::{Resampler, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction};
 
     const TARGET_SAMPLE_RATE: u32 = 16000;
 
-    // Check daemon is running
     if !daemon::is_daemon_running() {
         anyhow::bail!("Daemon is not running. Start it first with: hyprvoice daemon &");
     }
 
-    // Check file exists
     if !path.exists() {
         anyhow::bail!("File not found: {}", path.display());
     }
 
     info!("Loading WAV file: {}", path.display());
-
-    // Open WAV file
     let mut reader = WavReader::open(path)?;
     let spec = reader.spec();
 
@@ -695,39 +617,25 @@ fn cmd_transcribe_file(path: &std::path::Path, _model_override: Option<String>) 
         spec.channels, spec.sample_rate, spec.bits_per_sample, spec.sample_format
     );
 
-    // Read samples based on format
     let samples: Vec<f32> = match spec.sample_format {
         hound::SampleFormat::Float => reader.samples::<f32>().map(|s| s.unwrap()).collect(),
         hound::SampleFormat::Int => {
             let max_val = (1 << (spec.bits_per_sample - 1)) as f32;
-            reader
-                .samples::<i32>()
-                .map(|s| s.unwrap() as f32 / max_val)
-                .collect()
+            reader.samples::<i32>().map(|s| s.unwrap() as f32 / max_val).collect()
         }
     };
-
     info!("Loaded {} raw samples", samples.len());
 
-    // Convert stereo to mono if needed
     let mono_samples: Vec<f32> = if spec.channels == 2 {
         info!("Converting stereo to mono...");
-        samples
-            .chunks(2)
-            .map(|chunk| (chunk[0] + chunk[1]) / 2.0)
-            .collect()
+        samples.chunks(2).map(|chunk| (chunk[0] + chunk[1]) / 2.0).collect()
     } else {
         samples
     };
-
     info!("Mono samples: {}", mono_samples.len());
 
-    // Resample to 16kHz if needed
     let audio_16k: Vec<f32> = if spec.sample_rate != TARGET_SAMPLE_RATE {
-        info!(
-            "Resampling from {}Hz to {}Hz...",
-            spec.sample_rate, TARGET_SAMPLE_RATE
-        );
+        info!("Resampling from {}Hz to {}Hz...", spec.sample_rate, TARGET_SAMPLE_RATE);
 
         let params = SincInterpolationParameters {
             sinc_len: 256,
@@ -753,30 +661,15 @@ fn cmd_transcribe_file(path: &std::path::Path, _model_override: Option<String>) 
     };
 
     let duration_secs = audio_16k.len() as f32 / TARGET_SAMPLE_RATE as f32;
-    info!(
-        "Final audio: {} samples ({:.2}s at {}Hz)",
-        audio_16k.len(),
-        duration_secs,
-        TARGET_SAMPLE_RATE
-    );
+    info!("Final audio: {} samples ({:.2}s at {}Hz)", audio_16k.len(), duration_secs, TARGET_SAMPLE_RATE);
 
-    // Send to daemon for transcription
     info!("Sending to daemon for transcription...");
-    let response = daemon::send_request(&daemon::DaemonRequest::TranscribeAudio {
-        samples: audio_16k,
-    })?;
+    let response = daemon::send_request(&daemon::DaemonRequest::TranscribeAudio { samples: audio_16k })?;
 
-    // Handle response
     match response {
-        daemon::DaemonResponse::Success { text } => {
-            println!("\n=== Transcription ===\n{}\n", text);
-        },
-        daemon::DaemonResponse::Error { message } => {
-            anyhow::bail!("Transcription failed: {}", message);
-        },
-        _ => {
-            anyhow::bail!("Unexpected response from daemon");
-        },
+        daemon::DaemonResponse::Success { text } => println!("\n=== Transcription ===\n{}\n", text),
+        daemon::DaemonResponse::Error { message } => anyhow::bail!("Transcription failed: {}", message),
+        _ => anyhow::bail!("Unexpected response from daemon"),
     }
 
     Ok(())
