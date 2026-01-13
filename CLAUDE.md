@@ -1,5 +1,17 @@
 # Claude Code Instructions - dev-voice
 
+## Build Commands
+
+**Preferred local build (CUDA enabled):**
+```bash
+RUSTFLAGS="-L /usr/lib64 -L /usr/local/lib/ollama" cargo build --release --features cuda
+```
+
+**Quick dev build (no CUDA):**
+```bash
+cargo build
+```
+
 ## Documentation Organization
 
 All markdown files go in `docs/` (except README.md, CLAUDE.md, LICENSE.md, CONTRIBUTING.md).
@@ -26,11 +38,14 @@ All markdown files go in `docs/` (except README.md, CLAUDE.md, LICENSE.md, CONTR
 
 ## Project-Specific Notes
 
-**Rust/Candle Issues:**
-- Candle's `pcm_to_mel` generates incorrect frame count (4500 instead of ~3000)
-- Workaround exists in `src/transcribe/candle_engine.rs:706-715` (truncation)
-- **Solution:** Replace with mojo-audio FFI (correct output, faster)
+**Mojo-Audio FFI Integration:**
+- `lib/libmojo_audio.so` - Pre-built mojo-audio shared library
+- Replaces Candle's buggy `pcm_to_mel` (which produced 4500 frames instead of ~3000)
+- FFI bindings in `src/transcribe/mojo_ffi.rs`
+- Config uses `NORM_WHISPER` for Whisper-compatible output
+- Rebuild mojo-audio: `cd ../mojo-audio && pixi run mojo build src/ffi/audio_ffi.mojo -o libmojo_audio.so --emit shared-lib`
 
-**Dependencies:**
-- Whisper Large V3 Turbo: max_source_positions = 1500 (× 2 after downsampling = 3000 frames max)
-- mojo-audio FFI: Produces (80, 2998) frames for 30s audio - Whisper compatible
+**Whisper Model Compatibility:**
+- Large V3 Turbo: 128 mel bins, max_source_positions=1500 (3000 frames after downsampling)
+- Older models (tiny, base, small, medium, large-v2): 80 mel bins
+- mojo-audio produces correct frame count (~2998 for 30s audio)
