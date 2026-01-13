@@ -1,8 +1,7 @@
 use anyhow::Result;
 
 pub mod candle_engine;
-pub mod mojo_ffi;
-pub mod whisper;
+mod mojo_ffi;
 
 /// Trait to abstract transcription engines
 pub trait Transcriber: Send + Sync {

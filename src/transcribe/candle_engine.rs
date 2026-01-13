@@ -7,7 +7,7 @@ use std::path::Path;
 use tokenizers::Tokenizer;
 use tracing::{debug, info, warn};
 
-use crate::transcribe::mojo_ffi;
+use super::mojo_ffi;
 use crate::transcribe::Transcriber;
 
 // Temperature fallback constants (from official Candle Whisper example)
