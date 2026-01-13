@@ -1,6 +1,4 @@
-//! Command implementations for hyprvoice CLI
-//!
-//! This module contains all subcommand implementations organized by functionality.
+//! CLI command implementations
 
 pub mod enigo_test;
 
