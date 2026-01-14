@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use crate::daemon_client;
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DaemonStatus {
     pub running: bool,
     pub model_loaded: bool,
