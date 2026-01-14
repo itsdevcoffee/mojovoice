@@ -29,18 +29,23 @@ dev:
 # === Install Commands ===
 
 # Install CPU build to ~/.local/bin
+# Note: rm before cp handles "Text file busy" when daemon is running
 install: build
     @mkdir -p {{lib_dir}}
+    rm -f {{install_dir}}/hyprvoice
     cp target/release/hyprvoice {{install_dir}}/
     cp lib/libmojo_audio.so {{lib_dir}}/
     @echo "Installed hyprvoice to {{install_dir}}"
+    @echo "Run 'just daemon-restart' to use the new build"
 
 # Install CUDA build to ~/.local/bin
 install-cuda: build-cuda
     @mkdir -p {{lib_dir}}
+    rm -f {{install_dir}}/hyprvoice
     cp target/release/hyprvoice {{install_dir}}/
     cp lib/libmojo_audio.so {{lib_dir}}/
     @echo "Installed hyprvoice (CUDA) to {{install_dir}}"
+    @echo "Run 'just daemon-restart' to use the new build"
 
 # Install and restart daemon
 install-restart: install-cuda
