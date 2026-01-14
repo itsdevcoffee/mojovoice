@@ -1,4 +1,4 @@
-# hyprvoice Frontend Implementation Plan
+# mojovoice Frontend Implementation Plan
 
 **Created:** 2025-12-09
 **Status:** Planning
@@ -7,19 +7,19 @@
 
 ## Context
 
-hyprvoice is a Rust CLI voice dictation tool that captures speech, transcribes it locally using Whisper, and injects text at the cursor. The CLI is feature-complete but lacks a visual frontend.
+mojovoice is a Rust CLI voice dictation tool that captures speech, transcribes it locally using Whisper, and injects text at the cursor. The CLI is feature-complete but lacks a visual frontend.
 
 ### Current CLI Capabilities
 
 ```bash
-hyprvoice start           # Toggle mode: start recording
-hyprvoice start           # Toggle mode: stop and transcribe
-hyprvoice stop            # Explicit stop command
-hyprvoice start -d 5      # Fixed duration (5 seconds)
-hyprvoice start -c        # Output to clipboard instead of typing
-hyprvoice download base.en # Download whisper model
-hyprvoice doctor          # Check system dependencies
-hyprvoice config          # View/edit configuration
+mojovoice start           # Toggle mode: start recording
+mojovoice start           # Toggle mode: stop and transcribe
+mojovoice stop            # Explicit stop command
+mojovoice start -d 5      # Fixed duration (5 seconds)
+mojovoice start -c        # Output to clipboard instead of typing
+mojovoice download base.en # Download whisper model
+mojovoice doctor          # Check system dependencies
+mojovoice config          # View/edit configuration
 ```
 
 ### Key Files
@@ -27,15 +27,15 @@ hyprvoice config          # View/edit configuration
 | File | Purpose |
 |------|---------|
 | `src/main.rs` | CLI entry, commands |
-| `src/state/toggle.rs` | PID file at `~/.local/state/hyprvoice/recording.pid` |
+| `src/state/toggle.rs` | PID file at `~/.local/state/mojovoice/recording.pid` |
 | `src/state/paths.rs` | XDG directory helpers |
-| `~/.local/state/hyprvoice/logs/` | Log files |
+| `~/.local/state/mojovoice/logs/` | Log files |
 
 ### How Toggle Mode Works
 
-1. First `hyprvoice start` creates PID file, starts recording
-2. Second `hyprvoice start` sends SIGUSR1 to stop, transcribes, outputs text
-3. PID file: `~/.local/state/hyprvoice/recording.pid` (contains PID and start timestamp)
+1. First `mojovoice start` creates PID file, starts recording
+2. Second `mojovoice start` sends SIGUSR1 to stop, transcribes, outputs text
+3. PID file: `~/.local/state/mojovoice/recording.pid` (contains PID and start timestamp)
 4. 5 minute timeout if never stopped
 
 ---
@@ -62,13 +62,13 @@ hyprvoice config          # View/edit configuration
 
 #### 1.1 Create Status Script
 
-Create `~/.config/waybar/scripts/hyprvoice-status.sh`:
+Create `~/.config/waybar/scripts/mojovoice-status.sh`:
 
 ```bash
 #!/bin/bash
 # Outputs JSON for Waybar custom module
 
-PID_FILE="$HOME/.local/state/hyprvoice/recording.pid"
+PID_FILE="$HOME/.local/state/mojovoice/recording.pid"
 
 if [[ -f "$PID_FILE" ]]; then
     PID=$(head -1 "$PID_FILE")
@@ -90,35 +90,35 @@ fi
 Add to `~/.config/waybar/config.jsonc`:
 
 ```jsonc
-"custom/hyprvoice": {
+"custom/mojovoice": {
     "format": "{}",
     "return-type": "json",
-    "exec": "~/.config/waybar/scripts/hyprvoice-status.sh",
-    "on-click": "hyprvoice start",
-    "on-click-right": "hyprvoice stop",
+    "exec": "~/.config/waybar/scripts/mojovoice-status.sh",
+    "on-click": "mojovoice start",
+    "on-click-right": "mojovoice stop",
     "interval": 1,
     "tooltip": true
 }
 ```
 
-Add `"custom/hyprvoice"` to your modules list.
+Add `"custom/mojovoice"` to your modules list.
 
 #### 1.3 Waybar Styling
 
 Add to `~/.config/waybar/style.css`:
 
 ```css
-#custom-hyprvoice {
+#custom-mojovoice {
     padding: 0 10px;
     margin: 0 4px;
 }
 
-#custom-hyprvoice.recording {
+#custom-mojovoice.recording {
     color: #f38ba8;  /* Red/pink when recording */
     animation: pulse 1s ease-in-out infinite;
 }
 
-#custom-hyprvoice.idle {
+#custom-mojovoice.idle {
     color: #a6adc8;  /* Muted when idle */
 }
 
@@ -132,7 +132,7 @@ Add to `~/.config/waybar/style.css`:
 
 **Goal:** Show notification when transcription completes
 
-#### 2.1 Modify hyprvoice to Send Notifications
+#### 2.1 Modify mojovoice to Send Notifications
 
 Update `src/main.rs` to call `notify-send` after transcription:
 
@@ -140,7 +140,7 @@ Update `src/main.rs` to call `notify-send` after transcription:
 // After successful transcription
 std::process::Command::new("notify-send")
     .args([
-        "-a", "hyprvoice",
+        "-a", "mojovoice",
         "-i", "audio-input-microphone",
         "Transcription Complete",
         &format!("\"{}\"", text.chars().take(100).collect::<String>())
@@ -163,29 +163,29 @@ std::process::Command::new("notify-send")
 
 #### 3.2 AGS Widget Location
 
-Create `~/.config/ags/widgets/hyprvoice/`:
+Create `~/.config/ags/widgets/mojovoice/`:
 - `main.js` - Widget definition
 - `style.css` - Styling
 
 #### 3.3 AGS Widget Skeleton
 
 ```javascript
-// ~/.config/ags/widgets/hyprvoice/main.js
+// ~/.config/ags/widgets/mojovoice/main.js
 const { Widget, Utils } = ags;
 
-const PID_FILE = `${Utils.HOME}/.local/state/hyprvoice/recording.pid`;
+const PID_FILE = `${Utils.HOME}/.local/state/mojovoice/recording.pid`;
 
 const isRecording = Variable(false, {
     poll: [1000, () => Utils.exec('test -f ' + PID_FILE + ' && echo true || echo false').trim() === 'true']
 });
 
 export const DevVoiceWidget = () => Widget.Box({
-    className: 'hyprvoice-widget',
+    className: 'mojovoice-widget',
     vertical: true,
     children: [
         Widget.Button({
             className: isRecording.bind().transform(r => r ? 'recording' : 'idle'),
-            onClicked: () => Utils.exec('hyprvoice start'),
+            onClicked: () => Utils.exec('mojovoice start'),
             child: Widget.Label({
                 label: isRecording.bind().transform(r => r ? '⏹ Stop Recording' : '🎤 Start Recording')
             })
@@ -199,21 +199,21 @@ export const DevVoiceWidget = () => Widget.Box({
 
 **Goal:** Quick access via Rofi menu
 
-Create `~/.config/rofi/scripts/hyprvoice.sh`:
+Create `~/.config/rofi/scripts/mojovoice.sh`:
 
 ```bash
 #!/bin/bash
-# Rofi script for hyprvoice control
+# Rofi script for mojovoice control
 
 OPTIONS="🎤 Start/Stop Recording\n📋 Clipboard Mode\n⚙️ Settings\n📊 Doctor"
 
-CHOICE=$(echo -e "$OPTIONS" | rofi -dmenu -p "hyprvoice")
+CHOICE=$(echo -e "$OPTIONS" | rofi -dmenu -p "mojovoice")
 
 case "$CHOICE" in
-    "🎤 Start/Stop Recording") hyprvoice start ;;
-    "📋 Clipboard Mode") hyprvoice start -c ;;
-    "⚙️ Settings") $TERMINAL -e "hyprvoice config" ;;
-    "📊 Doctor") $TERMINAL -e "hyprvoice doctor" ;;
+    "🎤 Start/Stop Recording") mojovoice start ;;
+    "📋 Clipboard Mode") mojovoice start -c ;;
+    "⚙️ Settings") $TERMINAL -e "mojovoice config" ;;
+    "📊 Doctor") $TERMINAL -e "mojovoice doctor" ;;
 esac
 ```
 
@@ -224,20 +224,20 @@ esac
 ```
 ~/.config/
 ├── waybar/
-│   ├── config.jsonc          # Add custom/hyprvoice module
-│   ├── style.css             # Add hyprvoice styling
+│   ├── config.jsonc          # Add custom/mojovoice module
+│   ├── style.css             # Add mojovoice styling
 │   └── scripts/
-│       └── hyprvoice-status.sh
+│       └── mojovoice-status.sh
 ├── ags/
 │   └── widgets/
-│       └── hyprvoice/        # Optional AGS widget
+│       └── mojovoice/        # Optional AGS widget
 │           ├── main.js
 │           └── style.css
 ├── rofi/
 │   └── scripts/
-│       └── hyprvoice.sh      # Optional Rofi integration
+│       └── mojovoice.sh      # Optional Rofi integration
 └── hypr/
-    └── keybindings.conf      # Optional: bind Super+V to hyprvoice start
+    └── keybindings.conf      # Optional: bind Super+V to mojovoice start
 ```
 
 ---
@@ -248,8 +248,8 @@ Add to Hyprland config (`~/.config/hypr/keybindings.conf` or similar):
 
 ```conf
 # Voice dictation toggle
-bind = SUPER, V, exec, hyprvoice start
-bind = SUPER SHIFT, V, exec, hyprvoice start -c  # Clipboard mode
+bind = SUPER, V, exec, mojovoice start
+bind = SUPER SHIFT, V, exec, mojovoice start -c  # Clipboard mode
 ```
 
 ---
@@ -267,7 +267,7 @@ bind = SUPER SHIFT, V, exec, hyprvoice start -c  # Clipboard mode
 ## Testing Checklist
 
 - [ ] Waybar shows correct icon when idle
-- [ ] Waybar shows recording icon when `hyprvoice start` is running
+- [ ] Waybar shows recording icon when `mojovoice start` is running
 - [ ] Click on Waybar module toggles recording
 - [ ] Right-click stops recording
 - [ ] Icon pulses/animates during recording
@@ -285,4 +285,4 @@ bind = SUPER SHIFT, V, exec, hyprvoice start -c  # Clipboard mode
 
 3. **JaKooLit dots:** Check existing Waybar config structure - may need to add module to correct file if config is split.
 
-4. **Binary location:** Assumes `hyprvoice` is in PATH (symlinked to `~/.local/bin/hyprvoice` pointing to `~/dev-coffee/repos/hyprvoice/target/release/hyprvoice`).
+4. **Binary location:** Assumes `mojovoice` is in PATH (symlinked to `~/.local/bin/mojovoice` pointing to `~/dev-coffee/repos/mojovoice/target/release/mojovoice`).

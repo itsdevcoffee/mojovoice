@@ -1,12 +1,12 @@
 //! Integration tests for transcription
 //!
 //! These tests require:
-//! - The daemon running with a loaded model (`hyprvoice daemon &`)
+//! - The daemon running with a loaded model (`mojovoice daemon &`)
 //! - The mojo-audio library available (`lib/libmojo_audio.so`)
 //!
 //! Run locally with: `cargo test --test transcription -- --ignored`
 
-use hyprvoice::daemon::{DaemonRequest, DaemonResponse, is_daemon_running, send_request};
+use mojovoice::daemon::{DaemonRequest, DaemonResponse, is_daemon_running, send_request};
 use std::path::Path;
 
 /// Load WAV file and return audio samples as f32 (16kHz mono)
@@ -75,11 +75,11 @@ fn test_transcribe_sample_audio() {
     // Check daemon is running
     assert!(
         is_daemon_running(),
-        "Daemon is not running. Start it first with: hyprvoice daemon &"
+        "Daemon is not running. Start it first with: mojovoice daemon &"
     );
 
     // Load sample audio file
-    let audio_path = Path::new("assets/audio/samples/sample-hyprvoice-clip.wav");
+    let audio_path = Path::new("assets/audio/samples/sample-mojovoice-clip.wav");
     assert!(
         audio_path.exists(),
         "Sample audio file not found: {}",
@@ -130,7 +130,7 @@ fn test_transcribe_sample_audio() {
 fn test_transcribe_empty_audio_returns_error() {
     assert!(
         is_daemon_running(),
-        "Daemon is not running. Start it first with: hyprvoice daemon &"
+        "Daemon is not running. Start it first with: mojovoice daemon &"
     );
 
     // Send empty audio
@@ -165,7 +165,7 @@ fn test_transcribe_empty_audio_returns_error() {
 fn test_transcribe_silence_returns_minimal_output() {
     assert!(
         is_daemon_running(),
-        "Daemon is not running. Start it first with: hyprvoice daemon &"
+        "Daemon is not running. Start it first with: mojovoice daemon &"
     );
 
     // Generate 2 seconds of silence (16kHz)

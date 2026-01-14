@@ -1,10 +1,10 @@
-# HyprVoice Configuration
-# Copy to ~/.config/hyprvoice/config.toml
+# Mojo Voice Configuration
+# Copy to ~/.config/mojovoice/config.toml
 
 [model]
 # Path to whisper model file
-# Download with: hyprvoice download base.en
-path = "~/.local/share/hyprvoice/models/ggml-base.en.bin"
+# Download with: mojovoice download base.en
+path = "~/.local/share/mojovoice/models/ggml-base.en.bin"
 
 # Language code for transcription
 language = "en"

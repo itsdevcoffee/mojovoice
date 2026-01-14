@@ -1,6 +1,6 @@
-# hyprvoice UI
+# mojovoice UI
 
-Modern, glassmorphic desktop interface for hyprvoice built with Tauri 2.0, React, and Tailwind CSS.
+Modern, glassmorphic desktop interface for mojovoice built with Tauri 2.0, React, and Tailwind CSS.
 
 ## 🎨 Tech Stack
 
@@ -74,7 +74,7 @@ ui/
 
 Tauri commands available via `invoke()`:
 
-- `get_daemon_status()` - Check hyprvoice daemon status
+- `get_daemon_status()` - Check mojovoice daemon status
 - `start_recording()` - Start audio recording
 - `stop_recording()` - Stop and transcribe
 - `get_transcription_history()` - Get past transcriptions
@@ -145,7 +145,7 @@ Install Visual Studio C++ Build Tools
 
 ## 📝 Next Steps
 
-- [ ] Wire up real IPC to hyprvoice daemon (Unix socket)
+- [ ] Wire up real IPC to mojovoice daemon (Unix socket)
 - [ ] Add settings panel (model selection, audio devices)
 - [ ] Build transcription history view
 - [ ] Add audio visualizer component
@@ -163,7 +163,7 @@ Install Visual Studio C++ Build Tools
 - ✅ Zustand state management
 
 **TODO:**
-- ⏳ Connect to actual hyprvoice daemon
+- ⏳ Connect to actual mojovoice daemon
 - ⏳ Real-time audio visualization
 - ⏳ Settings and configuration
 - ⏳ Multiple views (history, dev tools)

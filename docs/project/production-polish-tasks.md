@@ -100,7 +100,7 @@
 - [ ] `gpu-setup.md` - CUDA/Metal setup details
 
 **Why:**
-- Better SEO (search for "hyprvoice fedora install")
+- Better SEO (search for "mojovoice fedora install")
 - Platform-specific troubleshooting
 - Easier to maintain than one huge README
 
@@ -124,7 +124,7 @@
 ```yaml
 - uses: Swatinem/rust-cache@v2
   with:
-    shared-key: "hyprvoice"
+    shared-key: "mojovoice"
 ```
 
 **Why:**

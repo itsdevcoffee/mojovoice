@@ -234,7 +234,7 @@ fn bench_resampling(c: &mut Criterion) {
                 b.iter(|| {
                     // Would call internal resample function
                     // Note: Need to expose this function
-                    black_box(hyprvoice::audio::resample(input, 44100, 16000))
+                    black_box(mojovoice::audio::resample(input, 44100, 16000))
                 });
             }
         );
@@ -258,7 +258,7 @@ fn bench_stereo_to_mono(c: &mut Criterion) {
             |b, stereo| {
                 b.iter(|| {
                     // Would call internal function
-                    black_box(hyprvoice::audio::stereo_to_mono(stereo))
+                    black_box(mojovoice::audio::stereo_to_mono(stereo))
                 });
             }
         );
@@ -276,7 +276,7 @@ criterion_main!(benches);
 ```rust
 // benches/daemon_benchmarks.rs
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use hyprvoice::daemon::protocol::{DaemonRequest, DaemonResponse};
+use mojovoice::daemon::protocol::{DaemonRequest, DaemonResponse};
 
 fn bench_protocol_serialization(c: &mut Criterion) {
     let mut group = c.benchmark_group("protocol_serialize");

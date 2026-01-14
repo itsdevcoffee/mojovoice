@@ -4,7 +4,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 
-/// Request to daemon (matches main hyprvoice protocol)
+/// Request to daemon (matches main mojovoice protocol)
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum DaemonRequest {
@@ -48,7 +48,7 @@ fn get_socket_path() -> Result<PathBuf> {
     let state_dir = PathBuf::from(home)
         .join(".local")
         .join("state")
-        .join("hyprvoice");
+        .join("mojovoice");
     Ok(state_dir.join("daemon.sock"))
 }
 

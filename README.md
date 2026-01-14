@@ -1,4 +1,4 @@
-# hyprvoice
+# Mojo Voice
 
 <div align="center">
 
@@ -12,9 +12,9 @@ Fast • Local • Private • GPU-Accelerated
 
 ---
 
-## 🎯 What is hyprvoice?
+## 🎯 What is Mojo Voice?
 
-**hyprvoice** is a lightning-fast, privacy-first voice dictation tool built for developers. Press a hotkey, speak naturally, and your words appear instantly at your cursor—no cloud, no latency, no compromises.
+**Mojo Voice** is a lightning-fast, privacy-first voice dictation tool built for developers. Press a hotkey, speak naturally, and your words appear instantly at your cursor—no cloud, no latency, no compromises.
 
 ### The Problem
 
@@ -25,7 +25,7 @@ Typing code comments, documentation, commit messages, and chat responses is slow
 
 ### The Solution
 
-hyprvoice runs **100% locally** on your machine with **GPU acceleration**, delivering transcription in under 500ms. It understands technical terminology out of the box and works offline. Built in Rust, powered by OpenAI Whisper.
+Mojo Voice runs **100% locally** on your machine with **GPU acceleration**, delivering transcription in under 500ms. It understands technical terminology out of the box and works offline. Built in Rust, powered by OpenAI Whisper.
 
 ---
 
@@ -72,35 +72,35 @@ Grab the latest binary for your platform:
 
 ```bash
 # Linux (NVIDIA GPU)
-wget https://github.com/itsdevcoffee/hyprvoice/releases/download/v0.2.0/hyprvoice-linux-x64-cuda
-chmod +x hyprvoice-linux-x64-cuda
-mv hyprvoice-linux-x64-cuda ~/.local/bin/hyprvoice
+wget https://github.com/itsdevcoffee/mojovoice/releases/download/v0.2.0/mojovoice-linux-x64-cuda
+chmod +x mojovoice-linux-x64-cuda
+mv mojovoice-linux-x64-cuda ~/.local/bin/mojovoice
 
 # macOS (Apple Silicon with Metal)
-wget https://github.com/itsdevcoffee/hyprvoice/releases/download/v0.2.0/hyprvoice-macos-arm64-metal
-chmod +x hyprvoice-macos-arm64-metal
-mv hyprvoice-macos-arm64-metal ~/.local/bin/hyprvoice
+wget https://github.com/itsdevcoffee/mojovoice/releases/download/v0.2.0/mojovoice-macos-arm64-metal
+chmod +x mojovoice-macos-arm64-metal
+mv mojovoice-macos-arm64-metal ~/.local/bin/mojovoice
 ```
 
 ### 2. Download a Model
 
 ```bash
-hyprvoice download base.en  # 148MB, balanced speed/accuracy
+mojovoice download base.en  # 148MB, balanced speed/accuracy
 ```
 
 ### 3. Start the Daemon
 
 ```bash
-hyprvoice daemon
+mojovoice daemon
 ```
 
 ### 4. Use It
 
 ```bash
 # In another terminal (or bind to a hotkey)
-hyprvoice start    # Begin recording
+mojovoice start    # Begin recording
 # Speak: "This is a test of voice dictation"
-hyprvoice stop     # Transcribe and inject text
+mojovoice stop     # Transcribe and inject text
 ```
 
 **Text appears at your cursor!**
@@ -230,7 +230,7 @@ hyprvoice stop     # Transcribe and inject text
 
 ## 🔧 Configuration Example
 
-**`~/.config/hyprvoice/config.toml`**
+**`~/.config/mojovoice/config.toml`**
 
 ```toml
 [model]
@@ -251,11 +251,11 @@ refresh_command = "pkill -RTMIN+8 waybar"  # Update Waybar status
 
 ## 🤝 Contributing
 
-We welcome contributions! hyprvoice is **open source** (MIT license) and community-driven.
+We welcome contributions! Mojo Voice is **open source** (MIT license) and community-driven.
 
 ### Ways to Contribute
-- 🐛 **Report bugs** via [GitHub Issues](https://github.com/itsdevcoffee/hyprvoice/issues)
-- 💡 **Suggest features** on our [Discussions](https://github.com/itsdevcoffee/hyprvoice/discussions)
+- 🐛 **Report bugs** via [GitHub Issues](https://github.com/itsdevcoffee/mojovoice/issues)
+- 💡 **Suggest features** on our [Discussions](https://github.com/itsdevcoffee/mojovoice/discussions)
 - 📝 **Improve docs** (setup guides, troubleshooting, translations)
 - 🔌 **Build integrations** (Polybar, i3status, GNOME extension)
 - 🧪 **Test on your platform** and share results
@@ -263,8 +263,8 @@ We welcome contributions! hyprvoice is **open source** (MIT license) and communi
 ### Development Setup
 
 ```bash
-git clone https://github.com/itsdevcoffee/hyprvoice.git
-cd hyprvoice
+git clone https://github.com/itsdevcoffee/mojovoice.git
+cd mojovoice
 cargo build --release --features cuda  # or 'metal' for macOS
 
 # Run tests
@@ -323,18 +323,24 @@ We're developers who got tired of:
 - Privacy concerns with commercial voice tools
 - Lack of Linux-first voice solutions
 
-hyprvoice is our answer: a tool that respects your privacy, runs at the speed of thought, and understands the language you actually speak.
+Mojo Voice is our answer: a tool that respects your privacy, runs at the speed of thought, and understands the language you actually speak.
 
-**If you think faster than you type, hyprvoice is for you.**
+**If you think faster than you type, Mojo Voice is for you.**
 
 ---
 
 <div align="center">
 
-**[⬆ Back to Top](#hyprvoice)**
+**[⬆ Back to Top](#mojo-voice)**
 
 Made with ❤️ for developers who value speed, privacy, and control.
 
 **Star us on GitHub** if you find this useful!
 
 </div>
+
+---
+
+## Trademark Notice
+
+Mojo® is a trademark of Modular, Inc. This project is not affiliated with, endorsed by, or sponsored by Modular, Inc.

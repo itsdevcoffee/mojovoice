@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use thiserror::Error;
 
-/// Custom error types for hyprvoice
+/// Custom error types for mojovoice
 /// Currently using anyhow, but this provides a foundation for future custom error handling
 #[allow(dead_code)]
 #[derive(Error, Debug)]

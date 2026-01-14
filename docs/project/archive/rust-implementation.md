@@ -23,7 +23,7 @@
 ## Project Structure
 
 ```
-hyprvoice/
+mojovoice/
 ├── Cargo.toml
 ├── src/
 │   ├── main.rs           # Entry point, CLI handling
@@ -50,7 +50,7 @@ hyprvoice/
 
 ```toml
 [package]
-name = "hyprvoice"
+name = "mojovoice"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.77"
@@ -121,7 +121,7 @@ impl AudioCapture {
             *pw::keys::MEDIA_ROLE => "Communication",
         };
 
-        let stream = Stream::new(&core, "hyprvoice-capture", props)?;
+        let stream = Stream::new(&core, "mojovoice-capture", props)?;
 
         // Configure stream for 16kHz mono (Whisper requirement)
         // Connect with Direction::Input, AUTOCONNECT, MAP_BUFFERS
@@ -275,7 +275,7 @@ pub struct OutputConfig {
 
 impl Default for Config {
     fn default() -> Self {
-        let dirs = directories::ProjectDirs::from("com", "devvoice", "hyprvoice")
+        let dirs = directories::ProjectDirs::from("com", "devvoice", "mojovoice")
             .expect("Failed to get project dirs");
 
         Self {
@@ -294,15 +294,15 @@ impl Default for Config {
 }
 
 pub fn load_config() -> anyhow::Result<Config> {
-    Ok(confy::load("hyprvoice", "config")?)
+    Ok(confy::load("mojovoice", "config")?)
 }
 
 pub fn save_config(config: &Config) -> anyhow::Result<()> {
-    Ok(confy::store("hyprvoice", "config", config)?)
+    Ok(confy::store("mojovoice", "config", config)?)
 }
 ```
 
-**Config location:** `~/.config/hyprvoice/config.toml`
+**Config location:** `~/.config/mojovoice/config.toml`
 
 ---
 
@@ -312,7 +312,7 @@ pub fn save_config(config: &Config) -> anyhow::Result<()> {
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "hyprvoice")]
+#[command(name = "mojovoice")]
 #[command(about = "Voice dictation for Linux developers")]
 #[command(version)]
 struct Cli {
@@ -368,12 +368,12 @@ fn main() -> anyhow::Result<()> {
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  Hyprland: bind = SUPER, V, exec, hyprvoice start       │
+│  Hyprland: bind = SUPER, V, exec, mojovoice start       │
 └─────────────────────────────────────────────────────────┘
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────┐
-│  1. Load config from ~/.config/hyprvoice/config.toml    │
+│  1. Load config from ~/.config/mojovoice/config.toml    │
 │  2. Initialize PipeWire stream (16kHz mono capture)     │
 │  3. Load Whisper model into memory                      │
 └─────────────────────────────────────────────────────────┘
@@ -402,17 +402,17 @@ fn main() -> anyhow::Result<()> {
 
 ```bash
 # Clone with submodules (whisper.cpp)
-git clone --recursive https://github.com/youruser/hyprvoice.git
-cd hyprvoice
+git clone --recursive https://github.com/youruser/mojovoice.git
+cd mojovoice
 
 # Build (release)
 cargo build --release
 
 # Download model
-./target/release/hyprvoice download base.en
+./target/release/mojovoice download base.en
 
 # Run
-./target/release/hyprvoice start
+./target/release/mojovoice start
 ```
 
 **System dependencies (Fedora):**

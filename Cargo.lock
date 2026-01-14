@@ -1623,45 +1623,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hyprvoice"
-version = "0.4.1"
-dependencies = [
- "anyhow",
- "arboard",
- "assert_matches",
- "candle-core",
- "candle-nn",
- "candle-transformers",
- "chrono",
- "clap",
- "confy",
- "cpal",
- "directories",
- "enigo",
- "hex",
- "hf-hub",
- "hound",
- "libloading",
- "mockall",
- "nix",
- "rubato",
- "safetensors 0.5.3",
- "scopeguard",
- "serde",
- "serde_json",
- "serial_test",
- "sha2",
- "tempfile",
- "thiserror 2.0.17",
- "tokenizers",
- "toml",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "ureq",
-]
-
-[[package]]
 name = "iana-time-zone"
 version = "0.1.64"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2095,6 +2056,45 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "mojovoice"
+version = "0.4.1"
+dependencies = [
+ "anyhow",
+ "arboard",
+ "assert_matches",
+ "candle-core",
+ "candle-nn",
+ "candle-transformers",
+ "chrono",
+ "clap",
+ "confy",
+ "cpal",
+ "directories",
+ "enigo",
+ "hex",
+ "hf-hub",
+ "hound",
+ "libloading",
+ "mockall",
+ "nix",
+ "rubato",
+ "safetensors 0.5.3",
+ "scopeguard",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tokenizers",
+ "toml",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "ureq",
 ]
 
 [[package]]

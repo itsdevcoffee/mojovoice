@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# hyprvoice-status.sh - Waybar custom module for voice dictation status
+# mojovoice-status.sh - Waybar custom module for voice dictation status
 
-STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/hyprvoice"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/mojovoice"
 PID_FILE="${STATE_DIR}/recording.pid"
 PROCESSING_FILE="${STATE_DIR}/processing"
 SOCKET_FILE="${STATE_DIR}/daemon.sock"
@@ -13,7 +13,7 @@ ICON_PROCESSING="󱐋"
 ICON_OFFLINE="󱘖"
 
 # Check if daemon is running (socket exists AND daemon process is alive)
-if [[ ! -S "$SOCKET_FILE" ]] || ! pgrep -f "hyprvoice daemon" &>/dev/null; then
+if [[ ! -S "$SOCKET_FILE" ]] || ! pgrep -f "mojovoice daemon" &>/dev/null; then
     # Clean up stale socket if process isn't running
     [[ -S "$SOCKET_FILE" ]] && rm -f "$SOCKET_FILE"
     echo "{\"text\": \"${ICON_OFFLINE}\", \"tooltip\": \"Daemon not running\", \"class\": \"offline\"}"

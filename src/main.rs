@@ -19,7 +19,7 @@ mod transcribe;
 fn validate_model_path(cfg: &config::Config) -> Result<()> {
     if !cfg.model.path.exists() {
         anyhow::bail!(
-            "Model not found: {}\nRun: hyprvoice download {}",
+            "Model not found: {}\nRun: mojovoice download {}",
             cfg.model.path.display(),
             cfg.model.path.file_stem().unwrap_or_default().to_string_lossy()
         );
@@ -46,7 +46,7 @@ fn output_mode_from_clipboard(clipboard: bool) -> output::OutputMode {
 }
 
 #[derive(Parser)]
-#[command(name = "hyprvoice")]
+#[command(name = "mojovoice")]
 #[command(about = "Voice dictation for Linux developers")]
 #[command(version)]
 struct Cli {
@@ -202,7 +202,7 @@ fn init_logging(verbose: bool) -> Result<()> {
 
     // Set up file logging
     let log_dir = state::get_log_dir()?;
-    let file_appender = RollingFileAppender::new(Rotation::DAILY, log_dir, "hyprvoice.log");
+    let file_appender = RollingFileAppender::new(Rotation::DAILY, log_dir, "mojovoice.log");
 
     // Create layers
     let file_layer = tracing_subscriber::fmt::layer()
@@ -257,7 +257,7 @@ fn cmd_stop_recording(clipboard: bool) -> Result<()> {
     println!("Stopping recording and transcribing...");
 
     if !daemon::is_daemon_running() {
-        anyhow::bail!("Daemon is not running. Start it first with: hyprvoice daemon &");
+        anyhow::bail!("Daemon is not running. Start it first with: mojovoice daemon &");
     }
 
     let processing_file = state::get_state_dir()?.join("processing");
@@ -292,10 +292,10 @@ fn cmd_stop_recording(clipboard: bool) -> Result<()> {
 /// Start recording (called from toggle mode)
 fn cmd_start_recording(timeout_secs: u32) -> Result<()> {
     info!("Starting recording via daemon (max {} seconds)", timeout_secs);
-    println!("Recording started. Run 'hyprvoice start' again or 'hyprvoice stop' to finish.");
+    println!("Recording started. Run 'mojovoice start' again or 'mojovoice stop' to finish.");
 
     if !daemon::is_daemon_running() {
-        anyhow::bail!("Daemon is not running. Start it first with: hyprvoice daemon &");
+        anyhow::bail!("Daemon is not running. Start it first with: mojovoice daemon &");
     }
 
     let response = daemon::send_request(&daemon::DaemonRequest::StartRecording {
@@ -503,7 +503,7 @@ fn cmd_config_check() -> Result<()> {
 
     // Show appropriate message based on validation results
     if has_warnings {
-        println!("\nRun 'hyprvoice config --migrate' to auto-update missing fields.");
+        println!("\nRun 'mojovoice config --migrate' to auto-update missing fields.");
     } else {
         println!("\n✓ Your config is valid and up to date.");
     }
@@ -567,7 +567,7 @@ fn send_notification(title: &str, body: &str, urgency: &str) {
     let _ = std::process::Command::new("notify-send")
         .args([
             "-a",
-            "hyprvoice",
+            "mojovoice",
             "-i",
             "audio-input-microphone",
             "-u",
@@ -583,7 +583,7 @@ fn cmd_daemon(command: Option<DaemonCommands>) -> Result<()> {
         None => {
             // No subcommand - show help
             println!("Daemon management commands\n");
-            println!("Usage: hyprvoice daemon <COMMAND>\n");
+            println!("Usage: mojovoice daemon <COMMAND>\n");
             println!("Commands:");
             println!("  up        Start the daemon server");
             println!("  down      Stop the running daemon");
@@ -591,7 +591,7 @@ fn cmd_daemon(command: Option<DaemonCommands>) -> Result<()> {
             println!("  status    Show daemon status");
             println!("  logs      View daemon logs");
             println!("  pid       Print daemon PID");
-            println!("\nRun 'hyprvoice daemon <COMMAND> --help' for more info");
+            println!("\nRun 'mojovoice daemon <COMMAND> --help' for more info");
             Ok(())
         }
         Some(DaemonCommands::Up { model }) => cmd_daemon_up(model),
@@ -606,7 +606,7 @@ fn cmd_daemon(command: Option<DaemonCommands>) -> Result<()> {
 fn cmd_daemon_up(model_override: Option<String>) -> Result<()> {
     // Check if already running
     if daemon::is_daemon_running() {
-        anyhow::bail!("Daemon is already running. Use 'hyprvoice daemon restart' to restart it.");
+        anyhow::bail!("Daemon is already running. Use 'mojovoice daemon restart' to restart it.");
     }
 
     let mut cfg = config::load()?;
@@ -648,7 +648,7 @@ fn cmd_daemon_restart(model_override: Option<String>) -> Result<()> {
         }
 
         if daemon::is_daemon_running() {
-            anyhow::bail!("Daemon did not shut down within 5 seconds. Try 'hyprvoice daemon shutdown' manually.");
+            anyhow::bail!("Daemon did not shut down within 5 seconds. Try 'mojovoice daemon shutdown' manually.");
         }
         println!("Daemon stopped.");
     }
@@ -692,14 +692,14 @@ fn cmd_daemon_status() -> Result<()> {
 fn cmd_daemon_logs(follow: bool, lines: usize) -> Result<()> {
     let log_dir = state::get_log_dir()?;
 
-    // Find the most recent log file (they have date suffixes like hyprvoice.log.2026-01-14)
+    // Find the most recent log file (they have date suffixes like mojovoice.log.2026-01-14)
     let log_file = std::fs::read_dir(&log_dir)?
         .filter_map(|e| e.ok())
         .map(|e| e.path())
         .filter(|p| {
             p.file_name()
                 .and_then(|n| n.to_str())
-                .is_some_and(|n| n.starts_with("hyprvoice.log"))
+                .is_some_and(|n| n.starts_with("mojovoice.log"))
         })
         .max_by_key(|p| p.metadata().and_then(|m| m.modified()).ok());
 
@@ -769,7 +769,7 @@ fn cmd_doctor() -> Result<()> {
     );
 
     if !model_ok {
-        println!("\nDownload a model with: hyprvoice download base.en");
+        println!("\nDownload a model with: mojovoice download base.en");
     }
 
     let pw_ok = std::process::Command::new("pw-cli")
@@ -796,7 +796,7 @@ fn cmd_transcribe_file(path: &std::path::Path, _model_override: Option<String>) 
     const TARGET_SAMPLE_RATE: u32 = 16000;
 
     if !daemon::is_daemon_running() {
-        anyhow::bail!("Daemon is not running. Start it first with: hyprvoice daemon &");
+        anyhow::bail!("Daemon is not running. Start it first with: mojovoice daemon &");
     }
 
     if !path.exists() {

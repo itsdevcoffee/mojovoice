@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to hyprvoice will be documented in this file.
+All notable changes to mojovoice will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -34,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Simplified main.rs CLI entry point
 - Removed dead whisper module and privatized mojo_ffi
 - Simplified audio capture, output, daemon client, and transcription modules
-- Cleaned up legacy binary name checks (hyprvoice-gpu/hyprvoice-cuda)
+- Cleaned up legacy binary name checks (mojovoice-gpu/mojovoice-cuda)
 
 ## [0.4.1] - 2025-01-01
 
@@ -58,14 +58,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.3.0] - 2024-12-30
 
 ### Changed
-- **BREAKING:** Renamed project from dev-voice to hyprvoice
+- **BREAKING:** Renamed project from dev-voice to mojovoice
 - Polished README for production readiness
 
 ## [0.2.0] - 2025-12-16 (Phase 4)
 
 ### Added
 - **Cross-platform support:** macOS, Windows, and X11 in addition to Wayland
-- **Clipboard mode flag:** `hyprvoice start -c` to copy text to clipboard instead of typing
+- **Clipboard mode flag:** `mojovoice start -c` to copy text to clipboard instead of typing
 - **Native HTTP downloads:** Replaced `curl` subprocess with `ureq` library for model downloads
 - **Checksum verification:** SHA256 verification for downloaded Whisper models
 - **Better resampling:** Migrated from linear interpolation to `rubato` library
@@ -76,7 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING:** Type mode no longer preserves clipboard contents
   - Previous versions used paste shortcuts (Ctrl+V) which required saving/restoring clipboard
   - Current version types text directly at cursor using `enigo.text()` - more reliable but doesn't interact with clipboard
-  - Migration: Use `hyprvoice start -c` for clipboard-based workflow
+  - Migration: Use `mojovoice start -c` for clipboard-based workflow
 - **BREAKING:** Migrated from Linux-only tools (wtype/xdotool) to cross-platform enigo library
 - **BREAKING:** Audio capture migrated from PipeWire to CPAL (cross-platform)
 - Simplified output module from 330+ lines to ~120 lines (-63% code reduction)
@@ -131,6 +131,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **v0.5.0:** Daemon subcommands (up/down), daemon control UI, justfile, mojo-audio FFI, expanded model registry
 - **v0.4.1:** Premium Settings Panel, UI scaling, cancel recording
 - **v0.4.0:** Tauri UI with glassmorphic design
-- **v0.3.0:** Renamed to hyprvoice
+- **v0.3.0:** Renamed to mojovoice
 - **v0.2.0 (Phase 4):** Cross-platform support, simplified architecture
 - **v0.1.0 (Phase 3):** Initial Linux Wayland release

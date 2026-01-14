@@ -202,20 +202,20 @@ jobs:
 
       - name: Verify CUDA artifact
         run: |
-          test -f target/release/hyprvoice || (echo "ERROR: target/release/hyprvoice not found" && exit 1)
-          file target/release/hyprvoice
-          ldd target/release/hyprvoice | grep -E 'libcudart\.so\.12' || (echo "ERROR: CUDA artifact missing cudart.so.12 dependency in ldd" && exit 1)
-          readelf -d target/release/hyprvoice | grep -E 'NEEDED.*libcudart\.so\.12' || (echo "ERROR: CUDA artifact missing cudart.so.12 in NEEDED section" && exit 1)
+          test -f target/release/mojovoice || (echo "ERROR: target/release/mojovoice not found" && exit 1)
+          file target/release/mojovoice
+          ldd target/release/mojovoice | grep -E 'libcudart\.so\.12' || (echo "ERROR: CUDA artifact missing cudart.so.12 dependency in ldd" && exit 1)
+          readelf -d target/release/mojovoice | grep -E 'NEEDED.*libcudart\.so\.12' || (echo "ERROR: CUDA artifact missing cudart.so.12 in NEEDED section" && exit 1)
           echo "✓ CUDA artifact verified"
 
       - name: Hash CUDA artifact
-        run: sha256sum target/release/hyprvoice
+        run: sha256sum target/release/mojovoice
 
       - name: Upload CUDA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: hyprvoice-linux-x64-cuda
-          path: target/release/hyprvoice
+          name: mojovoice-linux-x64-cuda
+          path: target/release/mojovoice
           retention-days: 90
 
   build-metal:
@@ -256,8 +256,8 @@ jobs:
       - name: Upload Metal artifact
         uses: actions/upload-artifact@v4
         with:
-          name: hyprvoice-${{ matrix.os }}-arm64-metal
-          path: target/release/hyprvoice
+          name: mojovoice-${{ matrix.os }}-arm64-metal
+          path: target/release/mojovoice
           retention-days: 90
 
   build-artifacts-linux:
@@ -297,15 +297,15 @@ jobs:
 
       - name: Verify artifact
         run: |
-          file target/release/hyprvoice
+          file target/release/mojovoice
           # CPU artifact should NOT depend on CUDA libraries
           echo "Checking ldd for CUDA libs (should be none):"
-          if ldd target/release/hyprvoice | grep -E 'libcudart|libcublas|libcudnn'; then
+          if ldd target/release/mojovoice | grep -E 'libcudart|libcublas|libcudnn'; then
             echo "❌ ERROR: CPU artifact has CUDA dependencies!"
             exit 1
           fi
           echo "Checking readelf for CUDA NEEDED entries (should be none):"
-          if readelf -d target/release/hyprvoice | grep NEEDED | grep -E 'cudart|cublas|cudnn'; then
+          if readelf -d target/release/mojovoice | grep NEEDED | grep -E 'cudart|cublas|cudnn'; then
             echo "❌ ERROR: CPU artifact has CUDA in NEEDED section!"
             exit 1
           fi
@@ -314,8 +314,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: hyprvoice-linux-x64
-          path: target/release/hyprvoice
+          name: mojovoice-linux-x64
+          path: target/release/mojovoice
           retention-days: 90
 
   build-artifacts-macos:
@@ -328,10 +328,10 @@ jobs:
         include:
           - os: macos-15
             name: macOS ARM64
-            artifact: hyprvoice-macos-arm64
+            artifact: mojovoice-macos-arm64
           - os: macos-15-large
             name: macOS Intel
-            artifact: hyprvoice-macos-intel
+            artifact: mojovoice-macos-intel
     steps:
       - uses: actions/checkout@v4
 
@@ -363,7 +363,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: target/release/hyprvoice
+          path: target/release/mojovoice
           retention-days: 90
 
   clippy:

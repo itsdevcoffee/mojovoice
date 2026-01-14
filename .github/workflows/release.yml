@@ -46,11 +46,11 @@ jobs:
 
       - name: Package binary
         run: |
-          mkdir -p hyprvoice-linux-x64
-          cp target/release/hyprvoice hyprvoice-linux-x64/
-          cp README.md hyprvoice-linux-x64/
-          cp LICENSE hyprvoice-linux-x64/ || echo "No LICENSE file"
-          tar -czf hyprvoice-linux-x64.tar.gz hyprvoice-linux-x64/
+          mkdir -p mojovoice-linux-x64
+          cp target/release/mojovoice mojovoice-linux-x64/
+          cp README.md mojovoice-linux-x64/
+          cp LICENSE mojovoice-linux-x64/ || echo "No LICENSE file"
+          tar -czf mojovoice-linux-x64.tar.gz mojovoice-linux-x64/
 
       - name: Upload Release Asset
         uses: actions/upload-release-asset@v1
@@ -58,8 +58,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./hyprvoice-linux-x64.tar.gz
-          asset_name: hyprvoice-linux-x64.tar.gz
+          asset_path: ./mojovoice-linux-x64.tar.gz
+          asset_name: mojovoice-linux-x64.tar.gz
           asset_content_type: application/gzip
 
   build-macos-arm:
@@ -77,11 +77,11 @@ jobs:
 
       - name: Package binary
         run: |
-          mkdir -p hyprvoice-macos-arm64
-          cp target/release/hyprvoice hyprvoice-macos-arm64/
-          cp README.md hyprvoice-macos-arm64/
-          cp LICENSE hyprvoice-macos-arm64/ || echo "No LICENSE file"
-          tar -czf hyprvoice-macos-arm64.tar.gz hyprvoice-macos-arm64/
+          mkdir -p mojovoice-macos-arm64
+          cp target/release/mojovoice mojovoice-macos-arm64/
+          cp README.md mojovoice-macos-arm64/
+          cp LICENSE mojovoice-macos-arm64/ || echo "No LICENSE file"
+          tar -czf mojovoice-macos-arm64.tar.gz mojovoice-macos-arm64/
 
       - name: Upload Release Asset
         uses: actions/upload-release-asset@v1
@@ -89,8 +89,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./hyprvoice-macos-arm64.tar.gz
-          asset_name: hyprvoice-macos-arm64.tar.gz
+          asset_path: ./mojovoice-macos-arm64.tar.gz
+          asset_name: mojovoice-macos-arm64.tar.gz
           asset_content_type: application/gzip
 
   build-macos-intel:
@@ -108,11 +108,11 @@ jobs:
 
       - name: Package binary
         run: |
-          mkdir -p hyprvoice-macos-intel
-          cp target/release/hyprvoice hyprvoice-macos-intel/
-          cp README.md hyprvoice-macos-intel/
-          cp LICENSE hyprvoice-macos-intel/ || echo "No LICENSE file"
-          tar -czf hyprvoice-macos-intel.tar.gz hyprvoice-macos-intel/
+          mkdir -p mojovoice-macos-intel
+          cp target/release/mojovoice mojovoice-macos-intel/
+          cp README.md mojovoice-macos-intel/
+          cp LICENSE mojovoice-macos-intel/ || echo "No LICENSE file"
+          tar -czf mojovoice-macos-intel.tar.gz mojovoice-macos-intel/
 
       - name: Upload Release Asset
         uses: actions/upload-release-asset@v1
@@ -120,6 +120,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./hyprvoice-macos-intel.tar.gz
-          asset_name: hyprvoice-macos-intel.tar.gz
+          asset_path: ./mojovoice-macos-intel.tar.gz
+          asset_name: mojovoice-macos-intel.tar.gz
           asset_content_type: application/gzip

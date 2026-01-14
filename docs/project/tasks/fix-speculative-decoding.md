@@ -147,15 +147,15 @@ After implementation, test with:
 cargo build --release --features cuda
 
 # Run daemon (should show draft model loading in logs)
-pkill -9 hyprvoice
-./target/release/hyprvoice daemon &
+pkill -9 mojovoice
+./target/release/mojovoice daemon &
 
 # Check logs
-tail -f ~/.local/state/hyprvoice/logs/hyprvoice.log.2025-12-20
+tail -f ~/.local/state/mojovoice/logs/mojovoice.log.2025-12-20
 # Look for: "Loading draft model for speculative decoding"
 
 # Test transcription
-./target/release/hyprvoice start --duration 5
+./target/release/mojovoice start --duration 5
 # Speak a test phrase
 # Verify output appears correctly
 ```

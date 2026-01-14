@@ -214,7 +214,7 @@ export default function Settings() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-white mb-2">Settings</h1>
-          <p className="text-gray-400">Configure hyprvoice behavior</p>
+          <p className="text-gray-400">Configure Mojo Voice behavior</p>
         </div>
 
         {/* Action buttons */}
@@ -428,7 +428,7 @@ export default function Settings() {
                       value={config.model.path}
                       onChange={(newPath) => setConfig({ ...config, model: { ...config.model, path: newPath }})}
                       type="any"
-                      placeholder="~/.local/share/hyprvoice/models/..."
+                      placeholder="~/.local/share/mojovoice/models/..."
                       label="Browse for model"
                     />
                   </SettingRow>
@@ -465,7 +465,7 @@ export default function Settings() {
                         value={config.audio.audio_clips_path}
                         onChange={(newPath) => setConfig({ ...config, audio: { ...config.audio, audio_clips_path: newPath }})}
                         type="directory"
-                        placeholder="~/.local/share/hyprvoice/recordings"
+                        placeholder="~/.local/share/mojovoice/recordings"
                         label="Browse for folder"
                       />
                     </SettingRow>

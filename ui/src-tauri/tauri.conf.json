@@ -1,7 +1,7 @@
 {
-  "productName": "hyprvoice",
+  "productName": "mojovoice",
   "version": "0.4.0",
-  "identifier": "com.hyprvoice.app",
+  "identifier": "com.mojovoice.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
@@ -12,7 +12,7 @@
     "withGlobalTauri": false,
     "windows": [
       {
-        "title": "hyprvoice",
+        "title": "Mojo Voice",
         "width": 1200,
         "height": 800,
         "minWidth": 900,

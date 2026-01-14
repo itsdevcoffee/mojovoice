@@ -1,4 +1,4 @@
-# Rustfmt configuration for hyprvoice
+# Rustfmt configuration for mojovoice
 # See: https://rust-lang.github.io/rustfmt/
 # Note: Only using stable features (unstable features require nightly Rust)
 

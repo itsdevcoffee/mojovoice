@@ -2,9 +2,9 @@ use anyhow::{Context, Result};
 use directories::ProjectDirs;
 use std::path::PathBuf;
 
-/// Get the state directory for hyprvoice (~/.local/state/hyprvoice)
+/// Get the state directory for mojovoice (~/.local/state/mojovoice)
 pub fn get_state_dir() -> Result<PathBuf> {
-    let proj_dirs = ProjectDirs::from("", "", "hyprvoice")
+    let proj_dirs = ProjectDirs::from("", "", "mojovoice")
         .context("Failed to determine project directories")?;
 
     // Use state_dir on Linux, fall back to data_local_dir
@@ -16,7 +16,7 @@ pub fn get_state_dir() -> Result<PathBuf> {
     Ok(state_dir.to_path_buf())
 }
 
-/// Get the log directory for hyprvoice (~/.local/state/hyprvoice/logs)
+/// Get the log directory for mojovoice (~/.local/state/mojovoice/logs)
 pub fn get_log_dir() -> Result<PathBuf> {
     let log_dir = get_state_dir()?.join("logs");
     std::fs::create_dir_all(&log_dir)?;

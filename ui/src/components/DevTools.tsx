@@ -16,7 +16,7 @@ export default function DevTools() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-white mb-2">Developer Tools</h1>
-          <p className="text-gray-400">Debug, monitor, and diagnose hyprvoice</p>
+          <p className="text-gray-400">Debug, monitor, and diagnose Mojo Voice</p>
         </div>
       </div>
 
@@ -313,7 +313,7 @@ function DiagnosticsTab() {
         <div className="glass-card p-4">
           <h3 className="text-white font-medium mb-3">Daemon Status</h3>
           <div className="space-y-2 text-sm">
-            <InfoRow label="Socket Path" value="~/.local/state/hyprvoice/daemon.sock" />
+            <InfoRow label="Socket Path" value="~/.local/state/mojovoice/daemon.sock" />
             <InfoRow label="Model" value="whisper-large-v3-turbo" />
             <InfoRow label="Backend" value="Candle (GPU)" />
             <InfoRow label="Uptime" value="2h 34m" />

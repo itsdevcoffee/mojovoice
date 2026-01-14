@@ -1,7 +1,7 @@
 /**
  * UI Scaling Utilities
  *
- * Centralized scale management for the hyprvoice UI.
+ * Centralized scale management for the Mojo Voice UI.
  * Provides constants, validation, and helper functions for UI scaling.
  */
 

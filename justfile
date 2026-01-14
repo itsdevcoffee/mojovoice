@@ -36,29 +36,29 @@ ui:
 # Note: rm before cp handles "Text file busy" when daemon is running
 install: build
     @mkdir -p {{lib_dir}}
-    rm -f {{install_dir}}/hyprvoice
-    cp target/release/hyprvoice {{install_dir}}/
+    rm -f {{install_dir}}/mojovoice
+    cp target/release/mojovoice {{install_dir}}/
     cp lib/libmojo_audio.so {{lib_dir}}/
-    @echo "Installed hyprvoice to {{install_dir}}"
+    @echo "Installed mojovoice to {{install_dir}}"
     @echo "Run 'just daemon-restart' to use the new build"
 
 # Install CUDA build to ~/.local/bin
 install-cuda: build-cuda
     @mkdir -p {{lib_dir}}
-    rm -f {{install_dir}}/hyprvoice
-    cp target/release/hyprvoice {{install_dir}}/
+    rm -f {{install_dir}}/mojovoice
+    cp target/release/mojovoice {{install_dir}}/
     cp lib/libmojo_audio.so {{lib_dir}}/
-    @echo "Installed hyprvoice (CUDA) to {{install_dir}}"
+    @echo "Installed mojovoice (CUDA) to {{install_dir}}"
     @echo "Run 'just daemon-restart' to use the new build"
 
 # Install and restart daemon
 install-restart: install-cuda
     @echo "Restarting daemon..."
-    -{{install_dir}}/hyprvoice daemon down 2>/dev/null || true
+    -{{install_dir}}/mojovoice daemon down 2>/dev/null || true
     @sleep 1
-    {{install_dir}}/hyprvoice daemon up &
+    {{install_dir}}/mojovoice daemon up &
     @sleep 2
-    {{install_dir}}/hyprvoice daemon status
+    {{install_dir}}/mojovoice daemon status
 
 # === Development Helpers ===
 
@@ -86,27 +86,27 @@ fmt:
 
 # Start daemon (foreground, for debugging)
 daemon-fg:
-    {{install_dir}}/hyprvoice daemon up
+    {{install_dir}}/mojovoice daemon up
 
 # Bring daemon up (background)
 daemon-up:
-    {{install_dir}}/hyprvoice daemon up &
+    {{install_dir}}/mojovoice daemon up &
 
 # Bring daemon down
 daemon-down:
-    {{install_dir}}/hyprvoice daemon down
+    {{install_dir}}/mojovoice daemon down
 
 # Restart daemon
 daemon-restart:
-    {{install_dir}}/hyprvoice daemon restart
+    {{install_dir}}/mojovoice daemon restart
 
 # Show daemon status
 daemon-status:
-    {{install_dir}}/hyprvoice daemon status
+    {{install_dir}}/mojovoice daemon status
 
 # Follow daemon logs
 daemon-logs:
-    {{install_dir}}/hyprvoice daemon logs -f
+    {{install_dir}}/mojovoice daemon logs -f
 
 # === Cleanup ===
 

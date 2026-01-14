@@ -17,7 +17,7 @@ function App() {
       id: Date.now().toString(),
       timestamp: Date.now(),
       level: 'info',
-      message: 'hyprvoice UI started',
+      message: 'Mojo Voice UI started',
       source: 'ui',
     });
 

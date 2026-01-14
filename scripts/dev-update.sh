@@ -53,17 +53,17 @@ cargo build --release $FEATURES
 
 # Install
 echo -e "${YELLOW}Installing binaries...${NC}"
-cp target/release/hyprvoice ~/.local/bin/hyprvoice
-cp target/release/hyprvoice ~/.local/bin/hyprvoice-cuda
+cp target/release/mojovoice ~/.local/bin/mojovoice
+cp target/release/mojovoice ~/.local/bin/mojovoice-cuda
 
-echo -e "${GREEN}✓ Installed to ~/.local/bin/{hyprvoice,hyprvoice-cuda}${NC}"
+echo -e "${GREEN}✓ Installed to ~/.local/bin/{mojovoice,mojovoice-cuda}${NC}"
 
 # Restart daemon if requested
 if [ "$RESTART" = true ]; then
     echo -e "${YELLOW}Restarting daemon...${NC}"
-    pkill -9 hyprvoice || true
+    pkill -9 mojovoice || true
     sleep 0.5
-    hyprvoice-gpu daemon &
+    mojovoice-gpu daemon &
     echo -e "${GREEN}✓ Daemon restarted${NC}"
 fi
 

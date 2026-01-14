@@ -1,26 +1,26 @@
-/* hyprvoice Waybar Module Styling */
+/* mojovoice Waybar Module Styling */
 
-#custom-hyprvoice {
+#custom-mojovoice {
   padding: 0 10px;
   margin: 0 4px;
 }
 
-#custom-hyprvoice.recording {
+#custom-mojovoice.recording {
   color: #ff5555;
   animation: pulse 0.75s ease-in-out infinite alternate;
 }
 
-#custom-hyprvoice.processing {
+#custom-mojovoice.processing {
   color: #f1fa8c;
   animation: pulse 0.25s ease-in-out infinite alternate;
 }
 
-#custom-hyprvoice.idle {
+#custom-mojovoice.idle {
   color: #6272a4;
   animation: none;
 }
 
-#custom-hyprvoice.offline {
+#custom-mojovoice.offline {
   color: #44475a;
   animation: none;
 }

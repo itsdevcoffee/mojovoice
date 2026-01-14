@@ -27,7 +27,7 @@ pub struct SystemInfo {
     pub platform: String,
 }
 
-/// Check if the hyprvoice daemon is running
+/// Check if the mojovoice daemon is running
 #[tauri::command]
 pub async fn get_daemon_status() -> Result<DaemonStatus, String> {
     match daemon_client::get_status() {
@@ -126,7 +126,7 @@ pub async fn cancel_recording() -> Result<(), String> {
 fn refresh_statusbar() {
     // Read config to get refresh_command
     let config_path = dirs::config_dir()
-        .map(|dir| dir.join("hyprvoice").join("config.toml"));
+        .map(|dir| dir.join("mojovoice").join("config.toml"));
 
     let Some(config_path) = config_path else {
         eprintln!("Could not determine config path");
@@ -187,7 +187,7 @@ pub async fn get_transcription_history() -> Result<Vec<TranscriptionEntry>, Stri
 /// Download a Whisper model
 #[tauri::command]
 pub async fn download_model(model_name: String) -> Result<(), String> {
-    // TODO: Call hyprvoice download command
+    // TODO: Call mojovoice download command
     println!("Downloading model: {}", model_name);
     Ok(())
 }
@@ -257,7 +257,7 @@ impl Default for UiConfig {
 pub async fn get_config() -> Result<AppConfig, String> {
     let config_path = dirs::config_dir()
         .ok_or("Could not determine config directory")?
-        .join("hyprvoice")
+        .join("mojovoice")
         .join("config.toml");
 
     let config_str = std::fs::read_to_string(&config_path)
@@ -274,7 +274,7 @@ pub async fn get_config() -> Result<AppConfig, String> {
 pub async fn save_config(config: AppConfig) -> Result<(), String> {
     let config_path = dirs::config_dir()
         .ok_or("Could not determine config directory")?
-        .join("hyprvoice")
+        .join("mojovoice")
         .join("config.toml");
 
     let config_str = toml::to_string_pretty(&config)
@@ -286,7 +286,7 @@ pub async fn save_config(config: AppConfig) -> Result<(), String> {
     Ok(())
 }
 
-/// Start the hyprvoice daemon
+/// Start the mojovoice daemon
 #[tauri::command]
 pub async fn start_daemon() -> Result<(), String> {
     // Check if already running
@@ -294,8 +294,8 @@ pub async fn start_daemon() -> Result<(), String> {
         return Err("Daemon is already running".to_string());
     }
 
-    // Find hyprvoice binary
-    let binary = find_hyprvoice_binary().ok_or("Could not find hyprvoice binary")?;
+    // Find mojovoice binary
+    let binary = find_mojovoice_binary().ok_or("Could not find mojovoice binary")?;
 
     eprintln!("Starting daemon with binary: {}", binary);
 
@@ -319,7 +319,7 @@ pub async fn start_daemon() -> Result<(), String> {
     Err("Daemon failed to start within 5 seconds".to_string())
 }
 
-/// Stop the hyprvoice daemon
+/// Stop the mojovoice daemon
 #[tauri::command]
 pub async fn stop_daemon() -> Result<(), String> {
     // Check if running
@@ -344,7 +344,7 @@ pub async fn stop_daemon() -> Result<(), String> {
     Err("Daemon did not stop within 5 seconds".to_string())
 }
 
-/// Restart the hyprvoice daemon with new configuration
+/// Restart the mojovoice daemon with new configuration
 #[tauri::command]
 pub async fn restart_daemon() -> Result<(), String> {
     // 1. Send shutdown command to daemon
@@ -369,8 +369,8 @@ pub async fn restart_daemon() -> Result<(), String> {
 
     // 3. Detect which binary was actually running, or find it
     let binary = detect_running_binary()
-        .or_else(find_hyprvoice_binary)
-        .unwrap_or_else(|| "hyprvoice".to_string());
+        .or_else(find_mojovoice_binary)
+        .unwrap_or_else(|| "mojovoice".to_string());
 
     eprintln!("Restarting daemon with detected binary: {}", binary);
 
@@ -450,10 +450,10 @@ pub struct PathValidation {
     pub message: String,
 }
 
-/// Find hyprvoice binary in common locations
-fn find_hyprvoice_binary() -> Option<String> {
+/// Find mojovoice binary in common locations
+fn find_mojovoice_binary() -> Option<String> {
     let home = std::env::var("HOME").ok()?;
-    let path = format!("{}/.local/bin/hyprvoice", home);
+    let path = format!("{}/.local/bin/mojovoice", home);
 
     if std::path::Path::new(&path).exists() {
         return Some(path);
@@ -461,7 +461,7 @@ fn find_hyprvoice_binary() -> Option<String> {
 
     // Try PATH as fallback
     if let Ok(output) = std::process::Command::new("which")
-        .arg("hyprvoice")
+        .arg("mojovoice")
         .output()
     {
         if output.status.success() {
@@ -475,9 +475,9 @@ fn find_hyprvoice_binary() -> Option<String> {
     None
 }
 
-/// Detect which hyprvoice binary is currently running
+/// Detect which mojovoice binary is currently running
 fn detect_running_binary() -> Option<String> {
-    // Run: ps aux | grep hyprvoice | grep daemon
+    // Run: ps aux | grep mojovoice | grep daemon
     let output = std::process::Command::new("ps")
         .args(["aux"])
         .output()
@@ -485,15 +485,15 @@ fn detect_running_binary() -> Option<String> {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
 
-    // Find lines with "hyprvoice" and "daemon"
+    // Find lines with "mojovoice" and "daemon"
     for line in stdout.lines() {
-        if line.contains("hyprvoice") && line.contains("daemon") && !line.contains("grep") {
+        if line.contains("mojovoice") && line.contains("daemon") && !line.contains("grep") {
             // Extract the command path (usually in the later columns)
             let parts: Vec<&str> = line.split_whitespace().collect();
 
-            // Find the part that looks like a path to hyprvoice
+            // Find the part that looks like a path to mojovoice
             for part in &parts {
-                if part.contains("hyprvoice") && (part.starts_with('/') || part.starts_with("./")) {
+                if part.contains("mojovoice") && (part.starts_with('/') || part.starts_with("./")) {
                     eprintln!("Detected running binary: {}", part);
                     return Some(part.to_string());
                 }
@@ -501,7 +501,7 @@ fn detect_running_binary() -> Option<String> {
 
             // Fallback: look for just the binary name
             for part in &parts {
-                if part.contains("hyprvoice") {
+                if part.contains("mojovoice") {
                     eprintln!("Detected running binary name: {}", part);
                     return Some(part.to_string());
                 }

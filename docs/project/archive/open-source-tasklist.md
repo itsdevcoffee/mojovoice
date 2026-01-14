@@ -1,6 +1,6 @@
-# hyprvoice Open Source Preparation Roadmap
+# mojovoice Open Source Preparation Roadmap
 
-**Goal:** Prepare hyprvoice for open source release with cross-platform support (Linux distros + macOS)
+**Goal:** Prepare mojovoice for open source release with cross-platform support (Linux distros + macOS)
 
 **Status:** Planning
 **Target:** After completing Weeks 1-3 of code quality improvements
@@ -218,7 +218,7 @@ metal = ["whisper-rs/metal"]  # macOS
 
 **Create:**
 - [ ] `ARCHITECTURE.md` - System design overview
-  - Current: `docs/context/hyprvoice-complete.md` (good start!)
+  - Current: `docs/context/mojovoice-complete.md` (good start!)
   - Expand with: Platform abstraction, trait design, module structure
 
 - [ ] `CONTRIBUTING.md` - How to contribute
@@ -257,7 +257,7 @@ metal = ["whisper-rs/metal"]  # macOS
 - [ ] Add installation badges
 - [ ] Add usage examples with GIFs/screenshots
 - [ ] Link to documentation
-- [ ] Add "Why hyprvoice?" section
+- [ ] Add "Why mojovoice?" section
 
 ---
 
@@ -478,7 +478,7 @@ if !audio_backend_available() {
 - No "second-class citizen" platforms
 
 ### 3. Low Barrier to Entry
-- One-command install: `cargo install hyprvoice`
+- One-command install: `cargo install mojovoice`
 - Pre-built binaries for releases
 - Clear error messages with solutions
 
@@ -543,4 +543,4 @@ if !audio_backend_available() {
 - Documentation is just as important as code
 - Community building takes time - be patient
 
-**Let's make hyprvoice an amazing open source project!** 🚀
+**Let's make mojovoice an amazing open source project!** 🚀

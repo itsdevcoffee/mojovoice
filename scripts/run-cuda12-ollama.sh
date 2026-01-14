@@ -1,5 +1,5 @@
 #!/bin/bash
-# Wrapper to run hyprvoice CUDA binary with Ollama's CUDA 12 libraries
+# Wrapper to run mojovoice CUDA binary with Ollama's CUDA 12 libraries
 #
 # Usage:
 #   ./scripts/run-cuda12-ollama.sh daemon
@@ -23,26 +23,26 @@ else
     export LD_LIBRARY_PATH=/usr/local/lib/ollama
 fi
 
-# Find hyprvoice binary
-BINARY="${DEVVOICE_BINARY:-./hyprvoice}"
+# Find mojovoice binary
+BINARY="${DEVVOICE_BINARY:-./mojovoice}"
 
 if [ ! -x "$BINARY" ]; then
     # Try common locations (prefer artifacts/ over docs/tmp/)
-    if [ -x "$HOME/.local/bin/hyprvoice-cuda" ]; then
-        BINARY="$HOME/.local/bin/hyprvoice-cuda"
-    elif [ -x "./target/release/hyprvoice" ]; then
-        BINARY="./target/release/hyprvoice"
-    elif [ -x "./artifacts/hyprvoice-linux-x64-cuda/hyprvoice" ]; then
-        BINARY="./artifacts/hyprvoice-linux-x64-cuda/hyprvoice"
-    elif [ -x "./docs/tmp/hyprvoice-linux-x64-cuda/hyprvoice" ]; then
-        BINARY="./docs/tmp/hyprvoice-linux-x64-cuda/hyprvoice"
+    if [ -x "$HOME/.local/bin/mojovoice-cuda" ]; then
+        BINARY="$HOME/.local/bin/mojovoice-cuda"
+    elif [ -x "./target/release/mojovoice" ]; then
+        BINARY="./target/release/mojovoice"
+    elif [ -x "./artifacts/mojovoice-linux-x64-cuda/mojovoice" ]; then
+        BINARY="./artifacts/mojovoice-linux-x64-cuda/mojovoice"
+    elif [ -x "./docs/tmp/mojovoice-linux-x64-cuda/mojovoice" ]; then
+        BINARY="./docs/tmp/mojovoice-linux-x64-cuda/mojovoice"
     else
-        echo "Error: Cannot find hyprvoice binary" >&2
+        echo "Error: Cannot find mojovoice binary" >&2
         echo "Searched:" >&2
-        echo "  - ~/.local/bin/hyprvoice-cuda" >&2
-        echo "  - ./target/release/hyprvoice" >&2
-        echo "  - ./artifacts/hyprvoice-linux-x64-cuda/hyprvoice" >&2
-        echo "  - ./docs/tmp/hyprvoice-linux-x64-cuda/hyprvoice" >&2
+        echo "  - ~/.local/bin/mojovoice-cuda" >&2
+        echo "  - ./target/release/mojovoice" >&2
+        echo "  - ./artifacts/mojovoice-linux-x64-cuda/mojovoice" >&2
+        echo "  - ./docs/tmp/mojovoice-linux-x64-cuda/mojovoice" >&2
         echo "" >&2
         echo "Set DEVVOICE_BINARY environment variable or install binary first" >&2
         exit 1
@@ -51,7 +51,7 @@ fi
 
 # Debug mode: Show what's being loaded
 if [ "$DEVVOICE_DEBUG" = "1" ]; then
-    echo "=== hyprvoice CUDA Debug Info ===" >&2
+    echo "=== mojovoice CUDA Debug Info ===" >&2
     echo "Binary: $BINARY" >&2
     echo "LD_LIBRARY_PATH: $LD_LIBRARY_PATH" >&2
     echo "" >&2
@@ -67,10 +67,10 @@ if [ "$DEVVOICE_DEBUG" = "1" ]; then
         echo "" >&2
     fi
 
-    echo "Starting hyprvoice..." >&2
+    echo "Starting mojovoice..." >&2
     echo "==============================" >&2
     echo "" >&2
 fi
 
-# Run hyprvoice with all arguments passed through
+# Run mojovoice with all arguments passed through
 exec "$BINARY" "$@"

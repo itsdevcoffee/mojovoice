@@ -80,7 +80,7 @@ export default function Dashboard() {
       >
         <h1 className="text-4xl font-bold text-white mb-2">
           <span className="bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-purple-500">
-            hyprvoice
+            Mojo Voice
           </span>
         </h1>
         <p className="text-gray-400">GPU-Accelerated Voice Dictation</p>

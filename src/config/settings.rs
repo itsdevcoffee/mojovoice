@@ -2,7 +2,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-const APP_NAME: &str = "hyprvoice";
+const APP_NAME: &str = "mojovoice";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {

@@ -1,9 +1,9 @@
 #!/bin/bash
-# Diagnostic script for hyprvoice troubleshooting and bug reports
+# Diagnostic script for mojovoice troubleshooting and bug reports
 #
 # Usage: ./scripts/doctor.sh
 
-echo "=== hyprvoice Doctor Report ==="
+echo "=== mojovoice Doctor Report ==="
 echo ""
 
 echo "## System Information"
@@ -13,19 +13,19 @@ echo ""
 
 echo "## Binary Resolution"
 echo "Checking which binaries are in PATH and their details..."
-command -v hyprvoice 2>/dev/null || echo "hyprvoice: not in PATH"
-command -v hyprvoice-cuda12 2>/dev/null || echo "hyprvoice-cuda12: not in PATH"
-command -v hyprvoice-gpu 2>/dev/null || echo "hyprvoice-gpu: not in PATH"
+command -v mojovoice 2>/dev/null || echo "mojovoice: not in PATH"
+command -v mojovoice-cuda12 2>/dev/null || echo "mojovoice-cuda12: not in PATH"
+command -v mojovoice-gpu 2>/dev/null || echo "mojovoice-gpu: not in PATH"
 echo ""
 
 echo "Binary files:"
-ls -lh "$(command -v hyprvoice 2>/dev/null)" 2>/dev/null || echo "hyprvoice: not found"
-ls -lh "$(command -v hyprvoice-cuda12 2>/dev/null)" 2>/dev/null || echo "hyprvoice-cuda12: not found"
-ls -lh "$(command -v hyprvoice-gpu 2>/dev/null)" 2>/dev/null || echo "hyprvoice-gpu: not found (wrapper script)"
+ls -lh "$(command -v mojovoice 2>/dev/null)" 2>/dev/null || echo "mojovoice: not found"
+ls -lh "$(command -v mojovoice-cuda12 2>/dev/null)" 2>/dev/null || echo "mojovoice-cuda12: not found"
+ls -lh "$(command -v mojovoice-gpu 2>/dev/null)" 2>/dev/null || echo "mojovoice-gpu: not found (wrapper script)"
 echo ""
 
 echo "Binary checksums (CPU and CUDA should be DIFFERENT):"
-sha256sum "$(command -v hyprvoice 2>/dev/null)" "$(command -v hyprvoice-cuda12 2>/dev/null)" 2>/dev/null || echo "One or both binaries not found"
+sha256sum "$(command -v mojovoice 2>/dev/null)" "$(command -v mojovoice-cuda12 2>/dev/null)" 2>/dev/null || echo "One or both binaries not found"
 echo ""
 
 echo "## NVIDIA GPU"
@@ -53,22 +53,22 @@ echo ""
 echo "## CUDA Binary Dependencies"
 
 # Check CPU binary (clear LD_LIBRARY_PATH to avoid confusion)
-if command -v hyprvoice &> /dev/null; then
-    BIN_CPU="$(command -v hyprvoice)"
-    echo "hyprvoice (CPU) link-time dependencies (LD_LIBRARY_PATH cleared):"
+if command -v mojovoice &> /dev/null; then
+    BIN_CPU="$(command -v mojovoice)"
+    echo "mojovoice (CPU) link-time dependencies (LD_LIBRARY_PATH cleared):"
     ( unset LD_LIBRARY_PATH; ldd "$BIN_CPU" | grep -E 'cudart|cublas|cudnn|cuda' ) && echo "  ❌ ERROR: CPU binary has CUDA dependencies!" || echo "  ✅ OK: No CUDA dependencies (expected for CPU version)"
     echo ""
 
-    echo "hyprvoice (CPU) NEEDED libraries check:"
+    echo "mojovoice (CPU) NEEDED libraries check:"
     readelf -d "$BIN_CPU" | grep -E 'NEEDED.*cudart|NEEDED.*cublas|NEEDED.*cudnn' && echo "  ❌ ERROR: CPU binary linked against CUDA!" || echo "  ✅ OK: No CUDA linkage"
     echo ""
 fi
 
 # Check CUDA binary
-if command -v hyprvoice-cuda12 &> /dev/null; then
-    BIN_GPU="$(command -v hyprvoice-cuda12)"
+if command -v mojovoice-cuda12 &> /dev/null; then
+    BIN_GPU="$(command -v mojovoice-cuda12)"
 
-    echo "hyprvoice-cuda12 (GPU) ambient environment (may be polluted):"
+    echo "mojovoice-cuda12 (GPU) ambient environment (may be polluted):"
     echo "Current LD_LIBRARY_PATH shows Python CUDA paths - this is the problem we're fixing."
     ldd "$BIN_GPU" | grep -E 'cudart|cublas|cudnn|cuda' || echo "  ❌ ERROR: No CUDA libs found"
 
@@ -79,27 +79,27 @@ if command -v hyprvoice-cuda12 &> /dev/null; then
     fi
     echo ""
 
-    echo "hyprvoice-cuda12 (GPU) NEEDED libraries:"
+    echo "mojovoice-cuda12 (GPU) NEEDED libraries:"
     readelf -d "$BIN_GPU" | grep NEEDED | grep -E 'cudart|cublas|cudnn' || echo "  (No explicit CUDA NEEDED entries - dependencies may be indirect)"
     echo ""
 
-    echo "hyprvoice-cuda12 (GPU) with strict CUDA 12 env (Ollama-only):"
+    echo "mojovoice-cuda12 (GPU) with strict CUDA 12 env (Ollama-only):"
     echo "This is what the binary sees when run with clean LD_LIBRARY_PATH:"
     LD_LIBRARY_PATH=/usr/local/lib/ollama ldd "$BIN_GPU" | grep -E 'cudart|cublas|cublasLt|cudnn|cuda' || echo "  ❌ ERROR: CUDA libs not found even with Ollama path"
     echo ""
 
     # Show wrapper runtime resolution (the real truth)
-    if command -v hyprvoice-gpu &> /dev/null; then
-        echo "hyprvoice-cuda12 (GPU) via hyprvoice-gpu wrapper (strict mode - REAL RUNTIME):"
-        echo "This is what actually loads when users run 'hyprvoice-gpu':"
-        DEVVOICE_DEBUG=1 hyprvoice-gpu --version 2>&1 | grep -A 10 "Libraries that will be loaded:" | grep -E 'libcuda|cudart|cublas|cublasLt|cudnn' || echo "  (Wrapper ran successfully; enable DEVVOICE_DEBUG=1 to see full runtime resolution)"
+    if command -v mojovoice-gpu &> /dev/null; then
+        echo "mojovoice-cuda12 (GPU) via mojovoice-gpu wrapper (strict mode - REAL RUNTIME):"
+        echo "This is what actually loads when users run 'mojovoice-gpu':"
+        DEVVOICE_DEBUG=1 mojovoice-gpu --version 2>&1 | grep -A 10 "Libraries that will be loaded:" | grep -E 'libcuda|cudart|cublas|cublasLt|cudnn' || echo "  (Wrapper ran successfully; enable DEVVOICE_DEBUG=1 to see full runtime resolution)"
         echo ""
     fi
 fi
 
 # Check downloaded artifact if not installed
-if [ ! command -v hyprvoice-cuda12 &> /dev/null ] && [ -x "./docs/tmp/hyprvoice-linux-x64-cuda/hyprvoice" ]; then
-    BIN_ARTIFACT="./docs/tmp/hyprvoice-linux-x64-cuda/hyprvoice"
+if [ ! command -v mojovoice-cuda12 &> /dev/null ] && [ -x "./docs/tmp/mojovoice-linux-x64-cuda/mojovoice" ]; then
+    BIN_ARTIFACT="./docs/tmp/mojovoice-linux-x64-cuda/mojovoice"
     echo "Downloaded CUDA artifact (not installed):"
     echo "Link-time dependencies:"
     ( unset LD_LIBRARY_PATH; ldd "$BIN_ARTIFACT" | grep -E 'cudart|cublas|cudnn|cuda' ) || echo "  No CUDA libs (ERROR - CUDA artifact should have CUDA deps)"

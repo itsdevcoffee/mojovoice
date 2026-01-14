@@ -2,42 +2,42 @@
   "description": "Audio samples for transcription testing",
   "samples": [
     {
-      "file": "sample-hyprvoice-clip.wav",
+      "file": "sample-mojovoice-clip.wav",
       "transcript": "Alright, testing 1, 2, 3, testing 1, 2, 3 to see if this works.",
       "source": "local-recording",
       "sample_rate": 16000,
       "duration_secs": 7.08
     },
     {
-      "file": "sample-hyprvoice-clip-1.wav",
+      "file": "sample-mojovoice-clip-1.wav",
       "transcript": "Alright, testing 1, 2, 3, testing 1, 2, 3 to see if this works.",
       "source": "local-recording",
       "sample_rate": 16000,
       "duration_secs": 7.08
     },
     {
-      "file": "sample-hyprvoice-clip-2.wav",
+      "file": "sample-mojovoice-clip-2.wav",
       "transcript": "Alright, with this change, I just want to ensure that you push it and trigger a new release.",
       "source": "local-recording",
       "sample_rate": 16000,
       "duration_secs": 7.88
     },
     {
-      "file": "sample-hyprvoice-clip-3.wav",
+      "file": "sample-mojovoice-clip-3.wav",
       "transcript": "Okay, I just tested.",
       "source": "local-recording",
       "sample_rate": 16000,
       "duration_secs": 5.08
     },
     {
-      "file": "sample-hyprvoice-clip-4.wav",
+      "file": "sample-mojovoice-clip-4.wav",
       "transcript": "So I'm testing this one more time to see if it works. Testing it one more time.",
       "source": "local-recording",
       "sample_rate": 16000,
       "duration_secs": 6.10
     },
     {
-      "file": "sample-hyprvoice-clip-5.wav",
+      "file": "sample-mojovoice-clip-5.wav",
       "transcript": "What I think is generally agreed upon is with no spectrogram, it is logically how we figured it is the best job to analyze.",
       "source": "local-recording",
       "sample_rate": 16000,
