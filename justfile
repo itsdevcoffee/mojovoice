@@ -26,6 +26,10 @@ build-cuda:
 dev:
     cargo build
 
+# Run Tauri UI in dev mode (hot reload)
+ui:
+    cd ui && npm run tauri:dev
+
 # === Install Commands ===
 
 # Install CPU build to ~/.local/bin
