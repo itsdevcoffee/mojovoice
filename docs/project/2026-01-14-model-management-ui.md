@@ -17,6 +17,16 @@ Add a model management interface to the Settings UI for browsing, downloading, a
 | **Backend** | `download_model` stub exists in Tauri |
 | **Registry** | 31 models in `src/model/registry.rs` |
 
+### Backend Commands Required
+
+| Command | Purpose |
+|---------|---------|
+| `list_available_models` | Get all 31 registry models |
+| `list_downloaded_models` | Scan local models directory |
+| `download_model` | Download with progress events |
+| `delete_model` | Remove model from disk (prevent if active) |
+| `switch_model` | Update config + restart daemon |
+
 ---
 
 ## UI Design
@@ -108,16 +118,16 @@ Active and recent downloads:
 
 ### Step 1: Expose Registry to Frontend
 
-Create Tauri command to list models:
+Create Tauri commands to list and manage models:
 
 ```rust
 // src-tauri/src/commands/models.rs
 
 #[tauri::command]
 pub fn list_available_models() -> Vec<ModelInfo> {
-    dev_voice::model::ModelInfo::available_models()
+    mojovoice::model::ModelInfo::available_models()
         .iter()
-        .filter_map(|name| dev_voice::model::ModelInfo::find(name))
+        .filter_map(|name| mojovoice::model::ModelInfo::find(name))
         .map(|m| ModelInfo {
             name: m.name.to_string(),
             size_mb: m.size_mb,
@@ -129,8 +139,29 @@ pub fn list_available_models() -> Vec<ModelInfo> {
 #[tauri::command]
 pub fn list_downloaded_models() -> Result<Vec<DownloadedModel>, String> {
     let models_dir = get_models_dir()?;
-    // Scan for .bin files and match against registry
+    // Scan for .bin/.safetensors files and match against registry
     // ...
+}
+
+#[tauri::command]
+pub async fn delete_model(name: String) -> Result<(), String> {
+    let models_dir = get_models_dir()?;
+    let path = models_dir.join(&name);
+
+    if !path.exists() {
+        return Err("Model not found".to_string());
+    }
+
+    // Prevent deleting active model
+    let config = get_config().await?;
+    if config.model.path.ends_with(&name) {
+        return Err("Cannot delete the currently active model".to_string());
+    }
+
+    std::fs::remove_file(&path)
+        .map_err(|e| format!("Failed to delete model: {}", e))?;
+
+    Ok(())
 }
 ```
 
@@ -224,10 +255,13 @@ pub async fn switch_model(name: String) -> Result<(), String> {
 ## File Checklist
 
 **Rust (src-tauri/):**
-- [ ] `src/commands/models.rs` - New commands module
-- [ ] `src/commands/mod.rs` - Export models module
+- [ ] `src/commands.rs` - Add model commands:
+  - [ ] `list_available_models` - Get all registry models
+  - [ ] `list_downloaded_models` - Scan local models
+  - [ ] `download_model` - Complete stub with progress events
+  - [ ] `delete_model` - Remove model from disk (prevent if active)
+  - [ ] `switch_model` - Update config + restart daemon
 - [ ] `src/main.rs` - Register new commands
-- [ ] `src/download.rs` - Download with progress (may exist)
 
 **Frontend (src-tauri/ui/src/):**
 - [ ] `components/models/ModelLibrary.tsx`
