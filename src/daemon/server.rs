@@ -418,6 +418,15 @@ pub fn run_daemon(model_path: &Path) -> Result<()> {
         fs::remove_file(&socket_path)?;
     }
 
+    // Clean up any stale state files from previous session
+    // This ensures Waybar starts in idle state, not processing
+    let _ = state::toggle::cleanup_processing();
+    let pid_file = state::paths::get_pid_file()?;
+    if pid_file.exists() {
+        info!("Removing stale recording.pid file");
+        let _ = fs::remove_file(&pid_file);
+    }
+
     let listener = UnixListener::bind(&socket_path).context("Failed to bind Unix socket")?;
 
     info!("Daemon listening on {}", socket_path.display());
