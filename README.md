@@ -265,12 +265,17 @@ We welcome contributions! Mojo Voice is **open source** (MIT license) and commun
 ```bash
 git clone https://github.com/itsdevcoffee/mojovoice.git
 cd mojovoice
+
+# Using just (recommended)
+just --list          # Show all commands
+just build-cuda      # Build with CUDA support
+just install-cuda    # Install to ~/.local/bin
+just daemon-restart  # Restart daemon with new build
+just ui              # Run Tauri UI in dev mode
+
+# Or using cargo directly
 cargo build --release --features cuda  # or 'metal' for macOS
-
-# Run tests
 cargo test
-
-# Lint and format
 cargo clippy
 cargo fmt --all
 ```
