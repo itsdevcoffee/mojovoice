@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use tauri::Emitter;
 use crate::daemon_client;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -185,12 +186,183 @@ pub async fn get_transcription_history() -> Result<Vec<TranscriptionEntry>, Stri
     ])
 }
 
-/// Download a Whisper model
+/// Progress update for model downloads
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadProgress {
+    pub model_name: String,
+    pub downloaded_bytes: u64,
+    pub total_bytes: u64,
+    pub speed_bps: u64,
+    pub status: String, // "downloading", "verifying", "complete", "error"
+}
+
+/// Download a Whisper model with progress events
 #[tauri::command]
-pub async fn download_model(model_name: String) -> Result<(), String> {
-    // TODO: Call mojovoice download command
-    println!("Downloading model: {}", model_name);
-    Ok(())
+pub async fn download_model(model_name: String, window: tauri::Window) -> Result<String, String> {
+    use std::io::{Read, Write, BufWriter};
+
+    // Find model in registry
+    let registry = get_model_registry();
+    let model = registry.iter()
+        .find(|m| m.name == model_name)
+        .ok_or_else(|| format!("Model '{}' not found in registry", model_name))?;
+
+    let models_dir = get_models_dir()?;
+    std::fs::create_dir_all(&models_dir)
+        .map_err(|e| format!("Failed to create models directory: {}", e))?;
+
+    let dest_path = models_dir.join(&model.filename);
+    let temp_path = dest_path.with_extension("download");
+
+    // Check if already downloaded and valid
+    if dest_path.exists() {
+        eprintln!("Model already exists, verifying checksum...");
+        let _ = window.emit("download-progress", DownloadProgress {
+            model_name: model_name.clone(),
+            downloaded_bytes: 0,
+            total_bytes: 0,
+            speed_bps: 0,
+            status: "verifying".into(),
+        });
+
+        if verify_sha256(&dest_path, &model.sha256)? {
+            let _ = window.emit("download-progress", DownloadProgress {
+                model_name: model_name.clone(),
+                downloaded_bytes: 0,
+                total_bytes: 0,
+                speed_bps: 0,
+                status: "complete".into(),
+            });
+            return Ok(dest_path.to_string_lossy().to_string());
+        }
+        // Invalid checksum, re-download
+        std::fs::remove_file(&dest_path)
+            .map_err(|e| format!("Failed to remove invalid model: {}", e))?;
+    }
+
+    eprintln!("Downloading {} ({} MB) from {}", model.name, model.size_mb, model.url);
+
+    // Start download
+    let response = ureq::get(&model.url)
+        .call()
+        .map_err(|e| format!("Failed to connect: {}", e))?;
+
+    let total_bytes = response
+        .header("content-length")
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(model.size_mb as u64 * 1_000_000);
+
+    let mut reader = response.into_reader();
+    let file = std::fs::File::create(&temp_path)
+        .map_err(|e| format!("Failed to create temp file: {}", e))?;
+    let mut writer = BufWriter::new(file);
+
+    let mut buffer = [0u8; 65536]; // 64KB buffer
+    let mut downloaded_bytes: u64 = 0;
+    let mut last_emit_time = std::time::Instant::now();
+    let start_time = std::time::Instant::now();
+
+    loop {
+        let bytes_read = reader.read(&mut buffer)
+            .map_err(|e| format!("Download error: {}", e))?;
+
+        if bytes_read == 0 {
+            break;
+        }
+
+        writer.write_all(&buffer[..bytes_read])
+            .map_err(|e| format!("Write error: {}", e))?;
+
+        downloaded_bytes += bytes_read as u64;
+
+        // Emit progress every 100ms
+        let now = std::time::Instant::now();
+        if now.duration_since(last_emit_time).as_millis() >= 100 {
+            let elapsed = now.duration_since(start_time).as_secs_f64();
+            let speed_bps = if elapsed > 0.0 {
+                (downloaded_bytes as f64 / elapsed) as u64
+            } else {
+                0
+            };
+
+            let _ = window.emit("download-progress", DownloadProgress {
+                model_name: model_name.clone(),
+                downloaded_bytes,
+                total_bytes,
+                speed_bps,
+                status: "downloading".into(),
+            });
+
+            last_emit_time = now;
+        }
+    }
+
+    writer.flush().map_err(|e| format!("Flush error: {}", e))?;
+    drop(writer);
+
+    eprintln!("Download complete, verifying checksum...");
+    let _ = window.emit("download-progress", DownloadProgress {
+        model_name: model_name.clone(),
+        downloaded_bytes: total_bytes,
+        total_bytes,
+        speed_bps: 0,
+        status: "verifying".into(),
+    });
+
+    // Verify checksum
+    if !verify_sha256(&temp_path, &model.sha256)? {
+        std::fs::remove_file(&temp_path).ok();
+        let _ = window.emit("download-progress", DownloadProgress {
+            model_name: model_name.clone(),
+            downloaded_bytes: 0,
+            total_bytes: 0,
+            speed_bps: 0,
+            status: "error".into(),
+        });
+        return Err("Checksum verification failed. Download may be corrupted.".into());
+    }
+
+    // Move to final location
+    std::fs::rename(&temp_path, &dest_path)
+        .map_err(|e| format!("Failed to move downloaded file: {}", e))?;
+
+    let _ = window.emit("download-progress", DownloadProgress {
+        model_name: model_name.clone(),
+        downloaded_bytes: total_bytes,
+        total_bytes,
+        speed_bps: 0,
+        status: "complete".into(),
+    });
+
+    eprintln!("Model saved to {}", dest_path.display());
+    Ok(dest_path.to_string_lossy().to_string())
+}
+
+/// Verify SHA256 checksum of a file
+fn verify_sha256(path: &std::path::Path, expected: &str) -> Result<bool, String> {
+    use sha2::{Sha256, Digest};
+    use std::io::Read;
+
+    let mut file = std::fs::File::open(path)
+        .map_err(|e| format!("Failed to open file for verification: {}", e))?;
+
+    let mut hasher = Sha256::new();
+    let mut buffer = [0u8; 65536];
+
+    loop {
+        let bytes_read = file.read(&mut buffer)
+            .map_err(|e| format!("Read error during verification: {}", e))?;
+        if bytes_read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..bytes_read]);
+    }
+
+    let result = hasher.finalize();
+    let actual = hex::encode(result);
+
+    Ok(actual == expected)
 }
 
 /// Get system information
@@ -526,6 +698,10 @@ pub struct RegistryModel {
     pub size_mb: u32,
     pub family: String,
     pub quantization: String,
+    #[serde(skip_serializing)]
+    pub url: String,
+    #[serde(skip_serializing)]
+    pub sha256: String,
 }
 
 /// Model that's been downloaded locally
@@ -543,43 +719,43 @@ pub struct DownloadedModel {
 fn get_model_registry() -> Vec<RegistryModel> {
     vec![
         // Large V3 Turbo
-        RegistryModel { name: "large-v3-turbo".into(), filename: "ggml-large-v3-turbo.bin".into(), size_mb: 1625, family: "Large V3 Turbo".into(), quantization: "Full".into() },
-        RegistryModel { name: "large-v3-turbo-q5_0".into(), filename: "ggml-large-v3-turbo-q5_0.bin".into(), size_mb: 547, family: "Large V3 Turbo".into(), quantization: "Q5_0".into() },
-        RegistryModel { name: "large-v3-turbo-q8_0".into(), filename: "ggml-large-v3-turbo-q8_0.bin".into(), size_mb: 834, family: "Large V3 Turbo".into(), quantization: "Q8_0".into() },
+        RegistryModel { name: "large-v3-turbo".into(), filename: "ggml-large-v3-turbo.bin".into(), size_mb: 1625, family: "Large V3 Turbo".into(), quantization: "Full".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin".into(), sha256: "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69".into() },
+        RegistryModel { name: "large-v3-turbo-q5_0".into(), filename: "ggml-large-v3-turbo-q5_0.bin".into(), size_mb: 547, family: "Large V3 Turbo".into(), quantization: "Q5_0".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin".into(), sha256: "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2".into() },
+        RegistryModel { name: "large-v3-turbo-q8_0".into(), filename: "ggml-large-v3-turbo-q8_0.bin".into(), size_mb: 834, family: "Large V3 Turbo".into(), quantization: "Q8_0".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q8_0.bin".into(), sha256: "317eb69c11673c9de1e1f0d459b253999804ec71ac4c23c17ecf5fbe24e259a1".into() },
         // Distil-Whisper
-        RegistryModel { name: "distil-large-v3.5".into(), filename: "ggml-distil-large-v3.5.bin".into(), size_mb: 1449, family: "Distil".into(), quantization: "Full".into() },
-        RegistryModel { name: "distil-large-v3".into(), filename: "ggml-distil-large-v3.bin".into(), size_mb: 1520, family: "Distil".into(), quantization: "Full".into() },
-        RegistryModel { name: "distil-large-v2".into(), filename: "ggml-distil-large-v2.bin".into(), size_mb: 1449, family: "Distil".into(), quantization: "Full".into() },
-        RegistryModel { name: "distil-medium.en".into(), filename: "ggml-distil-medium.en.bin".into(), size_mb: 757, family: "Distil".into(), quantization: "Full".into() },
-        RegistryModel { name: "distil-small.en".into(), filename: "ggml-distil-small.en.bin".into(), size_mb: 321, family: "Distil".into(), quantization: "Full".into() },
+        RegistryModel { name: "distil-large-v3.5".into(), filename: "ggml-distil-large-v3.5.bin".into(), size_mb: 1449, family: "Distil".into(), quantization: "Full".into(), url: "https://huggingface.co/distil-whisper/distil-large-v3.5-ggml/resolve/main/ggml-model.bin".into(), sha256: "ec2498919b498c5f6b00041adb45650124b3cd9f26f545fffa8f5d11c28dcf26".into() },
+        RegistryModel { name: "distil-large-v3".into(), filename: "ggml-distil-large-v3.bin".into(), size_mb: 1520, family: "Distil".into(), quantization: "Full".into(), url: "https://huggingface.co/distil-whisper/distil-large-v3-ggml/resolve/main/ggml-distil-large-v3.bin".into(), sha256: "2883a11b90fb10ed592d826edeaee7d2929bf1ab985109fe9e1e7b4d2b69a298".into() },
+        RegistryModel { name: "distil-large-v2".into(), filename: "ggml-distil-large-v2.bin".into(), size_mb: 1449, family: "Distil".into(), quantization: "Full".into(), url: "https://huggingface.co/distil-whisper/distil-large-v2/resolve/main/ggml-large-32-2.en.bin".into(), sha256: "2ed2bbe6c4138b3757f292b0622981bdb3d02bcac57f77095670dac85fab3cd6".into() },
+        RegistryModel { name: "distil-medium.en".into(), filename: "ggml-distil-medium.en.bin".into(), size_mb: 757, family: "Distil".into(), quantization: "Full".into(), url: "https://huggingface.co/distil-whisper/distil-medium.en/resolve/main/ggml-medium-32-2.en.bin".into(), sha256: "ad53ccb618188b210550e98cc32bf5a13188d86635e395bb11115ed275d6e7aa".into() },
+        RegistryModel { name: "distil-small.en".into(), filename: "ggml-distil-small.en.bin".into(), size_mb: 321, family: "Distil".into(), quantization: "Full".into(), url: "https://huggingface.co/distil-whisper/distil-small.en/resolve/main/ggml-distil-small.en.bin".into(), sha256: "7691eb11167ab7aaf6b3e05d8266f2fd9ad89c550e433f86ac266ebdee6c970a".into() },
         // Large V3
-        RegistryModel { name: "large-v3".into(), filename: "ggml-large-v3.bin".into(), size_mb: 3100, family: "Large V3".into(), quantization: "Full".into() },
-        RegistryModel { name: "large-v3-q5_0".into(), filename: "ggml-large-v3-q5_0.bin".into(), size_mb: 1031, family: "Large V3".into(), quantization: "Q5_0".into() },
+        RegistryModel { name: "large-v3".into(), filename: "ggml-large-v3.bin".into(), size_mb: 3100, family: "Large V3".into(), quantization: "Full".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin".into(), sha256: "64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e2".into() },
+        RegistryModel { name: "large-v3-q5_0".into(), filename: "ggml-large-v3-q5_0.bin".into(), size_mb: 1031, family: "Large V3".into(), quantization: "Q5_0".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-q5_0.bin".into(), sha256: "d75795ecff3f83b5faa89d1900604ad8c780abd5739fae406de19f23ecd98ad1".into() },
         // Large V2
-        RegistryModel { name: "large-v2".into(), filename: "ggml-large-v2.bin".into(), size_mb: 2950, family: "Large V2".into(), quantization: "Full".into() },
-        RegistryModel { name: "large-v2-q5_0".into(), filename: "ggml-large-v2-q5_0.bin".into(), size_mb: 1031, family: "Large V2".into(), quantization: "Q5_0".into() },
+        RegistryModel { name: "large-v2".into(), filename: "ggml-large-v2.bin".into(), size_mb: 2950, family: "Large V2".into(), quantization: "Full".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v2.bin".into(), sha256: "9a423fe4d40c82774b6af34115b8b935f34152246eb19e80e376071d3f999487".into() },
+        RegistryModel { name: "large-v2-q5_0".into(), filename: "ggml-large-v2-q5_0.bin".into(), size_mb: 1031, family: "Large V2".into(), quantization: "Q5_0".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v2-q5_0.bin".into(), sha256: "3a214837221e4530dbc1fe8d734f302af393eb30bd0ed046042ebf4baf70f6f2".into() },
         // Large V1
-        RegistryModel { name: "large-v1".into(), filename: "ggml-large-v1.bin".into(), size_mb: 2950, family: "Large V1".into(), quantization: "Full".into() },
+        RegistryModel { name: "large-v1".into(), filename: "ggml-large-v1.bin".into(), size_mb: 2950, family: "Large V1".into(), quantization: "Full".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v1.bin".into(), sha256: "7d99f41a10525d0206bddadd86760181fa920438b6b33237e3118ff6c83bb53d".into() },
         // Medium
-        RegistryModel { name: "medium".into(), filename: "ggml-medium.bin".into(), size_mb: 1463, family: "Medium".into(), quantization: "Full".into() },
-        RegistryModel { name: "medium.en".into(), filename: "ggml-medium.en.bin".into(), size_mb: 1530, family: "Medium".into(), quantization: "Full".into() },
-        RegistryModel { name: "medium-q5_0".into(), filename: "ggml-medium-q5_0.bin".into(), size_mb: 514, family: "Medium".into(), quantization: "Q5_0".into() },
-        RegistryModel { name: "medium.en-q5_0".into(), filename: "ggml-medium.en-q5_0.bin".into(), size_mb: 514, family: "Medium".into(), quantization: "Q5_0".into() },
+        RegistryModel { name: "medium".into(), filename: "ggml-medium.bin".into(), size_mb: 1463, family: "Medium".into(), quantization: "Full".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin".into(), sha256: "6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208".into() },
+        RegistryModel { name: "medium.en".into(), filename: "ggml-medium.en.bin".into(), size_mb: 1530, family: "Medium".into(), quantization: "Full".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.en.bin".into(), sha256: "cc37e93478338ec7700281a7ac30a10128929eb8f427dda2e865faa8f6da4356".into() },
+        RegistryModel { name: "medium-q5_0".into(), filename: "ggml-medium-q5_0.bin".into(), size_mb: 514, family: "Medium".into(), quantization: "Q5_0".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium-q5_0.bin".into(), sha256: "19fea4b380c3a618ec4723c3eef2eb785ffba0d0538cf43f8f235e7b3b34220f".into() },
+        RegistryModel { name: "medium.en-q5_0".into(), filename: "ggml-medium.en-q5_0.bin".into(), size_mb: 514, family: "Medium".into(), quantization: "Q5_0".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.en-q5_0.bin".into(), sha256: "76733e26ad8fe1c7a5bf7531a9d41917b2adc0f20f2e4f5531688a8c6cd88eb0".into() },
         // Small
-        RegistryModel { name: "small".into(), filename: "ggml-small.bin".into(), size_mb: 488, family: "Small".into(), quantization: "Full".into() },
-        RegistryModel { name: "small.en".into(), filename: "ggml-small.en.bin".into(), size_mb: 488, family: "Small".into(), quantization: "Full".into() },
-        RegistryModel { name: "small-q5_1".into(), filename: "ggml-small-q5_1.bin".into(), size_mb: 181, family: "Small".into(), quantization: "Q5_1".into() },
-        RegistryModel { name: "small.en-q5_1".into(), filename: "ggml-small.en-q5_1.bin".into(), size_mb: 181, family: "Small".into(), quantization: "Q5_1".into() },
+        RegistryModel { name: "small".into(), filename: "ggml-small.bin".into(), size_mb: 488, family: "Small".into(), quantization: "Full".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin".into(), sha256: "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1571299571".into() },
+        RegistryModel { name: "small.en".into(), filename: "ggml-small.en.bin".into(), size_mb: 488, family: "Small".into(), quantization: "Full".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin".into(), sha256: "c6138d6d58ecc8322097e0f987c32f1be8bb0a18532a3f88f734d1bbf9c41e5d".into() },
+        RegistryModel { name: "small-q5_1".into(), filename: "ggml-small-q5_1.bin".into(), size_mb: 181, family: "Small".into(), quantization: "Q5_1".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q5_1.bin".into(), sha256: "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb".into() },
+        RegistryModel { name: "small.en-q5_1".into(), filename: "ggml-small.en-q5_1.bin".into(), size_mb: 181, family: "Small".into(), quantization: "Q5_1".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en-q5_1.bin".into(), sha256: "bfdff4894dcb76bbf647d56263ea2a96645423f1669176f4844a1bf8e478ad30".into() },
         // Base
-        RegistryModel { name: "base".into(), filename: "ggml-base.bin".into(), size_mb: 148, family: "Base".into(), quantization: "Full".into() },
-        RegistryModel { name: "base.en".into(), filename: "ggml-base.en.bin".into(), size_mb: 148, family: "Base".into(), quantization: "Full".into() },
-        RegistryModel { name: "base-q5_1".into(), filename: "ggml-base-q5_1.bin".into(), size_mb: 57, family: "Base".into(), quantization: "Q5_1".into() },
-        RegistryModel { name: "base.en-q5_1".into(), filename: "ggml-base.en-q5_1.bin".into(), size_mb: 57, family: "Base".into(), quantization: "Q5_1".into() },
+        RegistryModel { name: "base".into(), filename: "ggml-base.bin".into(), size_mb: 148, family: "Base".into(), quantization: "Full".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin".into(), sha256: "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe".into() },
+        RegistryModel { name: "base.en".into(), filename: "ggml-base.en.bin".into(), size_mb: 148, family: "Base".into(), quantization: "Full".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin".into(), sha256: "a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002".into() },
+        RegistryModel { name: "base-q5_1".into(), filename: "ggml-base-q5_1.bin".into(), size_mb: 57, family: "Base".into(), quantization: "Q5_1".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base-q5_1.bin".into(), sha256: "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898".into() },
+        RegistryModel { name: "base.en-q5_1".into(), filename: "ggml-base.en-q5_1.bin".into(), size_mb: 57, family: "Base".into(), quantization: "Q5_1".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en-q5_1.bin".into(), sha256: "4baf70dd0d7c4247ba2b81fafd9c01005ac77c2f9ef064e00dcf195d0e2fdd2f".into() },
         // Tiny
-        RegistryModel { name: "tiny".into(), filename: "ggml-tiny.bin".into(), size_mb: 78, family: "Tiny".into(), quantization: "Full".into() },
-        RegistryModel { name: "tiny.en".into(), filename: "ggml-tiny.en.bin".into(), size_mb: 78, family: "Tiny".into(), quantization: "Full".into() },
-        RegistryModel { name: "tiny-q5_1".into(), filename: "ggml-tiny-q5_1.bin".into(), size_mb: 31, family: "Tiny".into(), quantization: "Q5_1".into() },
-        RegistryModel { name: "tiny.en-q5_1".into(), filename: "ggml-tiny.en-q5_1.bin".into(), size_mb: 31, family: "Tiny".into(), quantization: "Q5_1".into() },
+        RegistryModel { name: "tiny".into(), filename: "ggml-tiny.bin".into(), size_mb: 78, family: "Tiny".into(), quantization: "Full".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin".into(), sha256: "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21".into() },
+        RegistryModel { name: "tiny.en".into(), filename: "ggml-tiny.en.bin".into(), size_mb: 78, family: "Tiny".into(), quantization: "Full".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin".into(), sha256: "921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f".into() },
+        RegistryModel { name: "tiny-q5_1".into(), filename: "ggml-tiny-q5_1.bin".into(), size_mb: 31, family: "Tiny".into(), quantization: "Q5_1".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny-q5_1.bin".into(), sha256: "818710568da3ca15689e31a743197b520007872ff9576237bda97bd1b469c3d7".into() },
+        RegistryModel { name: "tiny.en-q5_1".into(), filename: "ggml-tiny.en-q5_1.bin".into(), size_mb: 31, family: "Tiny".into(), quantization: "Q5_1".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en-q5_1.bin".into(), sha256: "c77c5766f1cef09b6b7d47f21b546cbddd4157886b3b5d6d4f709e91e66c7c2b".into() },
     ]
 }
 

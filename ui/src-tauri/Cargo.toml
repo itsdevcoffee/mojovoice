@@ -24,6 +24,11 @@ num_cpus = "1.16"
 dirs = "5"
 toml = "0.8"
 
+# Model downloads
+ureq = "2.9"
+sha2 = "0.10"
+hex = "0.4"
+
 [features]
 # This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!
 custom-protocol = ["tauri/custom-protocol"]
