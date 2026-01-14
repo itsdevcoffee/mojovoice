@@ -34,7 +34,8 @@
           "permissions": [
             "dialog:allow-open",
             "dialog:default",
-            "shell:allow-execute"
+            "shell:allow-execute",
+            "core:event:default"
           ]
         }
       ]

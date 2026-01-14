@@ -37,6 +37,7 @@ fn main() {
             commands::list_downloaded_models,
             commands::delete_model,
             commands::switch_model,
+            commands::cancel_download,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

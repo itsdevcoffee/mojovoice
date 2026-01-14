@@ -28,6 +28,7 @@ toml = "0.8"
 ureq = "2.9"
 sha2 = "0.10"
 hex = "0.4"
+lazy_static = "1.4"
 
 [features]
 # This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!

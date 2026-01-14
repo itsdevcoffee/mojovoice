@@ -195,6 +195,128 @@ pub struct DownloadProgress {
     pub total_bytes: u64,
     pub speed_bps: u64,
     pub status: String, // "downloading", "verifying", "complete", "error"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+impl DownloadProgress {
+    fn new(model_name: &str, status: &str) -> Self {
+        Self {
+            model_name: model_name.to_string(),
+            downloaded_bytes: 0,
+            total_bytes: 0,
+            speed_bps: 0,
+            status: status.to_string(),
+            error: None,
+        }
+    }
+
+    fn downloading(model_name: &str, downloaded: u64, total: u64, speed: u64) -> Self {
+        Self {
+            model_name: model_name.to_string(),
+            downloaded_bytes: downloaded,
+            total_bytes: total,
+            speed_bps: speed,
+            status: "downloading".to_string(),
+            error: None,
+        }
+    }
+
+    fn verifying(model_name: &str, downloaded: u64, total: u64) -> Self {
+        Self {
+            model_name: model_name.to_string(),
+            downloaded_bytes: downloaded,
+            total_bytes: total,
+            speed_bps: 0,
+            status: "verifying".to_string(),
+            error: None,
+        }
+    }
+
+    fn complete(model_name: &str, total: u64) -> Self {
+        Self {
+            model_name: model_name.to_string(),
+            downloaded_bytes: total,
+            total_bytes: total,
+            speed_bps: 0,
+            status: "complete".to_string(),
+            error: None,
+        }
+    }
+
+    fn error(model_name: &str, message: &str) -> Self {
+        Self {
+            model_name: model_name.to_string(),
+            downloaded_bytes: 0,
+            total_bytes: 0,
+            speed_bps: 0,
+            status: "error".to_string(),
+            error: Some(message.to_string()),
+        }
+    }
+
+    fn cancelled(model_name: &str) -> Self {
+        Self {
+            model_name: model_name.to_string(),
+            downloaded_bytes: 0,
+            total_bytes: 0,
+            speed_bps: 0,
+            status: "cancelled".to_string(),
+            error: None,
+        }
+    }
+}
+
+// =============================================================================
+// Download Cancellation Tracking
+// =============================================================================
+
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
+lazy_static::lazy_static! {
+    /// Tracks cancellation flags for active downloads
+    static ref DOWNLOAD_CANCELLATION: std::sync::Mutex<std::collections::HashMap<String, Arc<AtomicBool>>> =
+        std::sync::Mutex::new(std::collections::HashMap::new());
+}
+
+/// Check if a download has been cancelled
+fn is_download_cancelled(model_name: &str) -> bool {
+    if let Ok(map) = DOWNLOAD_CANCELLATION.lock() {
+        if let Some(flag) = map.get(model_name) {
+            return flag.load(Ordering::Relaxed);
+        }
+    }
+    false
+}
+
+/// Register a new download for cancellation tracking
+fn register_download(model_name: &str) -> Arc<AtomicBool> {
+    let flag = Arc::new(AtomicBool::new(false));
+    if let Ok(mut map) = DOWNLOAD_CANCELLATION.lock() {
+        map.insert(model_name.to_string(), flag.clone());
+    }
+    flag
+}
+
+/// Unregister a download from cancellation tracking
+fn unregister_download(model_name: &str) {
+    if let Ok(mut map) = DOWNLOAD_CANCELLATION.lock() {
+        map.remove(model_name);
+    }
+}
+
+/// Cancel a model download
+#[tauri::command]
+pub async fn cancel_download(model_name: String) -> Result<(), String> {
+    if let Ok(map) = DOWNLOAD_CANCELLATION.lock() {
+        if let Some(flag) = map.get(&model_name) {
+            flag.store(true, Ordering::Relaxed);
+            eprintln!("Cancellation requested for download: {}", model_name);
+            return Ok(());
+        }
+    }
+    Err(format!("No active download found for '{}'", model_name))
 }
 
 /// Download a Whisper model with progress events
@@ -208,6 +330,20 @@ pub async fn download_model(model_name: String, window: tauri::Window) -> Result
         .find(|m| m.name == model_name)
         .ok_or_else(|| format!("Model '{}' not found in registry", model_name))?;
 
+    // Register this download for cancellation tracking
+    let _cancel_flag = register_download(&model_name);
+
+    // Ensure we unregister on any exit path
+    struct DownloadGuard<'a> {
+        model_name: &'a str,
+    }
+    impl<'a> Drop for DownloadGuard<'a> {
+        fn drop(&mut self) {
+            unregister_download(self.model_name);
+        }
+    }
+    let _guard = DownloadGuard { model_name: &model_name };
+
     let models_dir = get_models_dir()?;
     std::fs::create_dir_all(&models_dir)
         .map_err(|e| format!("Failed to create models directory: {}", e))?;
@@ -215,33 +351,32 @@ pub async fn download_model(model_name: String, window: tauri::Window) -> Result
     let dest_path = models_dir.join(&model.filename);
     let temp_path = dest_path.with_extension("download");
 
+    let backup_path = dest_path.with_extension("backup");
+
     // Check if already downloaded and valid
     if dest_path.exists() {
         eprintln!("Model already exists, verifying checksum...");
-        let _ = window.emit("download-progress", DownloadProgress {
-            model_name: model_name.clone(),
-            downloaded_bytes: 0,
-            total_bytes: 0,
-            speed_bps: 0,
-            status: "verifying".into(),
-        });
+        let _ = window.emit("download-progress", DownloadProgress::new(&model_name, "verifying"));
 
         if verify_sha256(&dest_path, &model.sha256)? {
-            let _ = window.emit("download-progress", DownloadProgress {
-                model_name: model_name.clone(),
-                downloaded_bytes: 0,
-                total_bytes: 0,
-                speed_bps: 0,
-                status: "complete".into(),
-            });
+            let _ = window.emit("download-progress", DownloadProgress::complete(&model_name, 0));
             return Ok(dest_path.to_string_lossy().to_string());
         }
-        // Invalid checksum, re-download
-        std::fs::remove_file(&dest_path)
-            .map_err(|e| format!("Failed to remove invalid model: {}", e))?;
+        // Invalid checksum, backup before re-downloading
+        eprintln!("Checksum mismatch, backing up existing file...");
+        std::fs::rename(&dest_path, &backup_path)
+            .map_err(|e| format!("Failed to backup existing model: {}", e))?;
     }
 
     eprintln!("Downloading {} ({} MB) from {}", model.name, model.size_mb, model.url);
+
+    // Emit initial progress event with estimated size
+    let estimated_bytes = model.size_mb as u64 * 1_000_000;
+    eprintln!("[DEBUG] Emitting initial progress event for {}", model_name);
+    match window.emit("download-progress", DownloadProgress::downloading(&model_name, 0, estimated_bytes, 0)) {
+        Ok(_) => eprintln!("[DEBUG] Initial event emitted successfully"),
+        Err(e) => eprintln!("[DEBUG] Failed to emit initial event: {:?}", e),
+    }
 
     // Start download
     let response = ureq::get(&model.url)
@@ -263,22 +398,59 @@ pub async fn download_model(model_name: String, window: tauri::Window) -> Result
     let mut last_emit_time = std::time::Instant::now();
     let start_time = std::time::Instant::now();
 
+    // Helper to clean up temp file and restore backup on error
+    let cleanup_on_error = |temp: &std::path::Path, backup: &std::path::Path, dest: &std::path::Path| {
+        std::fs::remove_file(temp).ok();
+        if backup.exists() {
+            std::fs::rename(backup, dest).ok();
+        }
+    };
+
     loop {
-        let bytes_read = reader.read(&mut buffer)
-            .map_err(|e| format!("Download error: {}", e))?;
+        // Check for cancellation
+        if is_download_cancelled(&model_name) {
+            eprintln!("Download cancelled: {}", model_name);
+            drop(writer);
+            cleanup_on_error(&temp_path, &backup_path, &dest_path);
+            let _ = window.emit("download-progress", DownloadProgress::cancelled(&model_name));
+            return Err("Download cancelled".to_string());
+        }
+
+        let bytes_read = match reader.read(&mut buffer) {
+            Ok(n) => n,
+            Err(e) => {
+                drop(writer); // Release file handle before cleanup
+                cleanup_on_error(&temp_path, &backup_path, &dest_path);
+                let _ = window.emit("download-progress", DownloadProgress::error(&model_name, &format!("Download error: {}", e)));
+                return Err(format!("Download error: {}", e));
+            }
+        };
 
         if bytes_read == 0 {
             break;
         }
 
-        writer.write_all(&buffer[..bytes_read])
-            .map_err(|e| format!("Write error: {}", e))?;
+        if let Err(e) = writer.write_all(&buffer[..bytes_read]) {
+            drop(writer);
+            cleanup_on_error(&temp_path, &backup_path, &dest_path);
+            let _ = window.emit("download-progress", DownloadProgress::error(&model_name, &format!("Write error: {}", e)));
+            return Err(format!("Write error: {}", e));
+        }
 
-        downloaded_bytes += bytes_read as u64;
+        downloaded_bytes = downloaded_bytes.saturating_add(bytes_read as u64);
 
         // Emit progress every 100ms
         let now = std::time::Instant::now();
         if now.duration_since(last_emit_time).as_millis() >= 100 {
+            // Check cancellation again before emitting
+            if is_download_cancelled(&model_name) {
+                eprintln!("Download cancelled: {}", model_name);
+                drop(writer);
+                cleanup_on_error(&temp_path, &backup_path, &dest_path);
+                let _ = window.emit("download-progress", DownloadProgress::cancelled(&model_name));
+                return Err("Download cancelled".to_string());
+            }
+
             let elapsed = now.duration_since(start_time).as_secs_f64();
             let speed_bps = if elapsed > 0.0 {
                 (downloaded_bytes as f64 / elapsed) as u64
@@ -286,54 +458,54 @@ pub async fn download_model(model_name: String, window: tauri::Window) -> Result
                 0
             };
 
-            let _ = window.emit("download-progress", DownloadProgress {
-                model_name: model_name.clone(),
-                downloaded_bytes,
-                total_bytes,
-                speed_bps,
-                status: "downloading".into(),
-            });
+            let _ = window.emit(
+                "download-progress",
+                DownloadProgress::downloading(&model_name, downloaded_bytes, total_bytes, speed_bps),
+            );
 
             last_emit_time = now;
         }
     }
 
-    writer.flush().map_err(|e| format!("Flush error: {}", e))?;
+    if let Err(e) = writer.flush() {
+        drop(writer);
+        cleanup_on_error(&temp_path, &backup_path, &dest_path);
+        let _ = window.emit("download-progress", DownloadProgress::error(&model_name, &format!("Flush error: {}", e)));
+        return Err(format!("Flush error: {}", e));
+    }
     drop(writer);
 
     eprintln!("Download complete, verifying checksum...");
-    let _ = window.emit("download-progress", DownloadProgress {
-        model_name: model_name.clone(),
-        downloaded_bytes: total_bytes,
-        total_bytes,
-        speed_bps: 0,
-        status: "verifying".into(),
-    });
+    let _ = window.emit(
+        "download-progress",
+        DownloadProgress::verifying(&model_name, total_bytes, total_bytes),
+    );
 
     // Verify checksum
     if !verify_sha256(&temp_path, &model.sha256)? {
         std::fs::remove_file(&temp_path).ok();
-        let _ = window.emit("download-progress", DownloadProgress {
-            model_name: model_name.clone(),
-            downloaded_bytes: 0,
-            total_bytes: 0,
-            speed_bps: 0,
-            status: "error".into(),
-        });
-        return Err("Checksum verification failed. Download may be corrupted.".into());
+
+        // Restore backup if it exists
+        if backup_path.exists() {
+            eprintln!("Verification failed, restoring backup...");
+            std::fs::rename(&backup_path, &dest_path).ok();
+        }
+
+        let error_msg = "Checksum verification failed. Download may be corrupted.";
+        let _ = window.emit("download-progress", DownloadProgress::error(&model_name, error_msg));
+        return Err(error_msg.into());
     }
 
     // Move to final location
     std::fs::rename(&temp_path, &dest_path)
         .map_err(|e| format!("Failed to move downloaded file: {}", e))?;
 
-    let _ = window.emit("download-progress", DownloadProgress {
-        model_name: model_name.clone(),
-        downloaded_bytes: total_bytes,
-        total_bytes,
-        speed_bps: 0,
-        status: "complete".into(),
-    });
+    // Clean up backup after successful download
+    if backup_path.exists() {
+        std::fs::remove_file(&backup_path).ok();
+    }
+
+    let _ = window.emit("download-progress", DownloadProgress::complete(&model_name, total_bytes));
 
     eprintln!("Model saved to {}", dest_path.display());
     Ok(dest_path.to_string_lossy().to_string())
@@ -766,6 +938,66 @@ fn get_models_dir() -> Result<std::path::PathBuf, String> {
     Ok(data_dir.join("mojovoice").join("models"))
 }
 
+/// Validate that a path is within the models directory (prevent path traversal)
+/// Works for both existing and non-existing files
+fn validate_model_path(models_dir: &std::path::Path, filename: &str) -> Result<std::path::PathBuf, String> {
+    // Check for path traversal characters in filename
+    if filename.contains("..") || filename.contains('/') || filename.contains('\\') {
+        return Err("Invalid filename: path traversal detected".to_string());
+    }
+
+    // Check for null bytes (could bypass string checks)
+    if filename.contains('\0') {
+        return Err("Invalid filename: null byte detected".to_string());
+    }
+
+    // Validate filename is not empty and starts with expected prefix
+    if filename.is_empty() {
+        return Err("Invalid filename: empty".to_string());
+    }
+
+    let path = models_dir.join(filename);
+
+    // For existing files, do additional canonicalization check
+    if path.exists() {
+        let canonical_path = path.canonicalize()
+            .map_err(|_| "Invalid model path".to_string())?;
+
+        // Ensure models_dir exists for this check
+        if models_dir.exists() {
+            let canonical_models_dir = models_dir.canonicalize()
+                .map_err(|_| "Invalid models directory".to_string())?;
+
+            if !canonical_path.starts_with(&canonical_models_dir) {
+                return Err("Invalid model path: access denied".to_string());
+            }
+        }
+
+        return Ok(canonical_path);
+    }
+
+    // For non-existing files, the character checks above are sufficient
+    // Also verify the constructed path stays within models_dir using lexical check
+    // (normalize the path without requiring it to exist)
+    let normalized = path.components().collect::<std::path::PathBuf>();
+    let normalized_models = models_dir.components().collect::<std::path::PathBuf>();
+
+    if !normalized.starts_with(&normalized_models) {
+        return Err("Invalid model path: access denied".to_string());
+    }
+
+    Ok(path)
+}
+
+/// Check if a model file is the currently active model
+fn is_active_model(active_path: &str, filename: &str) -> bool {
+    std::path::Path::new(active_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(|n| n == filename)
+        .unwrap_or(false)
+}
+
 /// List all available models from the registry
 #[tauri::command]
 pub async fn list_available_models() -> Result<Vec<RegistryModel>, String> {
@@ -796,14 +1028,12 @@ pub async fn list_downloaded_models() -> Result<Vec<DownloadedModel>, String> {
 
                     // Match against registry to get metadata
                     if let Some(reg_model) = registry.iter().find(|m| m.filename == filename) {
-                        let is_active = active_path.contains(&filename);
-
                         downloaded.push(DownloadedModel {
                             name: reg_model.name.clone(),
                             filename: filename.clone(),
                             path: path.to_string_lossy().to_string(),
                             size_mb: reg_model.size_mb,
-                            is_active,
+                            is_active: is_active_model(&active_path, &filename),
                         });
                     } else {
                         // Unknown model (not in registry) - still show it
@@ -816,7 +1046,7 @@ pub async fn list_downloaded_models() -> Result<Vec<DownloadedModel>, String> {
                             filename: filename.clone(),
                             path: path.to_string_lossy().to_string(),
                             size_mb,
-                            is_active: active_path.contains(&filename),
+                            is_active: is_active_model(&active_path, &filename),
                         });
                     }
                 }
@@ -834,7 +1064,9 @@ pub async fn list_downloaded_models() -> Result<Vec<DownloadedModel>, String> {
 #[tauri::command]
 pub async fn delete_model(filename: String) -> Result<(), String> {
     let models_dir = get_models_dir()?;
-    let path = models_dir.join(&filename);
+
+    // Validate path is within models directory (prevent path traversal)
+    let path = validate_model_path(&models_dir, &filename)?;
 
     if !path.exists() {
         return Err("Model not found".to_string());
@@ -842,7 +1074,7 @@ pub async fn delete_model(filename: String) -> Result<(), String> {
 
     // Prevent deleting active model
     let config = get_config().await?;
-    if config.model.path.contains(&filename) {
+    if is_active_model(&config.model.path, &filename) {
         return Err("Cannot delete the currently active model. Switch to a different model first.".to_string());
     }
 
@@ -857,7 +1089,9 @@ pub async fn delete_model(filename: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn switch_model(filename: String) -> Result<(), String> {
     let models_dir = get_models_dir()?;
-    let model_path = models_dir.join(&filename);
+
+    // Validate path is within models directory (prevent path traversal)
+    let model_path = validate_model_path(&models_dir, &filename)?;
 
     if !model_path.exists() {
         return Err("Model not found. Download it first.".to_string());
@@ -884,27 +1118,37 @@ pub async fn switch_model(filename: String) -> Result<(), String> {
 
 /// Infer HuggingFace model_id from filename
 fn infer_model_id(filename: &str) -> Option<String> {
-    // Map common filenames to HuggingFace model IDs
     let name = filename
         .trim_start_matches("ggml-")
         .trim_end_matches(".bin");
 
-    match name {
-        "large-v3-turbo" | "large-v3-turbo-q5_0" | "large-v3-turbo-q8_0" => {
-            Some("openai/whisper-large-v3-turbo".to_string())
-        }
-        "large-v3" | "large-v3-q5_0" => Some("openai/whisper-large-v3".to_string()),
-        "large-v2" | "large-v2-q5_0" => Some("openai/whisper-large-v2".to_string()),
-        "large-v1" => Some("openai/whisper-large".to_string()),
-        "medium" | "medium-q5_0" => Some("openai/whisper-medium".to_string()),
-        "medium.en" | "medium.en-q5_0" => Some("openai/whisper-medium.en".to_string()),
-        "small" | "small-q5_1" => Some("openai/whisper-small".to_string()),
-        "small.en" | "small.en-q5_1" => Some("openai/whisper-small.en".to_string()),
-        "base" | "base-q5_1" => Some("openai/whisper-base".to_string()),
-        "base.en" | "base.en-q5_1" => Some("openai/whisper-base.en".to_string()),
-        "tiny" | "tiny-q5_1" => Some("openai/whisper-tiny".to_string()),
-        "tiny.en" | "tiny.en-q5_1" => Some("openai/whisper-tiny.en".to_string()),
-        s if s.starts_with("distil-") => Some(format!("distil-whisper/{}", s)),
-        _ => None,
+    // Handle distil-whisper models
+    if name.starts_with("distil-") {
+        return Some(format!("distil-whisper/{}", name));
     }
+
+    // Strip quantization suffix to get base model name
+    let base_name = name
+        .trim_end_matches("-q5_0")
+        .trim_end_matches("-q5_1")
+        .trim_end_matches("-q8_0");
+
+    // Map base model names to HuggingFace model IDs
+    let model_id = match base_name {
+        "large-v3-turbo" => "openai/whisper-large-v3-turbo",
+        "large-v3" => "openai/whisper-large-v3",
+        "large-v2" => "openai/whisper-large-v2",
+        "large-v1" => "openai/whisper-large",
+        "medium" => "openai/whisper-medium",
+        "medium.en" => "openai/whisper-medium.en",
+        "small" => "openai/whisper-small",
+        "small.en" => "openai/whisper-small.en",
+        "base" => "openai/whisper-base",
+        "base.en" => "openai/whisper-base.en",
+        "tiny" => "openai/whisper-tiny",
+        "tiny.en" => "openai/whisper-tiny.en",
+        _ => return None,
+    };
+
+    Some(model_id.to_string())
 }

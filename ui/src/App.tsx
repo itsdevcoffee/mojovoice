@@ -5,6 +5,7 @@ import Navigation from './components/Navigation';
 import Dashboard from './components/Dashboard';
 import DevTools from './components/DevTools';
 import Settings from './components/Settings';
+import ModelManagement from './components/ModelManagement';
 import './styles/globals.css';
 import { type ScalePreset, isValidPreset, clampScale } from './lib/scale';
 
@@ -82,7 +83,7 @@ function App() {
       {activeView === 'dashboard' && <Dashboard />}
       {activeView === 'devtools' && <DevTools />}
       {activeView === 'history' && <PlaceholderView title="Transcription History" />}
-      {activeView === 'models' && <PlaceholderView title="Model Management" />}
+      {activeView === 'models' && <ModelManagement />}
       {activeView === 'settings' && <Settings />}
     </div>
   );
