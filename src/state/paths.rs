@@ -23,9 +23,14 @@ pub fn get_log_dir() -> Result<PathBuf> {
     Ok(log_dir)
 }
 
-/// Get the PID file path
+/// Get the recording PID file path
 pub fn get_pid_file() -> Result<PathBuf> {
     Ok(get_state_dir()?.join("recording.pid"))
+}
+
+/// Get the daemon PID file path
+pub fn get_daemon_pid_file() -> Result<PathBuf> {
+    Ok(get_state_dir()?.join("daemon.pid"))
 }
 
 #[cfg(test)]

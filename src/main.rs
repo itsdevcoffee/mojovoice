@@ -15,9 +15,6 @@ mod output;
 mod state;
 mod transcribe;
 
-/// Maximum recording duration in toggle mode (5 minutes)
-const TOGGLE_MODE_TIMEOUT_SECS: u32 = 300;
-
 /// Validate that the model file exists, returning a helpful error if not
 fn validate_model_path(cfg: &config::Config) -> Result<()> {
     if !cfg.model.path.exists() {
@@ -113,11 +110,10 @@ enum Commands {
     /// Check system dependencies
     Doctor,
 
-    /// Run daemon server (keeps model loaded in GPU memory)
+    /// Daemon management commands
     Daemon {
-        /// Override model path
-        #[arg(short, long)]
-        model: Option<String>,
+        #[command(subcommand)]
+        command: Option<DaemonCommands>,
     },
 
     /// Test enigo keyboard/clipboard functionality
@@ -142,6 +138,43 @@ enum Commands {
     },
 }
 
+#[derive(Subcommand)]
+enum DaemonCommands {
+    /// Start the daemon server (keeps model loaded in GPU memory)
+    Start {
+        /// Override model path
+        #[arg(short, long)]
+        model: Option<String>,
+    },
+
+    /// Shutdown the running daemon
+    Shutdown,
+
+    /// Restart the daemon (shutdown + start)
+    Restart {
+        /// Override model path
+        #[arg(short, long)]
+        model: Option<String>,
+    },
+
+    /// Show daemon status (running, model, GPU)
+    Status,
+
+    /// View daemon logs
+    Logs {
+        /// Follow log output (like tail -f)
+        #[arg(short, long)]
+        follow: bool,
+
+        /// Number of lines to show
+        #[arg(short = 'n', long, default_value = "50")]
+        lines: usize,
+    },
+
+    /// Print daemon PID
+    Pid,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -155,7 +188,7 @@ fn main() -> Result<()> {
         Commands::Download { model } => cmd_download(&model)?,
         Commands::Config { path, reset, check, migrate } => cmd_config(path, reset, check, migrate)?,
         Commands::Doctor => cmd_doctor()?,
-        Commands::Daemon { model } => cmd_daemon(model)?,
+        Commands::Daemon { command } => cmd_daemon(command)?,
         Commands::EnigoTest { text, clipboard } => commands::enigo_test(&text, clipboard)?,
         Commands::TranscribeFile { path, model } => cmd_transcribe_file(&path, model)?,
     }
@@ -214,7 +247,7 @@ fn cmd_start_toggle(model_override: Option<String>, clipboard: bool) -> Result<(
     if state::is_recording()?.is_some() {
         cmd_stop_recording(clipboard)
     } else {
-        cmd_start_recording()
+        cmd_start_recording(cfg.audio.timeout_secs)
     }
 }
 
@@ -257,8 +290,8 @@ fn cmd_stop_recording(clipboard: bool) -> Result<()> {
 }
 
 /// Start recording (called from toggle mode)
-fn cmd_start_recording() -> Result<()> {
-    info!("Starting recording via daemon (max {} seconds)", TOGGLE_MODE_TIMEOUT_SECS);
+fn cmd_start_recording(timeout_secs: u32) -> Result<()> {
+    info!("Starting recording via daemon (max {} seconds)", timeout_secs);
     println!("Recording started. Run 'hyprvoice start' again or 'hyprvoice stop' to finish.");
 
     if !daemon::is_daemon_running() {
@@ -266,7 +299,7 @@ fn cmd_start_recording() -> Result<()> {
     }
 
     let response = daemon::send_request(&daemon::DaemonRequest::StartRecording {
-        max_duration: TOGGLE_MODE_TIMEOUT_SECS,
+        max_duration: timeout_secs,
     })?;
 
     match response {
@@ -545,7 +578,32 @@ fn send_notification(title: &str, body: &str, urgency: &str) {
         .spawn();
 }
 
-fn cmd_daemon(model_override: Option<String>) -> Result<()> {
+fn cmd_daemon(command: Option<DaemonCommands>) -> Result<()> {
+    match command {
+        None => {
+            // No subcommand - show help
+            println!("Daemon management commands\n");
+            println!("Usage: hyprvoice daemon <COMMAND>\n");
+            println!("Commands:");
+            println!("  start     Start the daemon server");
+            println!("  shutdown  Shutdown the running daemon");
+            println!("  restart   Restart the daemon");
+            println!("  status    Show daemon status");
+            println!("  logs      View daemon logs");
+            println!("  pid       Print daemon PID");
+            println!("\nRun 'hyprvoice daemon <COMMAND> --help' for more info");
+            Ok(())
+        }
+        Some(DaemonCommands::Start { model }) => cmd_daemon_start(model),
+        Some(DaemonCommands::Shutdown) => cmd_daemon_shutdown(),
+        Some(DaemonCommands::Restart { model }) => cmd_daemon_restart(model),
+        Some(DaemonCommands::Status) => cmd_daemon_status(),
+        Some(DaemonCommands::Logs { follow, lines }) => cmd_daemon_logs(follow, lines),
+        Some(DaemonCommands::Pid) => cmd_daemon_pid(),
+    }
+}
+
+fn cmd_daemon_start(model_override: Option<String>) -> Result<()> {
     let mut cfg = config::load()?;
     if let Some(model_path) = model_override {
         cfg.model.path = model_path.into();
@@ -556,6 +614,118 @@ fn cmd_daemon(model_override: Option<String>) -> Result<()> {
     println!("Starting daemon...");
 
     daemon::run_daemon(&cfg.model.path)?;
+    Ok(())
+}
+
+fn cmd_daemon_shutdown() -> Result<()> {
+    if !daemon::is_daemon_running() {
+        println!("Daemon is not running");
+        return Ok(());
+    }
+
+    println!("Shutting down daemon...");
+    daemon::daemon_shutdown()?;
+    println!("Daemon shut down successfully");
+    Ok(())
+}
+
+fn cmd_daemon_restart(model_override: Option<String>) -> Result<()> {
+    // Shutdown if running
+    if daemon::is_daemon_running() {
+        println!("Shutting down existing daemon...");
+        daemon::daemon_shutdown()?;
+        // Give it a moment to clean up
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+
+    // Start new daemon
+    cmd_daemon_start(model_override)
+}
+
+fn cmd_daemon_status() -> Result<()> {
+    if !daemon::is_daemon_running() {
+        println!("Status: Stopped");
+        return Ok(());
+    }
+
+    let status = daemon::daemon_get_status()?;
+    let gpu_status = if status.gpu_enabled { "Enabled" } else { "Disabled" };
+
+    println!("Status: Running");
+    println!("Model:  {}", status.model_name);
+    println!("GPU:    {} ({})", gpu_status, status.gpu_name);
+
+    if let Ok(pid_file) = state::get_daemon_pid_file() {
+        if let Ok(pid) = std::fs::read_to_string(&pid_file) {
+            println!("PID:    {}", pid.trim());
+        }
+    }
+
+    Ok(())
+}
+
+fn cmd_daemon_logs(follow: bool, lines: usize) -> Result<()> {
+    let log_dir = state::get_log_dir()?;
+
+    // Find the most recent log file (they have date suffixes like hyprvoice.log.2026-01-14)
+    let log_file = std::fs::read_dir(&log_dir)?
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.starts_with("hyprvoice.log"))
+        })
+        .max_by_key(|p| p.metadata().and_then(|m| m.modified()).ok());
+
+    let log_file = match log_file {
+        Some(f) => f,
+        None => {
+            println!("No log files found in: {}", log_dir.display());
+            return Ok(());
+        }
+    };
+
+    println!("Log file: {}\n", log_file.display());
+
+    if follow {
+        // Use tail -f for following
+        let status = std::process::Command::new("tail")
+            .args(["-f", "-n", &lines.to_string()])
+            .arg(&log_file)
+            .status()?;
+
+        if !status.success() {
+            anyhow::bail!("tail command failed");
+        }
+    } else {
+        // Just show last N lines
+        let output = std::process::Command::new("tail")
+            .args(["-n", &lines.to_string()])
+            .arg(&log_file)
+            .output()?;
+
+        print!("{}", String::from_utf8_lossy(&output.stdout));
+    }
+
+    Ok(())
+}
+
+fn cmd_daemon_pid() -> Result<()> {
+    let pid_file = state::get_daemon_pid_file()?;
+
+    if !pid_file.exists() {
+        if daemon::is_daemon_running() {
+            println!("Daemon is running but PID file not found");
+            println!("(This may happen with older daemon versions)");
+        } else {
+            println!("Daemon is not running");
+        }
+        return Ok(());
+    }
+
+    let pid = std::fs::read_to_string(&pid_file)?;
+    println!("{}", pid.trim());
     Ok(())
 }
 

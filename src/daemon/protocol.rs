@@ -19,6 +19,8 @@ pub enum DaemonRequest {
     Shutdown,
     #[serde(rename = "ping")]
     Ping,
+    #[serde(rename = "get_status")]
+    GetStatus,
 }
 
 /// Response from daemon to client
@@ -33,4 +35,10 @@ pub enum DaemonResponse {
     Success { text: String },
     #[serde(rename = "error")]
     Error { message: String },
+    #[serde(rename = "status")]
+    Status {
+        model_name: String,
+        gpu_enabled: bool,
+        gpu_name: String,
+    },
 }

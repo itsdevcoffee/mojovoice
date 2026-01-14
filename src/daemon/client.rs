@@ -69,3 +69,41 @@ pub fn daemon_cancel_recording() -> Result<()> {
     let response = send_request(&DaemonRequest::CancelRecording)?;
     expect_ok_response(response, "Cancel")
 }
+
+/// Shutdown the daemon
+pub fn daemon_shutdown() -> Result<()> {
+    if !is_daemon_running() {
+        anyhow::bail!("Daemon is not running");
+    }
+    let response = send_request(&DaemonRequest::Shutdown)?;
+    expect_ok_response(response, "Shutdown")
+}
+
+/// Status info returned from daemon
+#[derive(Debug)]
+pub struct DaemonStatusInfo {
+    pub model_name: String,
+    pub gpu_enabled: bool,
+    pub gpu_name: String,
+}
+
+/// Get daemon status (model, GPU info)
+pub fn daemon_get_status() -> Result<DaemonStatusInfo> {
+    if !is_daemon_running() {
+        anyhow::bail!("Daemon is not running");
+    }
+    let response = send_request(&DaemonRequest::GetStatus)?;
+    match response {
+        DaemonResponse::Status {
+            model_name,
+            gpu_enabled,
+            gpu_name,
+        } => Ok(DaemonStatusInfo {
+            model_name,
+            gpu_enabled,
+            gpu_name,
+        }),
+        DaemonResponse::Error { message } => anyhow::bail!("Status error: {}", message),
+        _ => anyhow::bail!("Unexpected response from daemon"),
+    }
+}

@@ -18,6 +18,8 @@ pub enum DaemonRequest {
     Shutdown,
     #[serde(rename = "ping")]
     Ping,
+    #[serde(rename = "get_status")]
+    GetStatus,
 }
 
 /// Response from daemon
@@ -32,6 +34,12 @@ pub enum DaemonResponse {
     Success { text: String },
     #[serde(rename = "error")]
     Error { message: String },
+    #[serde(rename = "status")]
+    Status {
+        model_name: String,
+        gpu_enabled: bool,
+        gpu_name: String,
+    },
 }
 
 /// Get the daemon socket path
@@ -104,17 +112,24 @@ pub fn get_status() -> Result<DaemonStatusInfo> {
         });
     }
 
-    // Ping daemon to verify it's responsive
-    send_request(DaemonRequest::Ping)?;
+    let response = send_request(DaemonRequest::GetStatus)?;
 
-    // TODO: Add status command to daemon protocol to get actual model/GPU info
-    // For now, assume if daemon is running, model is loaded
-    Ok(DaemonStatusInfo {
-        running: true,
-        model_loaded: true,
-        gpu_enabled: true, // TODO: Query actual GPU status
-        gpu_name: Some("Unknown".to_string()), // TODO: Get from daemon
-    })
+    match response {
+        DaemonResponse::Status {
+            gpu_enabled,
+            gpu_name,
+            ..
+        } => Ok(DaemonStatusInfo {
+            running: true,
+            model_loaded: true,
+            gpu_enabled,
+            gpu_name: Some(gpu_name),
+        }),
+        DaemonResponse::Error { message } => {
+            anyhow::bail!("Failed to get daemon status: {}", message)
+        }
+        _ => anyhow::bail!("Unexpected response from daemon"),
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

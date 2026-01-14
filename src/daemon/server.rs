@@ -75,6 +75,9 @@ struct DaemonServer {
     transcriber: Arc<Mutex<Box<dyn crate::transcribe::Transcriber>>>,
     recording_state: Arc<Mutex<RecordingState>>,
     shutdown: Arc<AtomicBool>,
+    model_name: String,
+    gpu_enabled: bool,
+    gpu_name: String,
 }
 
 impl DaemonServer {
@@ -96,6 +99,22 @@ impl DaemonServer {
 
         info!("Model loaded and resident in GPU VRAM");
 
+        // Detect GPU status for status reporting
+        let (gpu_enabled, gpu_name) = Self::detect_gpu();
+
+        // Extract model name from config (use model_id or path basename)
+        let model_name = if !config.model.model_id.is_empty() {
+            config.model.model_id.clone()
+        } else {
+            config
+                .model
+                .path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("unknown")
+                .to_string()
+        };
+
         Ok(Self {
             transcriber: Arc::new(Mutex::new(Box::new(transcriber))),
             recording_state: Arc::new(Mutex::new(RecordingState {
@@ -103,7 +122,26 @@ impl DaemonServer {
                 audio: None,
             })),
             shutdown: Arc::new(AtomicBool::new(false)),
+            model_name,
+            gpu_enabled,
+            gpu_name,
         })
+    }
+
+    /// Detect GPU availability and name
+    fn detect_gpu() -> (bool, String) {
+        // Try CUDA first
+        if candle_core::utils::cuda_is_available() {
+            return (true, "CUDA".to_string());
+        }
+
+        // Try Metal (macOS)
+        if candle_core::utils::metal_is_available() {
+            return (true, "Metal".to_string());
+        }
+
+        // Fallback to CPU
+        (false, "CPU".to_string())
     }
 
     /// Save audio recording as WAV file with timestamp
@@ -176,6 +214,11 @@ impl DaemonServer {
                 DaemonResponse::Ok {
                     message: "shutting down".to_string(),
                 }
+            },
+            DaemonRequest::GetStatus => DaemonResponse::Status {
+                model_name: self.model_name.clone(),
+                gpu_enabled: self.gpu_enabled,
+                gpu_name: self.gpu_name.clone(),
             },
         };
 
@@ -429,6 +472,11 @@ pub fn run_daemon(model_path: &Path) -> Result<()> {
 
     let listener = UnixListener::bind(&socket_path).context("Failed to bind Unix socket")?;
 
+    // Write daemon PID file
+    let daemon_pid_file = state::paths::get_daemon_pid_file()?;
+    fs::write(&daemon_pid_file, std::process::id().to_string())?;
+    info!("Daemon PID {} written to {}", std::process::id(), daemon_pid_file.display());
+
     info!("Daemon listening on {}", socket_path.display());
 
     let server = DaemonServer::new(model_path)?;
@@ -451,9 +499,12 @@ pub fn run_daemon(model_path: &Path) -> Result<()> {
         }
     }
 
-    // Clean up socket on exit
+    // Clean up socket and PID file on exit
     if socket_path.exists() {
         fs::remove_file(&socket_path)?;
+    }
+    if daemon_pid_file.exists() {
+        fs::remove_file(&daemon_pid_file)?;
     }
 
     info!("Daemon shut down");
