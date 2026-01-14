@@ -53,8 +53,12 @@ pub async fn get_daemon_status() -> Result<DaemonStatus, String> {
 /// Start recording audio
 #[tauri::command]
 pub async fn start_recording() -> Result<(), String> {
+    // Read timeout from config
+    let config = get_config().await?;
+    let timeout_secs = config.audio.timeout_secs;
+
     let request = daemon_client::DaemonRequest::StartRecording {
-        max_duration: 300, // 5 minutes max
+        max_duration: timeout_secs,
     };
 
     match daemon_client::send_request(request) {

@@ -82,6 +82,7 @@ function App() {
       {activeView === 'dashboard' && <Dashboard />}
       {activeView === 'devtools' && <DevTools />}
       {activeView === 'history' && <PlaceholderView title="Transcription History" />}
+      {activeView === 'models' && <PlaceholderView title="Model Management" />}
       {activeView === 'settings' && <Settings />}
     </div>
   );

@@ -14,7 +14,7 @@ language = "en"
 sample_rate = 16000
 
 # Maximum recording duration in seconds (0 = no limit)
-timeout_secs = 30
+timeout_secs = 180
 
 [output]
 # Display server: "wayland", "x11", or null for auto-detect

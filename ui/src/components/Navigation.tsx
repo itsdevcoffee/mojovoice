@@ -1,9 +1,9 @@
 import { motion } from 'framer-motion';
-import { LayoutDashboard, Settings, History, Wrench } from 'lucide-react';
+import { LayoutDashboard, Settings, History, Wrench, Package } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { cn } from '../lib/utils';
 
-type View = 'dashboard' | 'settings' | 'history' | 'devtools';
+type View = 'dashboard' | 'settings' | 'history' | 'devtools' | 'models';
 
 interface NavItem {
   id: View;
@@ -14,6 +14,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
   { id: 'history', label: 'History', icon: <History className="w-5 h-5" /> },
+  { id: 'models', label: 'Models', icon: <Package className="w-5 h-5" /> },
   { id: 'settings', label: 'Settings', icon: <Settings className="w-5 h-5" /> },
   { id: 'devtools', label: 'Dev Tools', icon: <Wrench className="w-5 h-5" /> },
 ];

@@ -48,7 +48,7 @@ interface AppState {
   logs: LogEntry[];
 
   // UI state
-  activeView: 'dashboard' | 'settings' | 'history' | 'devtools';
+  activeView: 'dashboard' | 'settings' | 'history' | 'devtools' | 'models';
 
   // UI scaling
   uiScale: number;

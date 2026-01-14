@@ -118,7 +118,7 @@ impl Default for Config {
             },
             audio: AudioConfig {
                 sample_rate: 16000,
-                timeout_secs: 30,
+                timeout_secs: 180,
                 save_audio_clips: false,
                 audio_clips_path: default_audio_clips_path(),
             },
