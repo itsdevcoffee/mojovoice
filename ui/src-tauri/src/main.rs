@@ -32,6 +32,11 @@ fn main() {
             commands::stop_daemon,
             commands::restart_daemon,
             commands::validate_path,
+            // Model management
+            commands::list_available_models,
+            commands::list_downloaded_models,
+            commands::delete_model,
+            commands::switch_model,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

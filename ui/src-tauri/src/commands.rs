@@ -512,3 +512,223 @@ fn detect_running_binary() -> Option<String> {
 
     None
 }
+
+// =============================================================================
+// Model Management
+// =============================================================================
+
+/// Model info from the registry (available for download)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegistryModel {
+    pub name: String,
+    pub filename: String,
+    pub size_mb: u32,
+    pub family: String,
+    pub quantization: String,
+}
+
+/// Model that's been downloaded locally
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadedModel {
+    pub name: String,
+    pub filename: String,
+    pub path: String,
+    pub size_mb: u32,
+    pub is_active: bool,
+}
+
+/// Embedded model registry (synced from src/model/registry.rs)
+fn get_model_registry() -> Vec<RegistryModel> {
+    vec![
+        // Large V3 Turbo
+        RegistryModel { name: "large-v3-turbo".into(), filename: "ggml-large-v3-turbo.bin".into(), size_mb: 1625, family: "Large V3 Turbo".into(), quantization: "Full".into() },
+        RegistryModel { name: "large-v3-turbo-q5_0".into(), filename: "ggml-large-v3-turbo-q5_0.bin".into(), size_mb: 547, family: "Large V3 Turbo".into(), quantization: "Q5_0".into() },
+        RegistryModel { name: "large-v3-turbo-q8_0".into(), filename: "ggml-large-v3-turbo-q8_0.bin".into(), size_mb: 834, family: "Large V3 Turbo".into(), quantization: "Q8_0".into() },
+        // Distil-Whisper
+        RegistryModel { name: "distil-large-v3.5".into(), filename: "ggml-distil-large-v3.5.bin".into(), size_mb: 1449, family: "Distil".into(), quantization: "Full".into() },
+        RegistryModel { name: "distil-large-v3".into(), filename: "ggml-distil-large-v3.bin".into(), size_mb: 1520, family: "Distil".into(), quantization: "Full".into() },
+        RegistryModel { name: "distil-large-v2".into(), filename: "ggml-distil-large-v2.bin".into(), size_mb: 1449, family: "Distil".into(), quantization: "Full".into() },
+        RegistryModel { name: "distil-medium.en".into(), filename: "ggml-distil-medium.en.bin".into(), size_mb: 757, family: "Distil".into(), quantization: "Full".into() },
+        RegistryModel { name: "distil-small.en".into(), filename: "ggml-distil-small.en.bin".into(), size_mb: 321, family: "Distil".into(), quantization: "Full".into() },
+        // Large V3
+        RegistryModel { name: "large-v3".into(), filename: "ggml-large-v3.bin".into(), size_mb: 3100, family: "Large V3".into(), quantization: "Full".into() },
+        RegistryModel { name: "large-v3-q5_0".into(), filename: "ggml-large-v3-q5_0.bin".into(), size_mb: 1031, family: "Large V3".into(), quantization: "Q5_0".into() },
+        // Large V2
+        RegistryModel { name: "large-v2".into(), filename: "ggml-large-v2.bin".into(), size_mb: 2950, family: "Large V2".into(), quantization: "Full".into() },
+        RegistryModel { name: "large-v2-q5_0".into(), filename: "ggml-large-v2-q5_0.bin".into(), size_mb: 1031, family: "Large V2".into(), quantization: "Q5_0".into() },
+        // Large V1
+        RegistryModel { name: "large-v1".into(), filename: "ggml-large-v1.bin".into(), size_mb: 2950, family: "Large V1".into(), quantization: "Full".into() },
+        // Medium
+        RegistryModel { name: "medium".into(), filename: "ggml-medium.bin".into(), size_mb: 1463, family: "Medium".into(), quantization: "Full".into() },
+        RegistryModel { name: "medium.en".into(), filename: "ggml-medium.en.bin".into(), size_mb: 1530, family: "Medium".into(), quantization: "Full".into() },
+        RegistryModel { name: "medium-q5_0".into(), filename: "ggml-medium-q5_0.bin".into(), size_mb: 514, family: "Medium".into(), quantization: "Q5_0".into() },
+        RegistryModel { name: "medium.en-q5_0".into(), filename: "ggml-medium.en-q5_0.bin".into(), size_mb: 514, family: "Medium".into(), quantization: "Q5_0".into() },
+        // Small
+        RegistryModel { name: "small".into(), filename: "ggml-small.bin".into(), size_mb: 488, family: "Small".into(), quantization: "Full".into() },
+        RegistryModel { name: "small.en".into(), filename: "ggml-small.en.bin".into(), size_mb: 488, family: "Small".into(), quantization: "Full".into() },
+        RegistryModel { name: "small-q5_1".into(), filename: "ggml-small-q5_1.bin".into(), size_mb: 181, family: "Small".into(), quantization: "Q5_1".into() },
+        RegistryModel { name: "small.en-q5_1".into(), filename: "ggml-small.en-q5_1.bin".into(), size_mb: 181, family: "Small".into(), quantization: "Q5_1".into() },
+        // Base
+        RegistryModel { name: "base".into(), filename: "ggml-base.bin".into(), size_mb: 148, family: "Base".into(), quantization: "Full".into() },
+        RegistryModel { name: "base.en".into(), filename: "ggml-base.en.bin".into(), size_mb: 148, family: "Base".into(), quantization: "Full".into() },
+        RegistryModel { name: "base-q5_1".into(), filename: "ggml-base-q5_1.bin".into(), size_mb: 57, family: "Base".into(), quantization: "Q5_1".into() },
+        RegistryModel { name: "base.en-q5_1".into(), filename: "ggml-base.en-q5_1.bin".into(), size_mb: 57, family: "Base".into(), quantization: "Q5_1".into() },
+        // Tiny
+        RegistryModel { name: "tiny".into(), filename: "ggml-tiny.bin".into(), size_mb: 78, family: "Tiny".into(), quantization: "Full".into() },
+        RegistryModel { name: "tiny.en".into(), filename: "ggml-tiny.en.bin".into(), size_mb: 78, family: "Tiny".into(), quantization: "Full".into() },
+        RegistryModel { name: "tiny-q5_1".into(), filename: "ggml-tiny-q5_1.bin".into(), size_mb: 31, family: "Tiny".into(), quantization: "Q5_1".into() },
+        RegistryModel { name: "tiny.en-q5_1".into(), filename: "ggml-tiny.en-q5_1.bin".into(), size_mb: 31, family: "Tiny".into(), quantization: "Q5_1".into() },
+    ]
+}
+
+/// Get the models directory path
+fn get_models_dir() -> Result<std::path::PathBuf, String> {
+    let data_dir = dirs::data_local_dir()
+        .ok_or("Could not determine data directory")?;
+    Ok(data_dir.join("mojovoice").join("models"))
+}
+
+/// List all available models from the registry
+#[tauri::command]
+pub async fn list_available_models() -> Result<Vec<RegistryModel>, String> {
+    Ok(get_model_registry())
+}
+
+/// List all downloaded models
+#[tauri::command]
+pub async fn list_downloaded_models() -> Result<Vec<DownloadedModel>, String> {
+    let models_dir = get_models_dir()?;
+    let config = get_config().await?;
+    let active_path = config.model.path;
+
+    let mut downloaded = Vec::new();
+
+    // Scan models directory if it exists
+    if models_dir.exists() {
+        let registry = get_model_registry();
+
+        if let Ok(entries) = std::fs::read_dir(&models_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() {
+                    let filename = path.file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("")
+                        .to_string();
+
+                    // Match against registry to get metadata
+                    if let Some(reg_model) = registry.iter().find(|m| m.filename == filename) {
+                        let is_active = active_path.contains(&filename);
+
+                        downloaded.push(DownloadedModel {
+                            name: reg_model.name.clone(),
+                            filename: filename.clone(),
+                            path: path.to_string_lossy().to_string(),
+                            size_mb: reg_model.size_mb,
+                            is_active,
+                        });
+                    } else {
+                        // Unknown model (not in registry) - still show it
+                        let size_mb = std::fs::metadata(&path)
+                            .map(|m| (m.len() / 1_000_000) as u32)
+                            .unwrap_or(0);
+
+                        downloaded.push(DownloadedModel {
+                            name: filename.clone(),
+                            filename: filename.clone(),
+                            path: path.to_string_lossy().to_string(),
+                            size_mb,
+                            is_active: active_path.contains(&filename),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // Sort by name
+    downloaded.sort_by(|a, b| a.name.cmp(&b.name));
+
+    Ok(downloaded)
+}
+
+/// Delete a downloaded model
+#[tauri::command]
+pub async fn delete_model(filename: String) -> Result<(), String> {
+    let models_dir = get_models_dir()?;
+    let path = models_dir.join(&filename);
+
+    if !path.exists() {
+        return Err("Model not found".to_string());
+    }
+
+    // Prevent deleting active model
+    let config = get_config().await?;
+    if config.model.path.contains(&filename) {
+        return Err("Cannot delete the currently active model. Switch to a different model first.".to_string());
+    }
+
+    std::fs::remove_file(&path)
+        .map_err(|e| format!("Failed to delete model: {}", e))?;
+
+    eprintln!("Deleted model: {}", path.display());
+    Ok(())
+}
+
+/// Switch to a different model (updates config and restarts daemon)
+#[tauri::command]
+pub async fn switch_model(filename: String) -> Result<(), String> {
+    let models_dir = get_models_dir()?;
+    let model_path = models_dir.join(&filename);
+
+    if !model_path.exists() {
+        return Err("Model not found. Download it first.".to_string());
+    }
+
+    // Update config with new model path
+    let mut config = get_config().await?;
+    config.model.path = model_path.to_string_lossy().to_string();
+
+    // Try to infer model_id from filename
+    let model_id = infer_model_id(&filename);
+    if let Some(id) = model_id {
+        config.model.model_id = id;
+    }
+
+    save_config(config).await?;
+
+    // Restart daemon to load new model
+    restart_daemon().await?;
+
+    eprintln!("Switched to model: {}", filename);
+    Ok(())
+}
+
+/// Infer HuggingFace model_id from filename
+fn infer_model_id(filename: &str) -> Option<String> {
+    // Map common filenames to HuggingFace model IDs
+    let name = filename
+        .trim_start_matches("ggml-")
+        .trim_end_matches(".bin");
+
+    match name {
+        "large-v3-turbo" | "large-v3-turbo-q5_0" | "large-v3-turbo-q8_0" => {
+            Some("openai/whisper-large-v3-turbo".to_string())
+        }
+        "large-v3" | "large-v3-q5_0" => Some("openai/whisper-large-v3".to_string()),
+        "large-v2" | "large-v2-q5_0" => Some("openai/whisper-large-v2".to_string()),
+        "large-v1" => Some("openai/whisper-large".to_string()),
+        "medium" | "medium-q5_0" => Some("openai/whisper-medium".to_string()),
+        "medium.en" | "medium.en-q5_0" => Some("openai/whisper-medium.en".to_string()),
+        "small" | "small-q5_1" => Some("openai/whisper-small".to_string()),
+        "small.en" | "small.en-q5_1" => Some("openai/whisper-small.en".to_string()),
+        "base" | "base-q5_1" => Some("openai/whisper-base".to_string()),
+        "base.en" | "base.en-q5_1" => Some("openai/whisper-base.en".to_string()),
+        "tiny" | "tiny-q5_1" => Some("openai/whisper-tiny".to_string()),
+        "tiny.en" | "tiny.en-q5_1" => Some("openai/whisper-tiny.en".to_string()),
+        s if s.starts_with("distil-") => Some(format!("distil-whisper/{}", s)),
+        _ => None,
+    }
+}
