@@ -25,6 +25,20 @@ pub const MODEL_REGISTRY: &[ModelInfo] = &[
         size_mb: 1520,
     },
     ModelInfo {
+        name: "distil-large-v2",
+        filename: "ggml-distil-large-v2.bin",
+        url: "https://huggingface.co/distil-whisper/distil-large-v2/resolve/main/ggml-large-32-2.en.bin",
+        sha256: "2ed2bbe6c4138b3757f292b0622981bdb3d02bcac57f77095670dac85fab3cd6",
+        size_mb: 1449,
+    },
+    ModelInfo {
+        name: "distil-medium.en",
+        filename: "ggml-distil-medium.en.bin",
+        url: "https://huggingface.co/distil-whisper/distil-medium.en/resolve/main/ggml-medium-32-2.en.bin",
+        sha256: "ad53ccb618188b210550e98cc32bf5a13188d86635e395bb11115ed275d6e7aa",
+        size_mb: 757,
+    },
+    ModelInfo {
         name: "tiny.en",
         filename: "ggml-tiny.en.bin",
         url: concat!(
@@ -134,6 +148,9 @@ mod tests {
     fn test_find_model() {
         assert!(ModelInfo::find("base.en").is_some());
         assert!(ModelInfo::find("tiny.en").is_some());
+        assert!(ModelInfo::find("distil-large-v2").is_some());
+        assert!(ModelInfo::find("distil-large-v3").is_some());
+        assert!(ModelInfo::find("distil-medium.en").is_some());
         assert!(ModelInfo::find("nonexistent").is_none());
     }
 
