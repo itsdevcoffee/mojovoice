@@ -45,9 +45,9 @@ install-cuda: build-cuda
 # Install and restart daemon
 install-restart: install-cuda
     @echo "Restarting daemon..."
-    -{{install_dir}}/hyprvoice daemon shutdown 2>/dev/null || true
+    -{{install_dir}}/hyprvoice daemon down 2>/dev/null || true
     @sleep 1
-    {{install_dir}}/hyprvoice daemon start &
+    {{install_dir}}/hyprvoice daemon up &
     @sleep 2
     {{install_dir}}/hyprvoice daemon status
 
@@ -77,13 +77,19 @@ fmt:
 
 # Start daemon (foreground, for debugging)
 daemon-fg:
-    {{install_dir}}/hyprvoice daemon start
+    {{install_dir}}/hyprvoice daemon up
+
+# Bring daemon up (background)
+daemon-up:
+    {{install_dir}}/hyprvoice daemon up &
+
+# Bring daemon down
+daemon-down:
+    {{install_dir}}/hyprvoice daemon down
 
 # Restart daemon
 daemon-restart:
-    -{{install_dir}}/hyprvoice daemon shutdown 2>/dev/null || true
-    @sleep 1
-    {{install_dir}}/hyprvoice daemon start &
+    {{install_dir}}/hyprvoice daemon restart
 
 # Show daemon status
 daemon-status:

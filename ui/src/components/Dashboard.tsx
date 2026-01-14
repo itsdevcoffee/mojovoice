@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { invoke } from '../lib/ipc';
 import { motion } from 'framer-motion';
-import { Mic, Square, Zap, Cpu, Database, Loader2 } from 'lucide-react';
+import { Mic, Square, Zap, Cpu, Database, Loader2, Play, StopCircle, RotateCcw } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { cn } from '../lib/utils';
 
 export default function Dashboard() {
-  const { daemonStatus, isRecording, isProcessing, setRecording, setProcessing } = useAppStore();
+  const { daemonStatus, isRecording, isProcessing, setRecording, setProcessing, refreshDaemonStatus } = useAppStore();
   const [lastTranscription, setLastTranscription] = useState<string>('');
+  const [daemonLoading, setDaemonLoading] = useState<'start' | 'stop' | 'restart' | null>(null);
 
   const handleStartRecording = async () => {
     try {
@@ -30,6 +31,42 @@ export default function Dashboard() {
       console.error('Failed to stop recording:', error);
       setRecording(false);
       setProcessing(false);
+    }
+  };
+
+  const handleStartDaemon = async () => {
+    try {
+      setDaemonLoading('start');
+      await invoke('start_daemon');
+      await refreshDaemonStatus();
+    } catch (error) {
+      console.error('Failed to start daemon:', error);
+    } finally {
+      setDaemonLoading(null);
+    }
+  };
+
+  const handleStopDaemon = async () => {
+    try {
+      setDaemonLoading('stop');
+      await invoke('stop_daemon');
+      await refreshDaemonStatus();
+    } catch (error) {
+      console.error('Failed to stop daemon:', error);
+    } finally {
+      setDaemonLoading(null);
+    }
+  };
+
+  const handleRestartDaemon = async () => {
+    try {
+      setDaemonLoading('restart');
+      await invoke('restart_daemon');
+      await refreshDaemonStatus();
+    } catch (error) {
+      console.error('Failed to restart daemon:', error);
+    } finally {
+      setDaemonLoading(null);
     }
   };
 
@@ -70,6 +107,47 @@ export default function Dashboard() {
           status={daemonStatus.modelLoaded ? 'active' : 'inactive'}
         />
       </div>
+
+      {/* Daemon Controls */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.05 }}
+        className="glass-card p-4 mb-8"
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-white font-medium">Daemon Control</h3>
+            <p className="text-gray-400 text-sm">Start, stop, or restart the transcription daemon</p>
+          </div>
+          <div className="flex gap-2">
+            <DaemonButton
+              onClick={handleStartDaemon}
+              disabled={daemonStatus.running || daemonLoading !== null}
+              loading={daemonLoading === 'start'}
+              variant="start"
+              icon={<Play className="w-4 h-4" />}
+              label="Start"
+            />
+            <DaemonButton
+              onClick={handleStopDaemon}
+              disabled={!daemonStatus.running || daemonLoading !== null}
+              loading={daemonLoading === 'stop'}
+              variant="stop"
+              icon={<StopCircle className="w-4 h-4" />}
+              label="Stop"
+            />
+            <DaemonButton
+              onClick={handleRestartDaemon}
+              disabled={!daemonStatus.running || daemonLoading !== null}
+              loading={daemonLoading === 'restart'}
+              variant="restart"
+              icon={<RotateCcw className="w-4 h-4" />}
+              label="Restart"
+            />
+          </div>
+        </div>
+      </motion.div>
 
       {/* Main Control Panel */}
       <motion.div
@@ -206,5 +284,47 @@ function QuickStat({ label, value }: QuickStatProps) {
       <p className="text-2xl font-bold text-white mb-1">{value}</p>
       <p className="text-gray-400 text-xs">{label}</p>
     </div>
+  );
+}
+
+interface DaemonButtonProps {
+  onClick: () => void;
+  disabled: boolean;
+  loading: boolean;
+  variant: 'start' | 'stop' | 'restart';
+  icon: React.ReactNode;
+  label: string;
+}
+
+function DaemonButton({ onClick, disabled, loading, variant, icon, label }: DaemonButtonProps) {
+  const variantStyles = {
+    start: 'bg-green-500/20 border-green-500/50 hover:bg-green-500/30 text-green-400',
+    stop: 'bg-red-500/20 border-red-500/50 hover:bg-red-500/30 text-red-400',
+    restart: 'bg-yellow-500/20 border-yellow-500/50 hover:bg-yellow-500/30 text-yellow-400',
+  };
+
+  return (
+    <motion.button
+      whileHover={!disabled ? { scale: 1.02 } : {}}
+      whileTap={!disabled ? { scale: 0.98 } : {}}
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        'px-4 py-2 rounded-lg border flex items-center gap-2 transition-all duration-200',
+        disabled ? 'opacity-50 cursor-not-allowed bg-gray-500/10 border-gray-500/30 text-gray-500' : variantStyles[variant]
+      )}
+    >
+      {loading ? (
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+        >
+          <Loader2 className="w-4 h-4" />
+        </motion.div>
+      ) : (
+        icon
+      )}
+      <span className="text-sm font-medium">{label}</span>
+    </motion.button>
   );
 }

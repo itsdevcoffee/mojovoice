@@ -28,6 +28,8 @@ fn main() {
             commands::get_system_info,
             commands::get_config,
             commands::save_config,
+            commands::start_daemon,
+            commands::stop_daemon,
             commands::restart_daemon,
             commands::validate_path,
         ])

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { type ScalePreset, getScaleValue, applyScale } from '../lib/scale';
+import { invoke } from '../lib/ipc';
 
 interface DaemonStatus {
   running: boolean;
@@ -57,6 +58,7 @@ interface AppState {
 
   // Actions
   setDaemonStatus: (status: DaemonStatus) => void;
+  refreshDaemonStatus: () => Promise<void>;
   setRecording: (recording: boolean) => void;
   setProcessing: (processing: boolean) => void;
   addTranscription: (entry: TranscriptionEntry) => void;
@@ -89,6 +91,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // Actions
   setDaemonStatus: (status) => set({ daemonStatus: status }),
+  refreshDaemonStatus: async () => {
+    try {
+      const status = await invoke('get_daemon_status') as DaemonStatus;
+      set({ daemonStatus: status });
+    } catch (error) {
+      console.error('Failed to refresh daemon status:', error);
+    }
+  },
   setRecording: (recording) => set({ isRecording: recording }),
   setProcessing: (processing) => set({ isProcessing: processing }),
   addTranscription: (entry) =>

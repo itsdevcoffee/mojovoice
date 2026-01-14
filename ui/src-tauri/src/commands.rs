@@ -286,6 +286,64 @@ pub async fn save_config(config: AppConfig) -> Result<(), String> {
     Ok(())
 }
 
+/// Start the hyprvoice daemon
+#[tauri::command]
+pub async fn start_daemon() -> Result<(), String> {
+    // Check if already running
+    if daemon_client::is_daemon_running() {
+        return Err("Daemon is already running".to_string());
+    }
+
+    // Find hyprvoice binary
+    let binary = find_hyprvoice_binary().ok_or("Could not find hyprvoice binary")?;
+
+    eprintln!("Starting daemon with binary: {}", binary);
+
+    std::process::Command::new(&binary)
+        .args(["daemon", "up"])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| format!("Failed to start daemon: {}", e))?;
+
+    // Wait for daemon to be ready (max 5 seconds)
+    for i in 0..50 {
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        if daemon_client::is_daemon_running() {
+            eprintln!("Daemon started successfully after {}ms", i * 100);
+            return Ok(());
+        }
+    }
+
+    Err("Daemon failed to start within 5 seconds".to_string())
+}
+
+/// Stop the hyprvoice daemon
+#[tauri::command]
+pub async fn stop_daemon() -> Result<(), String> {
+    // Check if running
+    if !daemon_client::is_daemon_running() {
+        return Err("Daemon is not running".to_string());
+    }
+
+    // Send shutdown command
+    let shutdown_request = daemon_client::DaemonRequest::Shutdown;
+    daemon_client::send_request(shutdown_request)
+        .map_err(|e| format!("Failed to send shutdown: {}", e))?;
+
+    // Wait for daemon to stop (max 5 seconds)
+    for i in 0..50 {
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        if !daemon_client::is_daemon_running() {
+            eprintln!("Daemon stopped after {}ms", i * 100);
+            return Ok(());
+        }
+    }
+
+    Err("Daemon did not stop within 5 seconds".to_string())
+}
+
 /// Restart the hyprvoice daemon with new configuration
 #[tauri::command]
 pub async fn restart_daemon() -> Result<(), String> {
@@ -309,25 +367,15 @@ pub async fn restart_daemon() -> Result<(), String> {
         }
     }
 
-    // 3. Detect which binary was actually running (check process list)
-    let binary = detect_running_binary().unwrap_or_else(|| {
-        // Fallback: try to find any hyprvoice binary
-        if let Ok(home) = std::env::var("HOME") {
-            let bin_dir = format!("{}/.local/bin", home);
-            ["hyprvoice-gpu", "hyprvoice-cuda", "hyprvoice-test", "hyprvoice"]
-                .iter()
-                .map(|name| format!("{}/{}", bin_dir, name))
-                .find(|path| std::path::Path::new(path).exists())
-                .unwrap_or_else(|| "hyprvoice".to_string())
-        } else {
-            "hyprvoice".to_string()
-        }
-    });
+    // 3. Detect which binary was actually running, or find it
+    let binary = detect_running_binary()
+        .or_else(find_hyprvoice_binary)
+        .unwrap_or_else(|| "hyprvoice".to_string());
 
     eprintln!("Restarting daemon with detected binary: {}", binary);
 
     std::process::Command::new(&binary)
-        .arg("daemon")
+        .args(["daemon", "up"])
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -400,6 +448,31 @@ pub struct PathValidation {
     pub is_directory: bool,
     pub expanded_path: String,
     pub message: String,
+}
+
+/// Find hyprvoice binary in common locations
+fn find_hyprvoice_binary() -> Option<String> {
+    let home = std::env::var("HOME").ok()?;
+    let path = format!("{}/.local/bin/hyprvoice", home);
+
+    if std::path::Path::new(&path).exists() {
+        return Some(path);
+    }
+
+    // Try PATH as fallback
+    if let Ok(output) = std::process::Command::new("which")
+        .arg("hyprvoice")
+        .output()
+    {
+        if output.status.success() {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !path.is_empty() {
+                return Some(path);
+            }
+        }
+    }
+
+    None
 }
 
 /// Detect which hyprvoice binary is currently running

@@ -141,16 +141,16 @@ enum Commands {
 #[derive(Subcommand)]
 enum DaemonCommands {
     /// Start the daemon server (keeps model loaded in GPU memory)
-    Start {
+    Up {
         /// Override model path
         #[arg(short, long)]
         model: Option<String>,
     },
 
-    /// Shutdown the running daemon
-    Shutdown,
+    /// Stop the running daemon
+    Down,
 
-    /// Restart the daemon (shutdown + start)
+    /// Restart the daemon (down + up)
     Restart {
         /// Override model path
         #[arg(short, long)]
@@ -585,8 +585,8 @@ fn cmd_daemon(command: Option<DaemonCommands>) -> Result<()> {
             println!("Daemon management commands\n");
             println!("Usage: hyprvoice daemon <COMMAND>\n");
             println!("Commands:");
-            println!("  start     Start the daemon server");
-            println!("  shutdown  Shutdown the running daemon");
+            println!("  up        Start the daemon server");
+            println!("  down      Stop the running daemon");
             println!("  restart   Restart the daemon");
             println!("  status    Show daemon status");
             println!("  logs      View daemon logs");
@@ -594,8 +594,8 @@ fn cmd_daemon(command: Option<DaemonCommands>) -> Result<()> {
             println!("\nRun 'hyprvoice daemon <COMMAND> --help' for more info");
             Ok(())
         }
-        Some(DaemonCommands::Start { model }) => cmd_daemon_start(model),
-        Some(DaemonCommands::Shutdown) => cmd_daemon_shutdown(),
+        Some(DaemonCommands::Up { model }) => cmd_daemon_up(model),
+        Some(DaemonCommands::Down) => cmd_daemon_down(),
         Some(DaemonCommands::Restart { model }) => cmd_daemon_restart(model),
         Some(DaemonCommands::Status) => cmd_daemon_status(),
         Some(DaemonCommands::Logs { follow, lines }) => cmd_daemon_logs(follow, lines),
@@ -603,7 +603,12 @@ fn cmd_daemon(command: Option<DaemonCommands>) -> Result<()> {
     }
 }
 
-fn cmd_daemon_start(model_override: Option<String>) -> Result<()> {
+fn cmd_daemon_up(model_override: Option<String>) -> Result<()> {
+    // Check if already running
+    if daemon::is_daemon_running() {
+        anyhow::bail!("Daemon is already running. Use 'hyprvoice daemon restart' to restart it.");
+    }
+
     let mut cfg = config::load()?;
     if let Some(model_path) = model_override {
         cfg.model.path = model_path.into();
@@ -617,15 +622,15 @@ fn cmd_daemon_start(model_override: Option<String>) -> Result<()> {
     Ok(())
 }
 
-fn cmd_daemon_shutdown() -> Result<()> {
+fn cmd_daemon_down() -> Result<()> {
     if !daemon::is_daemon_running() {
         println!("Daemon is not running");
         return Ok(());
     }
 
-    println!("Shutting down daemon...");
+    println!("Stopping daemon...");
     daemon::daemon_shutdown()?;
-    println!("Daemon shut down successfully");
+    println!("Daemon stopped");
     Ok(())
 }
 
@@ -634,12 +639,32 @@ fn cmd_daemon_restart(model_override: Option<String>) -> Result<()> {
     if daemon::is_daemon_running() {
         println!("Shutting down existing daemon...");
         daemon::daemon_shutdown()?;
-        // Give it a moment to clean up
-        std::thread::sleep(std::time::Duration::from_millis(500));
+
+        // Wait for daemon to actually stop (up to 5 seconds)
+        let mut attempts = 0;
+        while daemon::is_daemon_running() && attempts < 50 {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            attempts += 1;
+        }
+
+        if daemon::is_daemon_running() {
+            anyhow::bail!("Daemon did not shut down within 5 seconds. Try 'hyprvoice daemon shutdown' manually.");
+        }
+        println!("Daemon stopped.");
     }
 
-    // Start new daemon
-    cmd_daemon_start(model_override)
+    // Start new daemon (bypass the is_running check since we just stopped it)
+    let mut cfg = config::load()?;
+    if let Some(model_path) = model_override {
+        cfg.model.path = model_path.into();
+    }
+    validate_model_path(&cfg)?;
+
+    info!("Starting daemon with model: {}", cfg.model.path.display());
+    println!("Starting daemon...");
+
+    daemon::run_daemon(&cfg.model.path)?;
+    Ok(())
 }
 
 fn cmd_daemon_status() -> Result<()> {

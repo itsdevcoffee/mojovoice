@@ -472,6 +472,9 @@ pub fn run_daemon(model_path: &Path) -> Result<()> {
 
     let listener = UnixListener::bind(&socket_path).context("Failed to bind Unix socket")?;
 
+    // Set non-blocking so we can check shutdown flag periodically
+    listener.set_nonblocking(true).context("Failed to set socket non-blocking")?;
+
     // Write daemon PID file
     let daemon_pid_file = state::paths::get_daemon_pid_file()?;
     fs::write(&daemon_pid_file, std::process::id().to_string())?;
@@ -481,17 +484,22 @@ pub fn run_daemon(model_path: &Path) -> Result<()> {
 
     let server = DaemonServer::new(model_path)?;
 
-    for stream in listener.incoming() {
+    loop {
+        // Check shutdown flag
         if server.shutdown.load(Ordering::SeqCst) {
             info!("Shutdown flag set, exiting");
             break;
         }
 
-        match stream {
-            Ok(stream) => {
+        match listener.accept() {
+            Ok((stream, _addr)) => {
                 if let Err(e) = server.handle_client(stream) {
                     error!("Error handling client: {}", e);
                 }
+            },
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                // No pending connections, sleep briefly and check shutdown flag
+                std::thread::sleep(std::time::Duration::from_millis(100));
             },
             Err(e) => {
                 error!("Error accepting connection: {}", e);

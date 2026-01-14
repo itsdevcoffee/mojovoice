@@ -5,6 +5,62 @@ All notable changes to hyprvoice will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - Unreleased
+
+### Added
+- **Daemon subcommands:** New CLI structure with `daemon up`, `down`, `restart`, `status`, `logs`, `pid`
+- **Daemon control UI:** Start/Stop/Restart buttons in Dashboard for managing daemon from UI
+- **Real daemon status:** UI dashboard now shows actual GPU (CUDA/Metal/CPU) and model info from daemon
+- **Expanded model registry:** 31 Whisper model variants including distil-whisper-v2 and distil-medium.en
+- **Waybar offline state:** Status indicator now shows distinct state when daemon isn't running
+- **Mojo-audio FFI:** Replaced Candle's buggy mel spectrogram with mojo-audio library for accurate frame counts
+- **Dynamic mel bins:** Automatic detection of 80 vs 128 mel bins based on model architecture
+- **Audio test samples:** Organized test samples with manifest and Harvard sentences
+- **justfile:** Build automation with commands for build, install, daemon management
+
+### Changed
+- **Settings UI redesign:** Cleaner layout with recording timeout now configurable from UI
+- **Recording timeout:** Now uses config value (default 180s) instead of hardcoded 5-minute limit
+
+### Fixed
+- **Daemon shutdown:** Fixed blocking listener that prevented graceful shutdown
+- **Stale state files:** Daemon now cleans up processing/recording files on startup
+- **Stale processing indicator:** Waybar no longer shows "processing" after daemon restart
+- **Mojo-audio RFFT:** Fixed audio library to produce correct ~3000 frames for 30s audio
+- **Daemon restart:** Now properly waits for daemon to stop before restarting (was using fixed 500ms sleep)
+- **Daemon start:** Now checks if daemon is already running before attempting to start
+
+### Refactored
+- Simplified main.rs CLI entry point
+- Removed dead whisper module and privatized mojo_ffi
+- Simplified audio capture, output, daemon client, and transcription modules
+- Cleaned up legacy binary name checks (hyprvoice-gpu/hyprvoice-cuda)
+
+## [0.4.1] - 2025-01-01
+
+### Added
+- **Premium Settings Panel:** Redesigned settings with smart daemon restart
+- **UI scaling:** Small/medium/large presets for different display densities
+- **Cancel recording:** New cancel command to discard recording without transcribing
+- **GitHub Release workflow:** Automated release builds
+
+### Fixed
+- CUDA_COMPUTE_CAP detection in CI builds
+- Added libssl-dev to CUDA build dependencies
+
+## [0.4.0] - 2024-12-31
+
+### Added
+- **Tauri UI:** Native desktop application with glassmorphic design
+- **Dev Tools:** Built-in developer panel for debugging
+- **Dashboard:** Real-time status display for daemon, GPU, and model
+
+## [0.3.0] - 2024-12-30
+
+### Changed
+- **BREAKING:** Renamed project from dev-voice to hyprvoice
+- Polished README for production readiness
+
 ## [0.2.0] - 2025-12-16 (Phase 4)
 
 ### Added
@@ -72,5 +128,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
+- **v0.5.0:** Daemon subcommands (up/down), daemon control UI, justfile, mojo-audio FFI, expanded model registry
+- **v0.4.1:** Premium Settings Panel, UI scaling, cancel recording
+- **v0.4.0:** Tauri UI with glassmorphic design
+- **v0.3.0:** Renamed to hyprvoice
 - **v0.2.0 (Phase 4):** Cross-platform support, simplified architecture
 - **v0.1.0 (Phase 3):** Initial Linux Wayland release
