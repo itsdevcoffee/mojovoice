@@ -338,6 +338,14 @@ pub async fn download_model(model_name: String, window: tauri::Window) -> Result
         .find(|m| m.name == model_name)
         .ok_or_else(|| format!("Model '{}' not found in registry", model_name))?;
 
+    // Validate repo_id format (should be "org/model" with safe characters)
+    if !model.repo_id.chars().all(|c| c.is_alphanumeric() || c == '/' || c == '-' || c == '_' || c == '.') {
+        return Err(format!("Invalid repo_id format: {}", model.repo_id));
+    }
+    if !model.repo_id.contains('/') || model.repo_id.starts_with('/') || model.repo_id.ends_with('/') {
+        return Err(format!("Invalid repo_id format (must be org/model): {}", model.repo_id));
+    }
+
     // Register this download for cancellation tracking
     let _cancel_flag = register_download(&model_name);
 
@@ -513,10 +521,15 @@ pub async fn download_model(model_name: String, window: tauri::Window) -> Result
 
     // Move temp directory to final location
     if dest_dir.exists() {
-        std::fs::remove_dir_all(&dest_dir).ok();
+        std::fs::remove_dir_all(&dest_dir).map_err(|e| {
+            cleanup_on_error(&temp_dir);
+            format!("Failed to remove existing model directory: {}", e)
+        })?;
     }
-    std::fs::rename(&temp_dir, &dest_dir)
-        .map_err(|e| format!("Failed to move downloaded files: {}", e))?;
+    std::fs::rename(&temp_dir, &dest_dir).map_err(|e| {
+        cleanup_on_error(&temp_dir);
+        format!("Failed to move downloaded files: {}", e)
+    })?;
 
     let _ = window.emit("download-progress", DownloadProgress::complete(&model_name, total_downloaded));
 
@@ -1009,6 +1022,14 @@ fn validate_model_path(models_dir: &std::path::Path, filename: &str) -> Result<s
 /// Check if a model directory is the currently active model
 fn is_active_model(active_path: &str, dirname: &str) -> bool {
     let active = std::path::Path::new(active_path);
+
+    // Try to canonicalize for accurate comparison (handles symlinks, ~, etc.)
+    let active = if active.exists() {
+        active.canonicalize().unwrap_or_else(|_| active.to_path_buf())
+    } else {
+        active.to_path_buf()
+    };
+
     // Check if the active path ends with the directory name
     // Handle both directory paths and file paths within directories
     if let Some(name) = active.file_name().and_then(|n| n.to_str()) {
@@ -1079,16 +1100,24 @@ pub async fn list_downloaded_models() -> Result<Vec<DownloadedModel>, String> {
                             });
                         } else {
                             // Unknown model (not in registry) - calculate size
-                            let size_mb = REQUIRED_FILES.iter()
-                                .filter_map(|f| std::fs::metadata(path.join(f)).ok())
-                                .map(|m| m.len())
-                                .sum::<u64>() / 1_000_000;
+                            let size_result: Result<u64, _> = REQUIRED_FILES.iter()
+                                .map(|f| std::fs::metadata(path.join(f)).map(|m| m.len()))
+                                .collect::<Result<Vec<_>, _>>()
+                                .map(|sizes| sizes.iter().sum());
+
+                            let size_mb = match size_result {
+                                Ok(size) => (size / 1_000_000) as u32,
+                                Err(e) => {
+                                    eprintln!("Warning: Could not calculate size for model {}: {}", dirname, e);
+                                    0 // Show as 0 MB if we can't read metadata
+                                }
+                            };
 
                             downloaded.push(DownloadedModel {
                                 name: dirname.clone(),
                                 filename: dirname.clone(),
                                 path: path.to_string_lossy().to_string(),
-                                size_mb: size_mb as u32,
+                                size_mb,
                                 is_active: is_active_model(&active_path, &dirname),
                             });
                         }
