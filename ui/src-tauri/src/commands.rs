@@ -124,13 +124,17 @@ pub async fn cancel_recording() -> Result<(), String> {
     }
 }
 
+/// Get the path to the mojovoice config file
+fn get_config_path() -> Result<std::path::PathBuf, String> {
+    dirs::config_dir()
+        .map(|dir| dir.join("mojovoice").join("config.toml"))
+        .ok_or_else(|| "Could not determine config directory".to_string())
+}
+
 /// Refresh status bar (execute user-configured refresh_command)
 fn refresh_statusbar() {
     // Read config to get refresh_command
-    let config_path = dirs::config_dir()
-        .map(|dir| dir.join("mojovoice").join("config.toml"));
-
-    let Some(config_path) = config_path else {
+    let Ok(config_path) = get_config_path() else {
         eprintln!("Could not determine config path");
         return;
     };
@@ -200,6 +204,7 @@ pub struct DownloadProgress {
 }
 
 impl DownloadProgress {
+    #[allow(dead_code)]
     fn new(model_name: &str, status: &str) -> Self {
         Self {
             model_name: model_name.to_string(),
@@ -324,6 +329,9 @@ pub async fn cancel_download(model_name: String) -> Result<(), String> {
 pub async fn download_model(model_name: String, window: tauri::Window) -> Result<String, String> {
     use std::io::{Read, Write, BufWriter};
 
+    // Files required for safetensors models
+    const REQUIRED_FILES: &[&str] = &["model.safetensors", "config.json", "tokenizer.json"];
+
     // Find model in registry
     let registry = get_model_registry();
     let model = registry.iter()
@@ -348,170 +356,176 @@ pub async fn download_model(model_name: String, window: tauri::Window) -> Result
     std::fs::create_dir_all(&models_dir)
         .map_err(|e| format!("Failed to create models directory: {}", e))?;
 
-    let dest_path = models_dir.join(&model.filename);
-    let temp_path = dest_path.with_extension("download");
+    // For safetensors, we download to a directory
+    let dest_dir = models_dir.join(&model.filename);
+    let temp_dir = models_dir.join(format!("{}.download", &model.filename));
 
-    let backup_path = dest_path.with_extension("backup");
-
-    // Check if already downloaded and valid
-    if dest_path.exists() {
-        eprintln!("Model already exists, verifying checksum...");
-        let _ = window.emit("download-progress", DownloadProgress::new(&model_name, "verifying"));
-
-        if verify_sha256(&dest_path, &model.sha256)? {
+    // Check if already downloaded and valid (all required files exist)
+    if dest_dir.exists() && dest_dir.is_dir() {
+        let all_files_exist = REQUIRED_FILES.iter().all(|f| dest_dir.join(f).exists());
+        if all_files_exist {
+            eprintln!("Model already exists with all required files");
             let _ = window.emit("download-progress", DownloadProgress::complete(&model_name, 0));
-            return Ok(dest_path.to_string_lossy().to_string());
+            return Ok(dest_dir.to_string_lossy().to_string());
         }
-        // Invalid checksum, backup before re-downloading
-        eprintln!("Checksum mismatch, backing up existing file...");
-        std::fs::rename(&dest_path, &backup_path)
-            .map_err(|e| format!("Failed to backup existing model: {}", e))?;
+        eprintln!("Model directory exists but missing files, re-downloading...");
     }
 
-    eprintln!("Downloading {} ({} MB) from {}", model.name, model.size_mb, model.url);
+    // Clean up any existing temp directory
+    if temp_dir.exists() {
+        std::fs::remove_dir_all(&temp_dir).ok();
+    }
+    std::fs::create_dir_all(&temp_dir)
+        .map_err(|e| format!("Failed to create temp directory: {}", e))?;
+
+    eprintln!("Downloading {} ({} MB) from HuggingFace: {}", model.name, model.size_mb, model.repo_id);
 
     // Emit initial progress event with estimated size
     let estimated_bytes = model.size_mb as u64 * 1_000_000;
-    eprintln!("[DEBUG] Emitting initial progress event for {}", model_name);
-    match window.emit("download-progress", DownloadProgress::downloading(&model_name, 0, estimated_bytes, 0)) {
-        Ok(_) => eprintln!("[DEBUG] Initial event emitted successfully"),
-        Err(e) => eprintln!("[DEBUG] Failed to emit initial event: {:?}", e),
-    }
+    let _ = window.emit("download-progress", DownloadProgress::downloading(&model_name, 0, estimated_bytes, 0));
 
-    // Start download
-    let response = ureq::get(&model.url)
-        .call()
-        .map_err(|e| format!("Failed to connect: {}", e))?;
-
-    let total_bytes = response
-        .header("content-length")
-        .and_then(|s| s.parse::<u64>().ok())
-        .unwrap_or(model.size_mb as u64 * 1_000_000);
-
-    let mut reader = response.into_reader();
-    let file = std::fs::File::create(&temp_path)
-        .map_err(|e| format!("Failed to create temp file: {}", e))?;
-    let mut writer = BufWriter::new(file);
-
-    let mut buffer = [0u8; 65536]; // 64KB buffer
-    let mut downloaded_bytes: u64 = 0;
-    let mut last_emit_time = std::time::Instant::now();
     let start_time = std::time::Instant::now();
+    let mut total_downloaded: u64 = 0;
 
-    // Helper to clean up temp file and restore backup on error
-    let cleanup_on_error = |temp: &std::path::Path, backup: &std::path::Path, dest: &std::path::Path| {
-        std::fs::remove_file(temp).ok();
-        if backup.exists() {
-            std::fs::rename(backup, dest).ok();
-        }
+    // Helper to clean up temp directory on error
+    let cleanup_on_error = |temp: &std::path::Path| {
+        std::fs::remove_dir_all(temp).ok();
     };
 
-    loop {
-        // Check for cancellation
+    // Download each required file
+    for (file_idx, filename) in REQUIRED_FILES.iter().enumerate() {
+        // Check for cancellation before starting each file
         if is_download_cancelled(&model_name) {
             eprintln!("Download cancelled: {}", model_name);
-            drop(writer);
-            cleanup_on_error(&temp_path, &backup_path, &dest_path);
+            cleanup_on_error(&temp_dir);
             let _ = window.emit("download-progress", DownloadProgress::cancelled(&model_name));
             return Err("Download cancelled".to_string());
         }
 
-        let bytes_read = match reader.read(&mut buffer) {
-            Ok(n) => n,
-            Err(e) => {
-                drop(writer); // Release file handle before cleanup
-                cleanup_on_error(&temp_path, &backup_path, &dest_path);
-                let _ = window.emit("download-progress", DownloadProgress::error(&model_name, &format!("Download error: {}", e)));
-                return Err(format!("Download error: {}", e));
-            }
-        };
+        let file_url = format!(
+            "https://huggingface.co/{}/resolve/main/{}",
+            model.repo_id, filename
+        );
+        eprintln!("Downloading file {}/{}: {}", file_idx + 1, REQUIRED_FILES.len(), filename);
 
-        if bytes_read == 0 {
-            break;
-        }
+        let response = ureq::get(&file_url)
+            .call()
+            .map_err(|e| {
+                cleanup_on_error(&temp_dir);
+                format!("Failed to download {}: {}", filename, e)
+            })?;
 
-        if let Err(e) = writer.write_all(&buffer[..bytes_read]) {
-            drop(writer);
-            cleanup_on_error(&temp_path, &backup_path, &dest_path);
-            let _ = window.emit("download-progress", DownloadProgress::error(&model_name, &format!("Write error: {}", e)));
-            return Err(format!("Write error: {}", e));
-        }
+        let _file_size = response
+            .header("content-length")
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(0);
 
-        downloaded_bytes = downloaded_bytes.saturating_add(bytes_read as u64);
+        let dest_file = temp_dir.join(filename);
+        let file = std::fs::File::create(&dest_file)
+            .map_err(|e| {
+                cleanup_on_error(&temp_dir);
+                format!("Failed to create file {}: {}", filename, e)
+            })?;
+        let mut writer = BufWriter::new(file);
 
-        // Emit progress every 100ms
-        let now = std::time::Instant::now();
-        if now.duration_since(last_emit_time).as_millis() >= 100 {
-            // Check cancellation again before emitting
+        let mut reader = response.into_reader();
+        let mut buffer = [0u8; 65536];
+        let mut file_downloaded: u64 = 0;
+        let mut last_emit_time = std::time::Instant::now();
+
+        loop {
+            // Check for cancellation
             if is_download_cancelled(&model_name) {
                 eprintln!("Download cancelled: {}", model_name);
                 drop(writer);
-                cleanup_on_error(&temp_path, &backup_path, &dest_path);
+                cleanup_on_error(&temp_dir);
                 let _ = window.emit("download-progress", DownloadProgress::cancelled(&model_name));
                 return Err("Download cancelled".to_string());
             }
 
-            let elapsed = now.duration_since(start_time).as_secs_f64();
-            let speed_bps = if elapsed > 0.0 {
-                (downloaded_bytes as f64 / elapsed) as u64
-            } else {
-                0
+            let bytes_read = match reader.read(&mut buffer) {
+                Ok(n) => n,
+                Err(e) => {
+                    drop(writer);
+                    cleanup_on_error(&temp_dir);
+                    let _ = window.emit("download-progress", DownloadProgress::error(&model_name, &format!("Download error: {}", e)));
+                    return Err(format!("Download error: {}", e));
+                }
             };
 
-            let _ = window.emit(
-                "download-progress",
-                DownloadProgress::downloading(&model_name, downloaded_bytes, total_bytes, speed_bps),
-            );
+            if bytes_read == 0 {
+                break;
+            }
 
-            last_emit_time = now;
+            if let Err(e) = writer.write_all(&buffer[..bytes_read]) {
+                drop(writer);
+                cleanup_on_error(&temp_dir);
+                let _ = window.emit("download-progress", DownloadProgress::error(&model_name, &format!("Write error: {}", e)));
+                return Err(format!("Write error: {}", e));
+            }
+
+            file_downloaded = file_downloaded.saturating_add(bytes_read as u64);
+            total_downloaded = total_downloaded.saturating_add(bytes_read as u64);
+
+            // Emit progress every 100ms
+            let now = std::time::Instant::now();
+            if now.duration_since(last_emit_time).as_millis() >= 100 {
+                let elapsed = now.duration_since(start_time).as_secs_f64();
+                let speed_bps = if elapsed > 0.0 {
+                    (total_downloaded as f64 / elapsed) as u64
+                } else {
+                    0
+                };
+
+                let _ = window.emit(
+                    "download-progress",
+                    DownloadProgress::downloading(&model_name, total_downloaded, estimated_bytes, speed_bps),
+                );
+
+                last_emit_time = now;
+            }
         }
+
+        if let Err(e) = writer.flush() {
+            drop(writer);
+            cleanup_on_error(&temp_dir);
+            let _ = window.emit("download-progress", DownloadProgress::error(&model_name, &format!("Flush error: {}", e)));
+            return Err(format!("Flush error: {}", e));
+        }
+
+        eprintln!("Downloaded {} ({} bytes)", filename, file_downloaded);
     }
 
-    if let Err(e) = writer.flush() {
-        drop(writer);
-        cleanup_on_error(&temp_path, &backup_path, &dest_path);
-        let _ = window.emit("download-progress", DownloadProgress::error(&model_name, &format!("Flush error: {}", e)));
-        return Err(format!("Flush error: {}", e));
-    }
-    drop(writer);
-
-    eprintln!("Download complete, verifying checksum...");
+    // Verify all files exist
     let _ = window.emit(
         "download-progress",
-        DownloadProgress::verifying(&model_name, total_bytes, total_bytes),
+        DownloadProgress::verifying(&model_name, total_downloaded, estimated_bytes),
     );
 
-    // Verify checksum
-    if !verify_sha256(&temp_path, &model.sha256)? {
-        std::fs::remove_file(&temp_path).ok();
-
-        // Restore backup if it exists
-        if backup_path.exists() {
-            eprintln!("Verification failed, restoring backup...");
-            std::fs::rename(&backup_path, &dest_path).ok();
+    for filename in REQUIRED_FILES {
+        if !temp_dir.join(filename).exists() {
+            cleanup_on_error(&temp_dir);
+            let error_msg = format!("Missing required file after download: {}", filename);
+            let _ = window.emit("download-progress", DownloadProgress::error(&model_name, &error_msg));
+            return Err(error_msg);
         }
-
-        let error_msg = "Checksum verification failed. Download may be corrupted.";
-        let _ = window.emit("download-progress", DownloadProgress::error(&model_name, error_msg));
-        return Err(error_msg.into());
     }
 
-    // Move to final location
-    std::fs::rename(&temp_path, &dest_path)
-        .map_err(|e| format!("Failed to move downloaded file: {}", e))?;
-
-    // Clean up backup after successful download
-    if backup_path.exists() {
-        std::fs::remove_file(&backup_path).ok();
+    // Move temp directory to final location
+    if dest_dir.exists() {
+        std::fs::remove_dir_all(&dest_dir).ok();
     }
+    std::fs::rename(&temp_dir, &dest_dir)
+        .map_err(|e| format!("Failed to move downloaded files: {}", e))?;
 
-    let _ = window.emit("download-progress", DownloadProgress::complete(&model_name, total_bytes));
+    let _ = window.emit("download-progress", DownloadProgress::complete(&model_name, total_downloaded));
 
-    eprintln!("Model saved to {}", dest_path.display());
-    Ok(dest_path.to_string_lossy().to_string())
+    eprintln!("Model saved to {}", dest_dir.display());
+    Ok(dest_dir.to_string_lossy().to_string())
 }
 
-/// Verify SHA256 checksum of a file
+/// Verify SHA256 checksum of a file (kept for future use)
+#[allow(dead_code)]
 fn verify_sha256(path: &std::path::Path, expected: &str) -> Result<bool, String> {
     use sha2::{Sha256, Digest};
     use std::io::Read;
@@ -866,14 +880,14 @@ fn detect_running_binary() -> Option<String> {
 #[serde(rename_all = "camelCase")]
 pub struct RegistryModel {
     pub name: String,
+    /// Directory name where model files are stored
     pub filename: String,
     pub size_mb: u32,
     pub family: String,
     pub quantization: String,
+    /// HuggingFace model ID (e.g., "openai/whisper-large-v3-turbo")
     #[serde(skip_serializing)]
-    pub url: String,
-    #[serde(skip_serializing)]
-    pub sha256: String,
+    pub repo_id: String,
 }
 
 /// Model that's been downloaded locally
@@ -887,52 +901,55 @@ pub struct DownloadedModel {
     pub is_active: bool,
 }
 
-/// Embedded model registry (synced from src/model/registry.rs)
+/// Embedded model registry - safetensors format from HuggingFace
 fn get_model_registry() -> Vec<RegistryModel> {
     vec![
-        // Large V3 Turbo
-        RegistryModel { name: "large-v3-turbo".into(), filename: "ggml-large-v3-turbo.bin".into(), size_mb: 1625, family: "Large V3 Turbo".into(), quantization: "Full".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin".into(), sha256: "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69".into() },
-        RegistryModel { name: "large-v3-turbo-q5_0".into(), filename: "ggml-large-v3-turbo-q5_0.bin".into(), size_mb: 547, family: "Large V3 Turbo".into(), quantization: "Q5_0".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin".into(), sha256: "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2".into() },
-        RegistryModel { name: "large-v3-turbo-q8_0".into(), filename: "ggml-large-v3-turbo-q8_0.bin".into(), size_mb: 834, family: "Large V3 Turbo".into(), quantization: "Q8_0".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q8_0.bin".into(), sha256: "317eb69c11673c9de1e1f0d459b253999804ec71ac4c23c17ecf5fbe24e259a1".into() },
-        // Distil-Whisper
-        RegistryModel { name: "distil-large-v3.5".into(), filename: "ggml-distil-large-v3.5.bin".into(), size_mb: 1449, family: "Distil".into(), quantization: "Full".into(), url: "https://huggingface.co/distil-whisper/distil-large-v3.5-ggml/resolve/main/ggml-model.bin".into(), sha256: "ec2498919b498c5f6b00041adb45650124b3cd9f26f545fffa8f5d11c28dcf26".into() },
-        RegistryModel { name: "distil-large-v3".into(), filename: "ggml-distil-large-v3.bin".into(), size_mb: 1520, family: "Distil".into(), quantization: "Full".into(), url: "https://huggingface.co/distil-whisper/distil-large-v3-ggml/resolve/main/ggml-distil-large-v3.bin".into(), sha256: "2883a11b90fb10ed592d826edeaee7d2929bf1ab985109fe9e1e7b4d2b69a298".into() },
-        RegistryModel { name: "distil-large-v2".into(), filename: "ggml-distil-large-v2.bin".into(), size_mb: 1449, family: "Distil".into(), quantization: "Full".into(), url: "https://huggingface.co/distil-whisper/distil-large-v2/resolve/main/ggml-large-32-2.en.bin".into(), sha256: "2ed2bbe6c4138b3757f292b0622981bdb3d02bcac57f77095670dac85fab3cd6".into() },
-        RegistryModel { name: "distil-medium.en".into(), filename: "ggml-distil-medium.en.bin".into(), size_mb: 757, family: "Distil".into(), quantization: "Full".into(), url: "https://huggingface.co/distil-whisper/distil-medium.en/resolve/main/ggml-medium-32-2.en.bin".into(), sha256: "ad53ccb618188b210550e98cc32bf5a13188d86635e395bb11115ed275d6e7aa".into() },
-        RegistryModel { name: "distil-small.en".into(), filename: "ggml-distil-small.en.bin".into(), size_mb: 321, family: "Distil".into(), quantization: "Full".into(), url: "https://huggingface.co/distil-whisper/distil-small.en/resolve/main/ggml-distil-small.en.bin".into(), sha256: "7691eb11167ab7aaf6b3e05d8266f2fd9ad89c550e433f86ac266ebdee6c970a".into() },
+        // Large V3 Turbo (Recommended - fast and accurate)
+        RegistryModel { name: "large-v3-turbo".into(), filename: "whisper-large-v3-turbo".into(), size_mb: 1550, family: "Large V3 Turbo".into(), quantization: "Full".into(), repo_id: "openai/whisper-large-v3-turbo".into() },
+        // Distil-Whisper (Faster, English-optimized)
+        RegistryModel { name: "distil-large-v3.5".into(), filename: "distil-large-v3.5".into(), size_mb: 1510, family: "Distil".into(), quantization: "Full".into(), repo_id: "distil-whisper/distil-large-v3.5".into() },
+        RegistryModel { name: "distil-large-v3".into(), filename: "distil-large-v3".into(), size_mb: 1510, family: "Distil".into(), quantization: "Full".into(), repo_id: "distil-whisper/distil-large-v3".into() },
+        RegistryModel { name: "distil-large-v2".into(), filename: "distil-large-v2".into(), size_mb: 1510, family: "Distil".into(), quantization: "Full".into(), repo_id: "distil-whisper/distil-large-v2".into() },
+        RegistryModel { name: "distil-small.en".into(), filename: "distil-small-en".into(), size_mb: 332, family: "Distil".into(), quantization: "Full".into(), repo_id: "distil-whisper/distil-small.en".into() },
         // Large V3
-        RegistryModel { name: "large-v3".into(), filename: "ggml-large-v3.bin".into(), size_mb: 3100, family: "Large V3".into(), quantization: "Full".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin".into(), sha256: "64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e2".into() },
-        RegistryModel { name: "large-v3-q5_0".into(), filename: "ggml-large-v3-q5_0.bin".into(), size_mb: 1031, family: "Large V3".into(), quantization: "Q5_0".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-q5_0.bin".into(), sha256: "d75795ecff3f83b5faa89d1900604ad8c780abd5739fae406de19f23ecd98ad1".into() },
+        RegistryModel { name: "large-v3".into(), filename: "whisper-large-v3".into(), size_mb: 3094, family: "Large V3".into(), quantization: "Full".into(), repo_id: "openai/whisper-large-v3".into() },
         // Large V2
-        RegistryModel { name: "large-v2".into(), filename: "ggml-large-v2.bin".into(), size_mb: 2950, family: "Large V2".into(), quantization: "Full".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v2.bin".into(), sha256: "9a423fe4d40c82774b6af34115b8b935f34152246eb19e80e376071d3f999487".into() },
-        RegistryModel { name: "large-v2-q5_0".into(), filename: "ggml-large-v2-q5_0.bin".into(), size_mb: 1031, family: "Large V2".into(), quantization: "Q5_0".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v2-q5_0.bin".into(), sha256: "3a214837221e4530dbc1fe8d734f302af393eb30bd0ed046042ebf4baf70f6f2".into() },
+        RegistryModel { name: "large-v2".into(), filename: "whisper-large-v2".into(), size_mb: 3094, family: "Large V2".into(), quantization: "Full".into(), repo_id: "openai/whisper-large-v2".into() },
         // Large V1
-        RegistryModel { name: "large-v1".into(), filename: "ggml-large-v1.bin".into(), size_mb: 2950, family: "Large V1".into(), quantization: "Full".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v1.bin".into(), sha256: "7d99f41a10525d0206bddadd86760181fa920438b6b33237e3118ff6c83bb53d".into() },
+        RegistryModel { name: "large".into(), filename: "whisper-large".into(), size_mb: 3094, family: "Large".into(), quantization: "Full".into(), repo_id: "openai/whisper-large".into() },
         // Medium
-        RegistryModel { name: "medium".into(), filename: "ggml-medium.bin".into(), size_mb: 1463, family: "Medium".into(), quantization: "Full".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin".into(), sha256: "6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208".into() },
-        RegistryModel { name: "medium.en".into(), filename: "ggml-medium.en.bin".into(), size_mb: 1530, family: "Medium".into(), quantization: "Full".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.en.bin".into(), sha256: "cc37e93478338ec7700281a7ac30a10128929eb8f427dda2e865faa8f6da4356".into() },
-        RegistryModel { name: "medium-q5_0".into(), filename: "ggml-medium-q5_0.bin".into(), size_mb: 514, family: "Medium".into(), quantization: "Q5_0".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium-q5_0.bin".into(), sha256: "19fea4b380c3a618ec4723c3eef2eb785ffba0d0538cf43f8f235e7b3b34220f".into() },
-        RegistryModel { name: "medium.en-q5_0".into(), filename: "ggml-medium.en-q5_0.bin".into(), size_mb: 514, family: "Medium".into(), quantization: "Q5_0".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.en-q5_0.bin".into(), sha256: "76733e26ad8fe1c7a5bf7531a9d41917b2adc0f20f2e4f5531688a8c6cd88eb0".into() },
+        RegistryModel { name: "medium".into(), filename: "whisper-medium".into(), size_mb: 1533, family: "Medium".into(), quantization: "Full".into(), repo_id: "openai/whisper-medium".into() },
+        RegistryModel { name: "medium.en".into(), filename: "whisper-medium-en".into(), size_mb: 1533, family: "Medium".into(), quantization: "Full".into(), repo_id: "openai/whisper-medium.en".into() },
         // Small
-        RegistryModel { name: "small".into(), filename: "ggml-small.bin".into(), size_mb: 488, family: "Small".into(), quantization: "Full".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin".into(), sha256: "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1571299571".into() },
-        RegistryModel { name: "small.en".into(), filename: "ggml-small.en.bin".into(), size_mb: 488, family: "Small".into(), quantization: "Full".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin".into(), sha256: "c6138d6d58ecc8322097e0f987c32f1be8bb0a18532a3f88f734d1bbf9c41e5d".into() },
-        RegistryModel { name: "small-q5_1".into(), filename: "ggml-small-q5_1.bin".into(), size_mb: 181, family: "Small".into(), quantization: "Q5_1".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q5_1.bin".into(), sha256: "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb".into() },
-        RegistryModel { name: "small.en-q5_1".into(), filename: "ggml-small.en-q5_1.bin".into(), size_mb: 181, family: "Small".into(), quantization: "Q5_1".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en-q5_1.bin".into(), sha256: "bfdff4894dcb76bbf647d56263ea2a96645423f1669176f4844a1bf8e478ad30".into() },
+        RegistryModel { name: "small".into(), filename: "whisper-small".into(), size_mb: 483, family: "Small".into(), quantization: "Full".into(), repo_id: "openai/whisper-small".into() },
+        RegistryModel { name: "small.en".into(), filename: "whisper-small-en".into(), size_mb: 483, family: "Small".into(), quantization: "Full".into(), repo_id: "openai/whisper-small.en".into() },
         // Base
-        RegistryModel { name: "base".into(), filename: "ggml-base.bin".into(), size_mb: 148, family: "Base".into(), quantization: "Full".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin".into(), sha256: "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe".into() },
-        RegistryModel { name: "base.en".into(), filename: "ggml-base.en.bin".into(), size_mb: 148, family: "Base".into(), quantization: "Full".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin".into(), sha256: "a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002".into() },
-        RegistryModel { name: "base-q5_1".into(), filename: "ggml-base-q5_1.bin".into(), size_mb: 57, family: "Base".into(), quantization: "Q5_1".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base-q5_1.bin".into(), sha256: "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898".into() },
-        RegistryModel { name: "base.en-q5_1".into(), filename: "ggml-base.en-q5_1.bin".into(), size_mb: 57, family: "Base".into(), quantization: "Q5_1".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en-q5_1.bin".into(), sha256: "4baf70dd0d7c4247ba2b81fafd9c01005ac77c2f9ef064e00dcf195d0e2fdd2f".into() },
+        RegistryModel { name: "base".into(), filename: "whisper-base".into(), size_mb: 145, family: "Base".into(), quantization: "Full".into(), repo_id: "openai/whisper-base".into() },
+        RegistryModel { name: "base.en".into(), filename: "whisper-base-en".into(), size_mb: 145, family: "Base".into(), quantization: "Full".into(), repo_id: "openai/whisper-base.en".into() },
         // Tiny
-        RegistryModel { name: "tiny".into(), filename: "ggml-tiny.bin".into(), size_mb: 78, family: "Tiny".into(), quantization: "Full".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin".into(), sha256: "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21".into() },
-        RegistryModel { name: "tiny.en".into(), filename: "ggml-tiny.en.bin".into(), size_mb: 78, family: "Tiny".into(), quantization: "Full".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin".into(), sha256: "921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f".into() },
-        RegistryModel { name: "tiny-q5_1".into(), filename: "ggml-tiny-q5_1.bin".into(), size_mb: 31, family: "Tiny".into(), quantization: "Q5_1".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny-q5_1.bin".into(), sha256: "818710568da3ca15689e31a743197b520007872ff9576237bda97bd1b469c3d7".into() },
-        RegistryModel { name: "tiny.en-q5_1".into(), filename: "ggml-tiny.en-q5_1.bin".into(), size_mb: 31, family: "Tiny".into(), quantization: "Q5_1".into(), url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en-q5_1.bin".into(), sha256: "c77c5766f1cef09b6b7d47f21b546cbddd4157886b3b5d6d4f709e91e66c7c2b".into() },
+        RegistryModel { name: "tiny".into(), filename: "whisper-tiny".into(), size_mb: 77, family: "Tiny".into(), quantization: "Full".into(), repo_id: "openai/whisper-tiny".into() },
+        RegistryModel { name: "tiny.en".into(), filename: "whisper-tiny-en".into(), size_mb: 77, family: "Tiny".into(), quantization: "Full".into(), repo_id: "openai/whisper-tiny.en".into() },
     ]
 }
 
-/// Get the models directory path
+/// Get the models directory path from config or use default
 fn get_models_dir() -> Result<std::path::PathBuf, String> {
+    // Try to get models dir from config file
+    if let Ok(config_path) = get_config_path() {
+        if let Ok(content) = std::fs::read_to_string(&config_path) {
+            if let Ok(config) = content.parse::<toml::Table>() {
+                if let Some(model) = config.get("model").and_then(|m| m.as_table()) {
+                    if let Some(path) = model.get("path").and_then(|p| p.as_str()) {
+                        if let Some(parent) = std::path::Path::new(path).parent() {
+                            return Ok(parent.to_path_buf());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback to default
     let data_dir = dirs::data_local_dir()
         .ok_or("Could not determine data directory")?;
     Ok(data_dir.join("mojovoice").join("models"))
@@ -989,13 +1006,25 @@ fn validate_model_path(models_dir: &std::path::Path, filename: &str) -> Result<s
     Ok(path)
 }
 
-/// Check if a model file is the currently active model
-fn is_active_model(active_path: &str, filename: &str) -> bool {
-    std::path::Path::new(active_path)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .map(|n| n == filename)
-        .unwrap_or(false)
+/// Check if a model directory is the currently active model
+fn is_active_model(active_path: &str, dirname: &str) -> bool {
+    let active = std::path::Path::new(active_path);
+    // Check if the active path ends with the directory name
+    // Handle both directory paths and file paths within directories
+    if let Some(name) = active.file_name().and_then(|n| n.to_str()) {
+        if name == dirname {
+            return true;
+        }
+    }
+    // Also check parent directory (in case active_path points to model.safetensors)
+    if let Some(parent) = active.parent() {
+        if let Some(name) = parent.file_name().and_then(|n| n.to_str()) {
+            if name == dirname {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// List all available models from the registry
@@ -1004,9 +1033,11 @@ pub async fn list_available_models() -> Result<Vec<RegistryModel>, String> {
     Ok(get_model_registry())
 }
 
-/// List all downloaded models
+/// List all downloaded models (safetensors directories)
 #[tauri::command]
 pub async fn list_downloaded_models() -> Result<Vec<DownloadedModel>, String> {
+    const REQUIRED_FILES: &[&str] = &["model.safetensors", "config.json", "tokenizer.json"];
+
     let models_dir = get_models_dir()?;
     let config = get_config().await?;
     let active_path = config.model.path;
@@ -1020,34 +1051,47 @@ pub async fn list_downloaded_models() -> Result<Vec<DownloadedModel>, String> {
         if let Ok(entries) = std::fs::read_dir(&models_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.is_file() {
-                    let filename = path.file_name()
+                // Look for directories that contain required model files
+                if path.is_dir() {
+                    let dirname = path.file_name()
                         .and_then(|n| n.to_str())
                         .unwrap_or("")
                         .to_string();
 
-                    // Match against registry to get metadata
-                    if let Some(reg_model) = registry.iter().find(|m| m.filename == filename) {
-                        downloaded.push(DownloadedModel {
-                            name: reg_model.name.clone(),
-                            filename: filename.clone(),
-                            path: path.to_string_lossy().to_string(),
-                            size_mb: reg_model.size_mb,
-                            is_active: is_active_model(&active_path, &filename),
-                        });
-                    } else {
-                        // Unknown model (not in registry) - still show it
-                        let size_mb = std::fs::metadata(&path)
-                            .map(|m| (m.len() / 1_000_000) as u32)
-                            .unwrap_or(0);
+                    // Skip temp download directories
+                    if dirname.ends_with(".download") {
+                        continue;
+                    }
 
-                        downloaded.push(DownloadedModel {
-                            name: filename.clone(),
-                            filename: filename.clone(),
-                            path: path.to_string_lossy().to_string(),
-                            size_mb,
-                            is_active: is_active_model(&active_path, &filename),
-                        });
+                    // Check if directory has required files (valid safetensors model)
+                    let has_required_files = REQUIRED_FILES.iter()
+                        .all(|f| path.join(f).exists());
+
+                    if has_required_files {
+                        // Match against registry to get metadata
+                        if let Some(reg_model) = registry.iter().find(|m| m.filename == dirname) {
+                            downloaded.push(DownloadedModel {
+                                name: reg_model.name.clone(),
+                                filename: dirname.clone(),
+                                path: path.to_string_lossy().to_string(),
+                                size_mb: reg_model.size_mb,
+                                is_active: is_active_model(&active_path, &dirname),
+                            });
+                        } else {
+                            // Unknown model (not in registry) - calculate size
+                            let size_mb = REQUIRED_FILES.iter()
+                                .filter_map(|f| std::fs::metadata(path.join(f)).ok())
+                                .map(|m| m.len())
+                                .sum::<u64>() / 1_000_000;
+
+                            downloaded.push(DownloadedModel {
+                                name: dirname.clone(),
+                                filename: dirname.clone(),
+                                path: path.to_string_lossy().to_string(),
+                                size_mb: size_mb as u32,
+                                is_active: is_active_model(&active_path, &dirname),
+                            });
+                        }
                     }
                 }
             }
@@ -1060,7 +1104,7 @@ pub async fn list_downloaded_models() -> Result<Vec<DownloadedModel>, String> {
     Ok(downloaded)
 }
 
-/// Delete a downloaded model
+/// Delete a downloaded model (directory)
 #[tauri::command]
 pub async fn delete_model(filename: String) -> Result<(), String> {
     let models_dir = get_models_dir()?;
@@ -1078,8 +1122,14 @@ pub async fn delete_model(filename: String) -> Result<(), String> {
         return Err("Cannot delete the currently active model. Switch to a different model first.".to_string());
     }
 
-    std::fs::remove_file(&path)
-        .map_err(|e| format!("Failed to delete model: {}", e))?;
+    // Delete directory (safetensors models are directories)
+    if path.is_dir() {
+        std::fs::remove_dir_all(&path)
+            .map_err(|e| format!("Failed to delete model directory: {}", e))?;
+    } else {
+        std::fs::remove_file(&path)
+            .map_err(|e| format!("Failed to delete model: {}", e))?;
+    }
 
     eprintln!("Deleted model: {}", path.display());
     Ok(())
@@ -1097,14 +1147,14 @@ pub async fn switch_model(filename: String) -> Result<(), String> {
         return Err("Model not found. Download it first.".to_string());
     }
 
-    // Update config with new model path
+    // Update config with new model path (directory path for safetensors)
     let mut config = get_config().await?;
     config.model.path = model_path.to_string_lossy().to_string();
 
-    // Try to infer model_id from filename
-    let model_id = infer_model_id(&filename);
-    if let Some(id) = model_id {
-        config.model.model_id = id;
+    // Look up repo_id from registry
+    let registry = get_model_registry();
+    if let Some(reg_model) = registry.iter().find(|m| m.filename == filename) {
+        config.model.model_id = reg_model.repo_id.clone();
     }
 
     save_config(config).await?;
@@ -1114,41 +1164,4 @@ pub async fn switch_model(filename: String) -> Result<(), String> {
 
     eprintln!("Switched to model: {}", filename);
     Ok(())
-}
-
-/// Infer HuggingFace model_id from filename
-fn infer_model_id(filename: &str) -> Option<String> {
-    let name = filename
-        .trim_start_matches("ggml-")
-        .trim_end_matches(".bin");
-
-    // Handle distil-whisper models
-    if name.starts_with("distil-") {
-        return Some(format!("distil-whisper/{}", name));
-    }
-
-    // Strip quantization suffix to get base model name
-    let base_name = name
-        .trim_end_matches("-q5_0")
-        .trim_end_matches("-q5_1")
-        .trim_end_matches("-q8_0");
-
-    // Map base model names to HuggingFace model IDs
-    let model_id = match base_name {
-        "large-v3-turbo" => "openai/whisper-large-v3-turbo",
-        "large-v3" => "openai/whisper-large-v3",
-        "large-v2" => "openai/whisper-large-v2",
-        "large-v1" => "openai/whisper-large",
-        "medium" => "openai/whisper-medium",
-        "medium.en" => "openai/whisper-medium.en",
-        "small" => "openai/whisper-small",
-        "small.en" => "openai/whisper-small.en",
-        "base" => "openai/whisper-base",
-        "base.en" => "openai/whisper-base.en",
-        "tiny" => "openai/whisper-tiny",
-        "tiny.en" => "openai/whisper-tiny.en",
-        _ => return None,
-    };
-
-    Some(model_id.to_string())
 }
