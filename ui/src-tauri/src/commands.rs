@@ -329,9 +329,6 @@ pub async fn cancel_download(model_name: String) -> Result<(), String> {
 pub async fn download_model(model_name: String, window: tauri::Window) -> Result<String, String> {
     use std::io::{Read, Write, BufWriter};
 
-    // Files required for safetensors models
-    const REQUIRED_FILES: &[&str] = &["model.safetensors", "config.json", "tokenizer.json"];
-
     // Find model in registry
     let registry = get_model_registry();
     let model = registry.iter()
@@ -345,6 +342,34 @@ pub async fn download_model(model_name: String, window: tauri::Window) -> Result
     if !model.repo_id.contains('/') || model.repo_id.starts_with('/') || model.repo_id.ends_with('/') {
         return Err(format!("Invalid repo_id format (must be org/model): {}", model.repo_id));
     }
+
+    // Determine required files and their source repos based on format
+    // For GGUF: model.gguf from repo_id, config/tokenizer from base_model_id
+    struct FileSource {
+        local_name: &'static str,  // What we save the file as locally
+        remote_name: String,        // What the file is called in the HuggingFace repo
+        repo_id: String,
+    }
+
+    let file_sources: Vec<FileSource> = if model.format == "gguf" {
+        let base_repo = model.base_model_id.clone()
+            .ok_or_else(|| format!("GGUF model '{}' missing base_model_id for config/tokenizer", model.name))?;
+        let gguf_remote = model.gguf_file.clone()
+            .ok_or_else(|| format!("GGUF model '{}' missing gguf_file (remote filename)", model.name))?;
+        vec![
+            FileSource { local_name: "model.gguf", remote_name: gguf_remote, repo_id: model.repo_id.clone() },
+            FileSource { local_name: "config.json", remote_name: "config.json".into(), repo_id: base_repo.clone() },
+            FileSource { local_name: "tokenizer.json", remote_name: "tokenizer.json".into(), repo_id: base_repo },
+        ]
+    } else {
+        vec![
+            FileSource { local_name: "model.safetensors", remote_name: "model.safetensors".into(), repo_id: model.repo_id.clone() },
+            FileSource { local_name: "config.json", remote_name: "config.json".into(), repo_id: model.repo_id.clone() },
+            FileSource { local_name: "tokenizer.json", remote_name: "tokenizer.json".into(), repo_id: model.repo_id.clone() },
+        ]
+    };
+
+    let required_files: Vec<&str> = file_sources.iter().map(|f| f.local_name).collect();
 
     // Register this download for cancellation tracking
     let _cancel_flag = register_download(&model_name);
@@ -364,13 +389,13 @@ pub async fn download_model(model_name: String, window: tauri::Window) -> Result
     std::fs::create_dir_all(&models_dir)
         .map_err(|e| format!("Failed to create models directory: {}", e))?;
 
-    // For safetensors, we download to a directory
+    // Both formats use a directory for consistency
     let dest_dir = models_dir.join(&model.filename);
     let temp_dir = models_dir.join(format!("{}.download", &model.filename));
 
     // Check if already downloaded and valid (all required files exist)
     if dest_dir.exists() && dest_dir.is_dir() {
-        let all_files_exist = REQUIRED_FILES.iter().all(|f| dest_dir.join(f).exists());
+        let all_files_exist = required_files.iter().all(|f| dest_dir.join(f).exists());
         if all_files_exist {
             eprintln!("Model already exists with all required files");
             let _ = window.emit("download-progress", DownloadProgress::complete(&model_name, 0));
@@ -386,7 +411,7 @@ pub async fn download_model(model_name: String, window: tauri::Window) -> Result
     std::fs::create_dir_all(&temp_dir)
         .map_err(|e| format!("Failed to create temp directory: {}", e))?;
 
-    eprintln!("Downloading {} ({} MB) from HuggingFace: {}", model.name, model.size_mb, model.repo_id);
+    eprintln!("Downloading {} [{}] ({} MB) from HuggingFace: {}", model.name, model.format, model.size_mb, model.repo_id);
 
     // Emit initial progress event with estimated size
     let estimated_bytes = model.size_mb as u64 * 1_000_000;
@@ -400,8 +425,8 @@ pub async fn download_model(model_name: String, window: tauri::Window) -> Result
         std::fs::remove_dir_all(temp).ok();
     };
 
-    // Download each required file
-    for (file_idx, filename) in REQUIRED_FILES.iter().enumerate() {
+    // Download each required file (each may come from a different repo)
+    for (file_idx, file_source) in file_sources.iter().enumerate() {
         // Check for cancellation before starting each file
         if is_download_cancelled(&model_name) {
             eprintln!("Download cancelled: {}", model_name);
@@ -412,15 +437,15 @@ pub async fn download_model(model_name: String, window: tauri::Window) -> Result
 
         let file_url = format!(
             "https://huggingface.co/{}/resolve/main/{}",
-            model.repo_id, filename
+            file_source.repo_id, file_source.remote_name
         );
-        eprintln!("Downloading file {}/{}: {}", file_idx + 1, REQUIRED_FILES.len(), filename);
+        eprintln!("Downloading file {}/{}: {} -> {} from {}", file_idx + 1, file_sources.len(), file_source.remote_name, file_source.local_name, file_source.repo_id);
 
         let response = ureq::get(&file_url)
             .call()
             .map_err(|e| {
                 cleanup_on_error(&temp_dir);
-                format!("Failed to download {}: {}", filename, e)
+                format!("Failed to download {}: {}", file_source.remote_name, e)
             })?;
 
         let _file_size = response
@@ -428,11 +453,11 @@ pub async fn download_model(model_name: String, window: tauri::Window) -> Result
             .and_then(|s| s.parse::<u64>().ok())
             .unwrap_or(0);
 
-        let dest_file = temp_dir.join(filename);
+        let dest_file = temp_dir.join(file_source.local_name);
         let file = std::fs::File::create(&dest_file)
             .map_err(|e| {
                 cleanup_on_error(&temp_dir);
-                format!("Failed to create file {}: {}", filename, e)
+                format!("Failed to create file {}: {}", file_source.local_name, e)
             })?;
         let mut writer = BufWriter::new(file);
 
@@ -501,7 +526,7 @@ pub async fn download_model(model_name: String, window: tauri::Window) -> Result
             return Err(format!("Flush error: {}", e));
         }
 
-        eprintln!("Downloaded {} ({} bytes)", filename, file_downloaded);
+        eprintln!("Downloaded {} as {} ({} bytes)", file_source.remote_name, file_source.local_name, file_downloaded);
     }
 
     // Verify all files exist
@@ -510,13 +535,25 @@ pub async fn download_model(model_name: String, window: tauri::Window) -> Result
         DownloadProgress::verifying(&model_name, total_downloaded, estimated_bytes),
     );
 
-    for filename in REQUIRED_FILES {
+    for filename in &required_files {
         if !temp_dir.join(filename).exists() {
             cleanup_on_error(&temp_dir);
             let error_msg = format!("Missing required file after download: {}", filename);
             let _ = window.emit("download-progress", DownloadProgress::error(&model_name, &error_msg));
             return Err(error_msg);
         }
+    }
+
+    // Validate GGUF format if applicable
+    if model.format == "gguf" {
+        let gguf_file = temp_dir.join("model.gguf");
+        if !is_valid_gguf(&gguf_file) {
+            cleanup_on_error(&temp_dir);
+            let error_msg = "Downloaded GGUF file is invalid or corrupted".to_string();
+            let _ = window.emit("download-progress", DownloadProgress::error(&model_name, &error_msg));
+            return Err(error_msg);
+        }
+        eprintln!("GGUF file validated successfully");
     }
 
     // Move temp directory to final location
@@ -535,6 +572,20 @@ pub async fn download_model(model_name: String, window: tauri::Window) -> Result
 
     eprintln!("Model saved to {}", dest_dir.display());
     Ok(dest_dir.to_string_lossy().to_string())
+}
+
+/// Validate that a file is a valid GGUF format by checking the magic bytes
+fn is_valid_gguf(path: &std::path::Path) -> bool {
+    use std::io::Read;
+    // GGUF files start with magic number "GGUF" (0x46554747 in little-endian)
+    if let Ok(mut file) = std::fs::File::open(path) {
+        let mut magic = [0u8; 4];
+        if file.read_exact(&mut magic).is_ok() {
+            // GGUF magic: "GGUF" = [0x47, 0x47, 0x55, 0x46]
+            return &magic == b"GGUF";
+        }
+    }
+    false
 }
 
 /// Verify SHA256 checksum of a file (kept for future use)
@@ -898,9 +949,17 @@ pub struct RegistryModel {
     pub size_mb: u32,
     pub family: String,
     pub quantization: String,
+    /// Model format: "safetensors" or "gguf"
+    pub format: String,
     /// HuggingFace model ID (e.g., "openai/whisper-large-v3-turbo")
     #[serde(skip_serializing)]
     pub repo_id: String,
+    /// For GGUF models: HuggingFace model ID to fetch config/tokenizer from
+    #[serde(skip_serializing)]
+    pub base_model_id: Option<String>,
+    /// For GGUF models: actual filename in the HuggingFace repo (e.g., "whisper-large-v3-q8_0.gguf")
+    #[serde(skip_serializing)]
+    pub gguf_file: Option<String>,
 }
 
 /// Model that's been downloaded locally
@@ -914,34 +973,56 @@ pub struct DownloadedModel {
     pub is_active: bool,
 }
 
-/// Embedded model registry - safetensors format from HuggingFace
+/// Embedded model registry - safetensors and GGUF formats from HuggingFace
 fn get_model_registry() -> Vec<RegistryModel> {
     vec![
+        // ===========================================
+        // SAFETENSORS MODELS (Full precision)
+        // ===========================================
+
         // Large V3 Turbo (Recommended - fast and accurate)
-        RegistryModel { name: "large-v3-turbo".into(), filename: "whisper-large-v3-turbo".into(), size_mb: 1550, family: "Large V3 Turbo".into(), quantization: "Full".into(), repo_id: "openai/whisper-large-v3-turbo".into() },
+        RegistryModel { name: "large-v3-turbo".into(), filename: "whisper-large-v3-turbo".into(), size_mb: 1550, family: "Large V3 Turbo".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-large-v3-turbo".into(), base_model_id: None, gguf_file: None },
         // Distil-Whisper (Faster, English-optimized)
-        RegistryModel { name: "distil-large-v3.5".into(), filename: "distil-large-v3.5".into(), size_mb: 1510, family: "Distil".into(), quantization: "Full".into(), repo_id: "distil-whisper/distil-large-v3.5".into() },
-        RegistryModel { name: "distil-large-v3".into(), filename: "distil-large-v3".into(), size_mb: 1510, family: "Distil".into(), quantization: "Full".into(), repo_id: "distil-whisper/distil-large-v3".into() },
-        RegistryModel { name: "distil-large-v2".into(), filename: "distil-large-v2".into(), size_mb: 1510, family: "Distil".into(), quantization: "Full".into(), repo_id: "distil-whisper/distil-large-v2".into() },
-        RegistryModel { name: "distil-small.en".into(), filename: "distil-small-en".into(), size_mb: 332, family: "Distil".into(), quantization: "Full".into(), repo_id: "distil-whisper/distil-small.en".into() },
+        RegistryModel { name: "distil-large-v3.5".into(), filename: "distil-large-v3.5".into(), size_mb: 1510, family: "Distil".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "distil-whisper/distil-large-v3.5".into(), base_model_id: None, gguf_file: None },
+        RegistryModel { name: "distil-large-v3".into(), filename: "distil-large-v3".into(), size_mb: 1510, family: "Distil".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "distil-whisper/distil-large-v3".into(), base_model_id: None, gguf_file: None },
+        RegistryModel { name: "distil-large-v2".into(), filename: "distil-large-v2".into(), size_mb: 1510, family: "Distil".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "distil-whisper/distil-large-v2".into(), base_model_id: None, gguf_file: None },
+        RegistryModel { name: "distil-small.en".into(), filename: "distil-small-en".into(), size_mb: 332, family: "Distil".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "distil-whisper/distil-small.en".into(), base_model_id: None, gguf_file: None },
         // Large V3
-        RegistryModel { name: "large-v3".into(), filename: "whisper-large-v3".into(), size_mb: 3094, family: "Large V3".into(), quantization: "Full".into(), repo_id: "openai/whisper-large-v3".into() },
+        RegistryModel { name: "large-v3".into(), filename: "whisper-large-v3".into(), size_mb: 3094, family: "Large V3".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-large-v3".into(), base_model_id: None, gguf_file: None },
         // Large V2
-        RegistryModel { name: "large-v2".into(), filename: "whisper-large-v2".into(), size_mb: 3094, family: "Large V2".into(), quantization: "Full".into(), repo_id: "openai/whisper-large-v2".into() },
+        RegistryModel { name: "large-v2".into(), filename: "whisper-large-v2".into(), size_mb: 3094, family: "Large V2".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-large-v2".into(), base_model_id: None, gguf_file: None },
         // Large V1
-        RegistryModel { name: "large".into(), filename: "whisper-large".into(), size_mb: 3094, family: "Large".into(), quantization: "Full".into(), repo_id: "openai/whisper-large".into() },
+        RegistryModel { name: "large".into(), filename: "whisper-large".into(), size_mb: 3094, family: "Large".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-large".into(), base_model_id: None, gguf_file: None },
         // Medium
-        RegistryModel { name: "medium".into(), filename: "whisper-medium".into(), size_mb: 1533, family: "Medium".into(), quantization: "Full".into(), repo_id: "openai/whisper-medium".into() },
-        RegistryModel { name: "medium.en".into(), filename: "whisper-medium-en".into(), size_mb: 1533, family: "Medium".into(), quantization: "Full".into(), repo_id: "openai/whisper-medium.en".into() },
+        RegistryModel { name: "medium".into(), filename: "whisper-medium".into(), size_mb: 1533, family: "Medium".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-medium".into(), base_model_id: None, gguf_file: None },
+        RegistryModel { name: "medium.en".into(), filename: "whisper-medium-en".into(), size_mb: 1533, family: "Medium".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-medium.en".into(), base_model_id: None, gguf_file: None },
         // Small
-        RegistryModel { name: "small".into(), filename: "whisper-small".into(), size_mb: 483, family: "Small".into(), quantization: "Full".into(), repo_id: "openai/whisper-small".into() },
-        RegistryModel { name: "small.en".into(), filename: "whisper-small-en".into(), size_mb: 483, family: "Small".into(), quantization: "Full".into(), repo_id: "openai/whisper-small.en".into() },
+        RegistryModel { name: "small".into(), filename: "whisper-small".into(), size_mb: 483, family: "Small".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-small".into(), base_model_id: None, gguf_file: None },
+        RegistryModel { name: "small.en".into(), filename: "whisper-small-en".into(), size_mb: 483, family: "Small".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-small.en".into(), base_model_id: None, gguf_file: None },
         // Base
-        RegistryModel { name: "base".into(), filename: "whisper-base".into(), size_mb: 145, family: "Base".into(), quantization: "Full".into(), repo_id: "openai/whisper-base".into() },
-        RegistryModel { name: "base.en".into(), filename: "whisper-base-en".into(), size_mb: 145, family: "Base".into(), quantization: "Full".into(), repo_id: "openai/whisper-base.en".into() },
+        RegistryModel { name: "base".into(), filename: "whisper-base".into(), size_mb: 145, family: "Base".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-base".into(), base_model_id: None, gguf_file: None },
+        RegistryModel { name: "base.en".into(), filename: "whisper-base-en".into(), size_mb: 145, family: "Base".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-base.en".into(), base_model_id: None, gguf_file: None },
         // Tiny
-        RegistryModel { name: "tiny".into(), filename: "whisper-tiny".into(), size_mb: 77, family: "Tiny".into(), quantization: "Full".into(), repo_id: "openai/whisper-tiny".into() },
-        RegistryModel { name: "tiny.en".into(), filename: "whisper-tiny-en".into(), size_mb: 77, family: "Tiny".into(), quantization: "Full".into(), repo_id: "openai/whisper-tiny.en".into() },
+        RegistryModel { name: "tiny".into(), filename: "whisper-tiny".into(), size_mb: 77, family: "Tiny".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-tiny".into(), base_model_id: None, gguf_file: None },
+        RegistryModel { name: "tiny.en".into(), filename: "whisper-tiny-en".into(), size_mb: 77, family: "Tiny".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-tiny.en".into(), base_model_id: None, gguf_file: None },
+
+        // ===========================================
+        // GGUF MODELS (Quantized - smaller & faster)
+        // ===========================================
+        // Note: These may or may not work with Candle's from_gguf() loader.
+        // The Demonthos model is confirmed to work; others are experimental.
+
+        // Large V3 Turbo GGUF variants
+        RegistryModel { name: "large-v3-turbo-q8".into(), filename: "whisper-large-v3-turbo-q8-gguf".into(), size_mb: 478, family: "Large V3 Turbo".into(), quantization: "Q8_0".into(), format: "gguf".into(), repo_id: "Demonthos/candle-quantized-whisper-large-v3-turbo".into(), base_model_id: Some("openai/whisper-large-v3-turbo".into()), gguf_file: Some("model.gguf".into()) },
+        RegistryModel { name: "large-v3-turbo-q4".into(), filename: "whisper-large-v3-turbo-q4-gguf".into(), size_mb: 528, family: "Large V3 Turbo".into(), quantization: "Q4_1".into(), format: "gguf".into(), repo_id: "xkeyC/whisper-large-v3-turbo-gguf".into(), base_model_id: Some("openai/whisper-large-v3-turbo".into()), gguf_file: Some("model_q4_1.gguf".into()) },
+        RegistryModel { name: "large-v3-turbo-q4k".into(), filename: "whisper-large-v3-turbo-q4k-gguf".into(), size_mb: 478, family: "Large V3 Turbo".into(), quantization: "Q4_K".into(), format: "gguf".into(), repo_id: "xkeyC/whisper-large-v3-turbo-gguf".into(), base_model_id: Some("openai/whisper-large-v3-turbo".into()), gguf_file: Some("model_q4_k.gguf".into()) },
+
+        // Large V3 GGUF variants
+        RegistryModel { name: "large-v3-q8".into(), filename: "whisper-large-v3-q8-gguf".into(), size_mb: 1660, family: "Large V3".into(), quantization: "Q8_0".into(), format: "gguf".into(), repo_id: "vonjack/whisper-large-v3-gguf".into(), base_model_id: Some("openai/whisper-large-v3".into()), gguf_file: Some("whisper-large-v3-q8_0.gguf".into()) },
+        RegistryModel { name: "large-v3-f16".into(), filename: "whisper-large-v3-f16-gguf".into(), size_mb: 3100, family: "Large V3".into(), quantization: "F16".into(), format: "gguf".into(), repo_id: "vonjack/whisper-large-v3-gguf".into(), base_model_id: Some("openai/whisper-large-v3".into()), gguf_file: Some("whisper-large-v3-f16.gguf".into()) },
+
+        // Medium GGUF variants
+        RegistryModel { name: "medium-q4k".into(), filename: "whisper-medium-q4k-gguf".into(), size_mb: 446, family: "Medium".into(), quantization: "Q4_K".into(), format: "gguf".into(), repo_id: "OllmOne/whisper-medium-GGUF".into(), base_model_id: Some("openai/whisper-medium".into()), gguf_file: Some("model-q4k.gguf".into()) },
     ]
 }
 
@@ -1057,8 +1138,6 @@ pub async fn list_available_models() -> Result<Vec<RegistryModel>, String> {
 /// List all downloaded models (safetensors directories)
 #[tauri::command]
 pub async fn list_downloaded_models() -> Result<Vec<DownloadedModel>, String> {
-    const REQUIRED_FILES: &[&str] = &["model.safetensors", "config.json", "tokenizer.json"];
-
     let models_dir = get_models_dir()?;
     let config = get_config().await?;
     let active_path = config.model.path;
@@ -1084,11 +1163,17 @@ pub async fn list_downloaded_models() -> Result<Vec<DownloadedModel>, String> {
                         continue;
                     }
 
-                    // Check if directory has required files (valid safetensors model)
-                    let has_required_files = REQUIRED_FILES.iter()
-                        .all(|f| path.join(f).exists());
+                    // Check if directory has required files for either format
+                    // Safetensors: model.safetensors + config.json + tokenizer.json
+                    // GGUF: model.gguf + config.json + tokenizer.json
+                    let is_safetensors = path.join("model.safetensors").exists()
+                        && path.join("config.json").exists()
+                        && path.join("tokenizer.json").exists();
+                    let is_gguf = path.join("model.gguf").exists()
+                        && path.join("config.json").exists()
+                        && path.join("tokenizer.json").exists();
 
-                    if has_required_files {
+                    if is_safetensors || is_gguf {
                         // Match against registry to get metadata
                         if let Some(reg_model) = registry.iter().find(|m| m.filename == dirname) {
                             downloaded.push(DownloadedModel {
@@ -1100,7 +1185,13 @@ pub async fn list_downloaded_models() -> Result<Vec<DownloadedModel>, String> {
                             });
                         } else {
                             // Unknown model (not in registry) - calculate size
-                            let size_result: Result<u64, _> = REQUIRED_FILES.iter()
+                            let model_files: Vec<&str> = if is_gguf {
+                                vec!["model.gguf", "config.json", "tokenizer.json"]
+                            } else {
+                                vec!["model.safetensors", "config.json", "tokenizer.json"]
+                            };
+
+                            let size_result: Result<u64, _> = model_files.iter()
                                 .map(|f| std::fs::metadata(path.join(f)).map(|m| m.len()))
                                 .collect::<Result<Vec<_>, _>>()
                                 .map(|sizes| sizes.iter().sum());

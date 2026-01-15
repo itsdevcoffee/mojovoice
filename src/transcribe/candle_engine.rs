@@ -3,12 +3,26 @@ use candle_core::{Device, IndexOp, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::models::whisper::{self, Config};
 use hf_hub::{Repo, api::sync::Api};
+use std::io::Read;
 use std::path::Path;
 use tokenizers::Tokenizer;
 use tracing::{debug, info, warn};
 
 use super::mojo_ffi;
 use crate::transcribe::Transcriber;
+
+/// Validate that a file is a valid GGUF format by checking the magic bytes
+fn is_valid_gguf(path: &Path) -> bool {
+    // GGUF files start with magic number "GGUF" (0x46554747 in little-endian)
+    if let Ok(mut file) = std::fs::File::open(path) {
+        let mut magic = [0u8; 4];
+        if file.read_exact(&mut magic).is_ok() {
+            // GGUF magic: "GGUF" = [0x47, 0x47, 0x55, 0x46]
+            return &magic == b"GGUF";
+        }
+    }
+    false
+}
 
 // Temperature fallback constants (from official Candle Whisper example)
 const TEMPERATURES: [f64; 6] = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0];
@@ -86,34 +100,89 @@ impl CandleEngine {
         let device = Self::get_device()?;
         info!("Using device: {:?}", device);
 
-        // Check if model_id is a local file path
-        let is_local_file = Path::new(model_id).exists();
-        let is_quantized =
-            is_local_file && (model_id.ends_with(".gguf") || model_id.ends_with(".bin"));
+        // Check if model_id is a local path (file or directory)
+        let model_path = Path::new(model_id);
+        let is_local = model_path.exists();
 
-        let (config, tokenizer, model) = if is_local_file {
-            info!("Loading model from local file: {}", model_id);
+        // Detect model format:
+        // 1. Direct GGUF file: /path/to/model.gguf
+        // 2. Directory with GGUF: /path/to/model_dir/model.gguf
+        // 3. Directory with safetensors: /path/to/model_dir/model.safetensors
+        let is_direct_gguf = is_local && (model_id.ends_with(".gguf") || model_id.ends_with(".bin"));
+        let is_dir_gguf = is_local && model_path.is_dir() && model_path.join("model.gguf").exists();
+        let is_quantized = is_direct_gguf || is_dir_gguf;
+
+        let (config, tokenizer, model) = if is_local {
+            info!("Loading model from local path: {}", model_id);
 
             if is_quantized {
-                // Load GGUF quantized model from local file
-                info!("Detected quantized model (GGUF/GGML format)");
+                // Load GGUF quantized model
+                info!("Detected quantized model (GGUF format)");
 
-                // For quantized models, we need config and tokenizer from HuggingFace
-                // Use a base model for config/tokenizer
-                let api = Api::new()?;
-                let repo = api.repo(Repo::model("openai/whisper-large-v3-turbo".to_string()));
+                // Determine the actual GGUF file path
+                let gguf_path = if is_direct_gguf {
+                    model_path.to_path_buf()
+                } else {
+                    model_path.join("model.gguf")
+                };
 
-                let config_filename = repo.get("config.json")?;
-                let tokenizer_filename = repo.get("tokenizer.json")?;
+                // Validate GGUF file format
+                if !is_valid_gguf(&gguf_path) {
+                    anyhow::bail!(
+                        "Invalid or corrupted GGUF file: {:?}. File may be a different format (GGML, safetensors) or corrupted.",
+                        gguf_path
+                    );
+                }
 
-                let config: Config =
-                    serde_json::from_str(&std::fs::read_to_string(config_filename)?)?;
-                let tokenizer = Tokenizer::from_file(tokenizer_filename)
-                    .map_err(|e| anyhow::anyhow!("Failed to load tokenizer: {}", e))?;
+                // For quantized models, we need config and tokenizer
+                // Try local files first (if downloaded via registry), fall back to HuggingFace
+                let (config, tokenizer) = if is_dir_gguf {
+                    let config_path = model_path.join("config.json");
+                    let tokenizer_path = model_path.join("tokenizer.json");
+
+                    if config_path.exists() && tokenizer_path.exists() {
+                        info!("Using local config and tokenizer");
+                        let config: Config = serde_json::from_str(&std::fs::read_to_string(&config_path)?)?;
+                        let tokenizer = Tokenizer::from_file(&tokenizer_path)
+                            .map_err(|e| anyhow::anyhow!("Failed to load tokenizer: {}", e))?;
+                        (config, tokenizer)
+                    } else {
+                        // Fall back to HuggingFace for config/tokenizer
+                        // WARNING: Using large-v3-turbo config - may not match your GGUF model!
+                        warn!(
+                            "Config/tokenizer not found locally - falling back to openai/whisper-large-v3-turbo. \
+                             If your GGUF model is not based on large-v3-turbo, this may cause issues. \
+                             Consider downloading the model via the UI to get matching config files."
+                        );
+                        let api = Api::new()?;
+                        let repo = api.repo(Repo::model("openai/whisper-large-v3-turbo".to_string()));
+                        let config_filename = repo.get("config.json")?;
+                        let tokenizer_filename = repo.get("tokenizer.json")?;
+                        let config: Config = serde_json::from_str(&std::fs::read_to_string(config_filename)?)?;
+                        let tokenizer = Tokenizer::from_file(tokenizer_filename)
+                            .map_err(|e| anyhow::anyhow!("Failed to load tokenizer: {}", e))?;
+                        (config, tokenizer)
+                    }
+                } else {
+                    // Direct GGUF file - must fetch from HuggingFace
+                    // WARNING: Using large-v3-turbo config - may not match your GGUF model!
+                    warn!(
+                        "Direct GGUF file without local config - falling back to openai/whisper-large-v3-turbo. \
+                         If your GGUF model is not based on large-v3-turbo, this may cause issues."
+                    );
+                    let api = Api::new()?;
+                    let repo = api.repo(Repo::model("openai/whisper-large-v3-turbo".to_string()));
+                    let config_filename = repo.get("config.json")?;
+                    let tokenizer_filename = repo.get("tokenizer.json")?;
+                    let config: Config = serde_json::from_str(&std::fs::read_to_string(config_filename)?)?;
+                    let tokenizer = Tokenizer::from_file(tokenizer_filename)
+                        .map_err(|e| anyhow::anyhow!("Failed to load tokenizer: {}", e))?;
+                    (config, tokenizer)
+                };
 
                 // Load quantized weights
                 let vb = candle_transformers::quantized_var_builder::VarBuilder::from_gguf(
-                    model_id, &device,
+                    &gguf_path, &device,
                 )?;
                 let model = Model::Quantized(whisper::quantized_model::Whisper::load(
                     &vb,
@@ -125,7 +194,6 @@ impl CandleEngine {
                 // Load safetensors from local directory
                 info!("Loading local safetensors model");
 
-                let model_path = Path::new(model_id);
                 let config_path = model_path.join("config.json");
                 let tokenizer_path = model_path.join("tokenizer.json");
                 let weights_path = model_path.join("model.safetensors");
