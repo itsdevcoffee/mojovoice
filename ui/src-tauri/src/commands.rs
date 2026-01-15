@@ -994,17 +994,17 @@ fn get_model_registry() -> Vec<RegistryModel> {
         // Large V1
         RegistryModel { name: "large".into(), filename: "whisper-large".into(), size_mb: 3094, family: "Large".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-large".into(), base_model_id: None, gguf_file: None },
         // Medium
-        RegistryModel { name: "medium".into(), filename: "whisper-medium".into(), size_mb: 1533, family: "Medium".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-medium".into(), base_model_id: None, gguf_file: None },
-        RegistryModel { name: "medium.en".into(), filename: "whisper-medium-en".into(), size_mb: 1533, family: "Medium".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-medium.en".into(), base_model_id: None, gguf_file: None },
+        RegistryModel { name: "medium".into(), filename: "whisper-medium".into(), size_mb: 3090, family: "Medium".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-medium".into(), base_model_id: None, gguf_file: None },
+        RegistryModel { name: "medium.en".into(), filename: "whisper-medium-en".into(), size_mb: 3090, family: "Medium".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-medium.en".into(), base_model_id: None, gguf_file: None },
         // Small
-        RegistryModel { name: "small".into(), filename: "whisper-small".into(), size_mb: 483, family: "Small".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-small".into(), base_model_id: None, gguf_file: None },
-        RegistryModel { name: "small.en".into(), filename: "whisper-small-en".into(), size_mb: 483, family: "Small".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-small.en".into(), base_model_id: None, gguf_file: None },
+        RegistryModel { name: "small".into(), filename: "whisper-small".into(), size_mb: 970, family: "Small".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-small".into(), base_model_id: None, gguf_file: None },
+        RegistryModel { name: "small.en".into(), filename: "whisper-small-en".into(), size_mb: 970, family: "Small".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-small.en".into(), base_model_id: None, gguf_file: None },
         // Base
-        RegistryModel { name: "base".into(), filename: "whisper-base".into(), size_mb: 145, family: "Base".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-base".into(), base_model_id: None, gguf_file: None },
-        RegistryModel { name: "base.en".into(), filename: "whisper-base-en".into(), size_mb: 145, family: "Base".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-base.en".into(), base_model_id: None, gguf_file: None },
+        RegistryModel { name: "base".into(), filename: "whisper-base".into(), size_mb: 293, family: "Base".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-base".into(), base_model_id: None, gguf_file: None },
+        RegistryModel { name: "base.en".into(), filename: "whisper-base-en".into(), size_mb: 293, family: "Base".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-base.en".into(), base_model_id: None, gguf_file: None },
         // Tiny
-        RegistryModel { name: "tiny".into(), filename: "whisper-tiny".into(), size_mb: 77, family: "Tiny".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-tiny".into(), base_model_id: None, gguf_file: None },
-        RegistryModel { name: "tiny.en".into(), filename: "whisper-tiny-en".into(), size_mb: 77, family: "Tiny".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-tiny.en".into(), base_model_id: None, gguf_file: None },
+        RegistryModel { name: "tiny".into(), filename: "whisper-tiny".into(), size_mb: 154, family: "Tiny".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-tiny".into(), base_model_id: None, gguf_file: None },
+        RegistryModel { name: "tiny.en".into(), filename: "whisper-tiny-en".into(), size_mb: 154, family: "Tiny".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-tiny.en".into(), base_model_id: None, gguf_file: None },
 
         // ===========================================
         // GGUF MODELS (Quantized - smaller & faster)
