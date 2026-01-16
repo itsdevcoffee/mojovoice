@@ -1,0 +1,344 @@
+/* Dev Coffee Brand Style - Benchmark Report */
+
+:root {
+    --bg-primary: #030303;
+    --bg-card: rgba(255, 255, 255, 0.02);
+    --bg-card-hover: rgba(255, 255, 255, 0.04);
+    --text-primary: rgba(255, 255, 255, 0.9);
+    --text-secondary: rgba(255, 255, 255, 0.5);
+    --text-muted: rgba(255, 255, 255, 0.3);
+    --accent: #10b981;
+    --accent-glow: rgba(16, 185, 129, 0.15);
+    --warning: #f59e0b;
+    --error: #ef4444;
+    --border: rgba(255, 255, 255, 0.08);
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-sans: 'Inter', sans-serif;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-sans);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    line-height: 1.6;
+    position: relative;
+    overflow-x: hidden;
+}
+
+/* Retro effects */
+.scanlines {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.03) 0px,
+        rgba(0, 0, 0, 0.03) 1px,
+        transparent 1px,
+        transparent 2px
+    );
+    z-index: 1000;
+}
+
+.grid-bg {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    background-image:
+        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    background-size: 50px 50px;
+    z-index: -1;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 2rem;
+    position: relative;
+    z-index: 1;
+}
+
+/* Typography */
+.mono {
+    font-family: var(--font-mono);
+}
+
+.label {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    display: block;
+    margin-bottom: 0.25rem;
+}
+
+.accent { color: var(--accent); }
+.warning { color: var(--warning); }
+.error { color: var(--error); }
+
+/* Header */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 2rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.header-title h1 {
+    font-family: var(--font-mono);
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-top: 0.5rem;
+}
+
+.header-meta {
+    display: flex;
+    gap: 2rem;
+}
+
+.meta-item {
+    text-align: right;
+}
+
+.meta-item .value {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+/* Cards with bracket frames */
+.card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 1.5rem;
+    position: relative;
+    transition: background 0.2s ease;
+}
+
+.card:hover {
+    background: var(--bg-card-hover);
+}
+
+.card.wide {
+    grid-column: 1 / -1;
+}
+
+.card-bracket {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-color: var(--accent);
+    border-style: solid;
+    border-width: 0;
+    opacity: 0.5;
+}
+
+.card-bracket.tl { top: -1px; left: -1px; border-top-width: 2px; border-left-width: 2px; }
+.card-bracket.tr { top: -1px; right: -1px; border-top-width: 2px; border-right-width: 2px; }
+.card-bracket.bl { bottom: -1px; left: -1px; border-bottom-width: 2px; border-left-width: 2px; }
+.card-bracket.br { bottom: -1px; right: -1px; border-bottom-width: 2px; border-right-width: 2px; }
+
+.card:hover .card-bracket {
+    opacity: 1;
+}
+
+/* Summary grid */
+.summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+@media (max-width: 1200px) {
+    .summary-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .summary-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.metric-large {
+    margin: 1rem 0;
+}
+
+.metric-large .value {
+    font-family: var(--font-mono);
+    font-size: 2.5rem;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.metric-large .unit {
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-left: 0.5rem;
+}
+
+.metric-details {
+    display: flex;
+    gap: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+}
+
+.detail {
+    display: flex;
+    flex-direction: column;
+}
+
+.detail .label {
+    font-size: 0.6rem;
+    margin-bottom: 0.125rem;
+}
+
+.detail .value {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+/* Rate groups */
+.rate-groups {
+    display: flex;
+    gap: 2rem;
+    margin-top: 1rem;
+}
+
+.rate-group {
+    flex: 1;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border);
+}
+
+.rate-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.rate-value {
+    font-size: 1.1rem;
+    color: var(--text-primary);
+}
+
+.rate-count {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.rate-metrics {
+    display: flex;
+    gap: 1.5rem;
+}
+
+.rate-metric {
+    display: flex;
+    flex-direction: column;
+}
+
+.rate-metric .label {
+    font-size: 0.6rem;
+}
+
+.rate-metric .value {
+    font-size: 1rem;
+}
+
+/* Tables */
+.samples-section,
+.history-section,
+.charts-section {
+    margin-bottom: 2rem;
+}
+
+.samples-table,
+.history-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+    font-size: 0.85rem;
+}
+
+.samples-table th,
+.history-table th {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-align: left;
+    padding: 0.75rem 1rem;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+}
+
+.samples-table td,
+.history-table td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-secondary);
+}
+
+.samples-table tr:hover td,
+.history-table tr:hover td {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* Footer */
+.footer {
+    text-align: center;
+    padding: 2rem 0;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    border-top: 1px solid var(--border);
+}
+
+/* Accent glow effect */
+.accent {
+    text-shadow: 0 0 20px var(--accent-glow);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.15);
+}

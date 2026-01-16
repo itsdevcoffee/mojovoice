@@ -1,4 +1,5 @@
 pub mod audio;
+pub mod benchmark;
 pub mod config;
 pub mod daemon;
 pub mod error;

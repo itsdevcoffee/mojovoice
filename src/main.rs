@@ -6,6 +6,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 mod audio;
+mod benchmark;
 mod commands;
 mod config;
 mod daemon;
@@ -136,6 +137,25 @@ enum Commands {
         #[arg(short, long)]
         model: Option<String>,
     },
+
+    /// Benchmark the current model against test audio samples
+    Benchmark {
+        /// Custom samples directory (default: assets/audio/samples/)
+        #[arg(short, long)]
+        samples_dir: Option<std::path::PathBuf>,
+
+        /// Output directory for results (default: benchmarks/)
+        #[arg(short, long)]
+        output_dir: Option<std::path::PathBuf>,
+
+        /// Print results to stdout only (no file output)
+        #[arg(long)]
+        stdout_only: bool,
+
+        /// Generate HTML report from all benchmark results
+        #[arg(long)]
+        report: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -191,6 +211,9 @@ fn main() -> Result<()> {
         Commands::Daemon { command } => cmd_daemon(command)?,
         Commands::EnigoTest { text, clipboard } => commands::enigo_test(&text, clipboard)?,
         Commands::TranscribeFile { path, model } => cmd_transcribe_file(&path, model)?,
+        Commands::Benchmark { samples_dir, output_dir, stdout_only, report } => {
+            cmd_benchmark(samples_dir, output_dir, stdout_only, report)?
+        }
     }
 
     Ok(())
@@ -786,6 +809,34 @@ fn cmd_doctor() -> Result<()> {
 
     println!();
     Ok(())
+}
+
+/// Run benchmark on test audio samples
+fn cmd_benchmark(
+    samples_dir: Option<std::path::PathBuf>,
+    output_dir: Option<std::path::PathBuf>,
+    stdout_only: bool,
+    report: bool,
+) -> Result<()> {
+    // Default paths relative to current working directory
+    let samples_dir = samples_dir.unwrap_or_else(|| std::path::PathBuf::from("assets/audio/samples"));
+    let output_dir = output_dir.unwrap_or_else(|| std::path::PathBuf::from("benchmarks"));
+
+    // If --report flag is set, generate HTML report from existing results
+    if report {
+        let report_path = benchmark::report::generate_report(&output_dir)?;
+        println!("Report generated: {}", report_path.display());
+        return Ok(());
+    }
+
+    if !samples_dir.exists() {
+        anyhow::bail!(
+            "Samples directory not found: {}\nExpected to find test audio files here.",
+            samples_dir.display()
+        );
+    }
+
+    benchmark::run_benchmark(&samples_dir, &output_dir, stdout_only)
 }
 
 /// Transcribe a WAV file via daemon (for testing/debugging)
