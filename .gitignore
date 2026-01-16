@@ -25,3 +25,6 @@ coverage/
 
 docs/tmp/
 artifacts/
+
+# Benchmark output (machine-specific results)
+benchmarks/
