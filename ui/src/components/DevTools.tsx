@@ -347,25 +347,17 @@ function DiagnosticsTab() {
   }, []);
 
   const formatUptime = (secs: number | null | undefined): string => {
-    if (secs === null || secs === undefined) return 'N/A';
+    if (secs == null) return 'N/A';
     const hours = Math.floor(secs / 3600);
     const minutes = Math.floor((secs % 3600) / 60);
-    if (hours > 0) {
-      return `${hours}h ${minutes}m`;
-    }
-    return `${minutes}m`;
+    return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
   };
 
-  const formatRam = (gb: number): string => {
-    return `${gb.toFixed(1)} GB`;
-  };
+  const formatRam = (gb: number): string => `${gb.toFixed(1)} GB`;
 
   const formatVram = (mb: number | null): string => {
     if (mb === null) return 'N/A';
-    if (mb >= 1024) {
-      return `${(mb / 1024).toFixed(1)} GB`;
-    }
-    return `${mb} MB`;
+    return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb} MB`;
   };
 
   const getBackend = (): string => {

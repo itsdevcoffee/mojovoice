@@ -153,15 +153,11 @@ fn detect_macos_gpu() -> Option<GpuInfo> {
             }
         });
 
-    if name.is_some() {
-        Some(GpuInfo {
-            available: true,
-            name,
-            vram_mb,
-        })
-    } else {
-        None
-    }
+    name.map(|n| GpuInfo {
+        available: true,
+        name: Some(n),
+        vram_mb,
+    })
 }
 
 /// Check if the mojovoice daemon is running
@@ -1037,13 +1033,11 @@ pub async fn restart_daemon() -> Result<(), String> {
 pub async fn validate_path(path: String) -> Result<PathValidation, String> {
     // Expand ~ to home directory
     let expanded_path = if path.starts_with('~') {
-        if let Ok(home) = std::env::var("HOME") {
-            path.replacen('~', &home, 1)
-        } else {
-            path.clone()
-        }
+        std::env::var("HOME")
+            .map(|home| path.replacen('~', &home, 1))
+            .unwrap_or_else(|_| path.clone())
     } else {
-        path.clone()
+        path
     };
 
     let path_obj = std::path::Path::new(&expanded_path);
@@ -1054,7 +1048,7 @@ pub async fn validate_path(path: String) -> Result<PathValidation, String> {
             exists: false,
             is_file: false,
             is_directory: false,
-            expanded_path: expanded_path.clone(),
+            expanded_path,
             message: "Path does not exist".to_string(),
         });
     }
@@ -1062,19 +1056,21 @@ pub async fn validate_path(path: String) -> Result<PathValidation, String> {
     let is_file = path_obj.is_file();
     let is_directory = path_obj.is_dir();
 
+    let message = if is_file {
+        "Valid file path"
+    } else if is_directory {
+        "Valid directory path"
+    } else {
+        "Path exists"
+    };
+
     Ok(PathValidation {
         valid: true,
         exists: true,
         is_file,
         is_directory,
-        expanded_path: expanded_path.clone(),
-        message: if is_file {
-            "Valid file path".to_string()
-        } else if is_directory {
-            "Valid directory path".to_string()
-        } else {
-            "Path exists".to_string()
-        },
+        expanded_path,
+        message: message.to_string(),
     })
 }
 
