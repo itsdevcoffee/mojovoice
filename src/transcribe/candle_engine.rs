@@ -79,7 +79,8 @@ pub struct CandleEngine {
     language: String,
     initial_prompt: Option<String>,
     suppress_tokens: Tensor,
-    num_mel_bins: usize, // 128 for large-v3/turbo, 80 for others
+    num_mel_bins: usize,    // 128 for large-v3/turbo, 80 for others
+    is_english_only: bool,  // True for .en models (skip lang/task tokens)
 }
 
 impl CandleEngine {
@@ -263,6 +264,20 @@ impl CandleEngine {
 
         info!("Model loaded successfully");
 
+        // Detect English-only models (they use a simpler token sequence)
+        // English-only models have forced_decoder_ids that skip language/task tokens
+        // They expect: <|sot|><|notimestamps|>... instead of <|sot|><|lang|><|task|><|notimestamps|>...
+        let is_english_only = model_id.contains(".en")
+            || model_id.ends_with("-en")
+            || model_id.contains("whisper-tiny-en")
+            || model_id.contains("whisper-base-en")
+            || model_id.contains("whisper-small-en")
+            || model_id.contains("whisper-medium-en");
+
+        if is_english_only {
+            info!("Detected English-only model - using simplified token sequence");
+        }
+
         // Build suppress tokens mask to prevent unwanted tokens (like 199)
         let vocab_size = tokenizer.get_vocab_size(true);
         let no_ts_token = tokenizer
@@ -298,6 +313,7 @@ impl CandleEngine {
             initial_prompt,
             suppress_tokens,
             num_mel_bins: config.num_mel_bins,
+            is_english_only,
         })
     }
 
@@ -412,19 +428,32 @@ impl CandleEngine {
             audio_features.dim(2)?
         );
 
-        // Build initial token sequence: <|sot|><|lang|><|transcribe|><|notimestamps|>[prompt]
-        let mut current_tokens = vec![
-            special_tokens.sot_token,
-            special_tokens.language_token,
-            special_tokens.transcribe_token,
-            special_tokens.no_timestamps_token,
-        ];
+        // Build initial token sequence based on model type:
+        // - Multilingual: <|sot|><|lang|><|transcribe|><|notimestamps|>[prompt]
+        // - English-only: <|sot|><|notimestamps|>[prompt]
+        let mut current_tokens = if self.is_english_only {
+            // English-only models expect simplified sequence (no language/task tokens)
+            vec![
+                special_tokens.sot_token,
+                special_tokens.no_timestamps_token,
+            ]
+        } else {
+            // Multilingual models need full sequence
+            vec![
+                special_tokens.sot_token,
+                special_tokens.language_token,
+                special_tokens.transcribe_token,
+                special_tokens.no_timestamps_token,
+            ]
+        };
+        let num_special = current_tokens.len();
         current_tokens.extend_from_slice(&prompt_tokens);
         debug!(
-            "Initial tokens: {} special + {} prompt = {} total",
-            4,
+            "Initial tokens: {} special + {} prompt = {} total (english_only={})",
+            num_special,
             prompt_tokens.len(),
-            current_tokens.len()
+            current_tokens.len(),
+            self.is_english_only
         );
 
         // Greedy decoding loop with quality metrics

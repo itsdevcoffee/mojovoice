@@ -254,12 +254,13 @@ fn render_html(results: &[(String, BenchmarkResult)]) -> String {
                 <div class="card-bracket tr"></div>
                 <div class="card-bracket bl"></div>
                 <div class="card-bracket br"></div>
-                <span class="label">SAMPLE RESULTS</span>
+                <span class="label">SAMPLE RESULTS ({total_samples} SAMPLES, {total_audio_duration:.1}s AUDIO, {total_transcription_time:.2}s PROCESSING)</span>
                 <table class="samples-table">
                     <thead>
                         <tr>
                             <th>FILE</th>
                             <th>DURATION</th>
+                            <th>TIME</th>
                             <th>RATE</th>
                             <th>RTF</th>
                             <th>WER</th>
@@ -349,6 +350,8 @@ fn render_html(results: &[(String, BenchmarkResult)]) -> String {
         samples_rows_html = render_sample_rows(latest),
         history_rows_html = render_history_rows(results),
         total_runs = results.len(),
+        total_audio_duration = latest.aggregate_stats.total_audio_duration_secs,
+        total_transcription_time = latest.aggregate_stats.total_transcription_time_secs,
     )
 }
 
@@ -423,6 +426,7 @@ fn render_sample_rows(result: &BenchmarkResult) -> String {
                 r#"<tr>
                     <td class="mono">{file}</td>
                     <td class="mono">{duration:.1}s</td>
+                    <td class="mono">{time:.3}s</td>
                     <td class="mono">{rate}</td>
                     <td class="mono">{rtf:.4}</td>
                     <td class="{wer_class}">{wer:.1}%</td>
@@ -431,6 +435,7 @@ fn render_sample_rows(result: &BenchmarkResult) -> String {
                 </tr>"#,
                 file = sample.file,
                 duration = sample.duration_secs,
+                time = sample.transcription_time_secs,
                 rate = sample.sample_rate,
                 rtf = sample.real_time_factor,
                 wer = sample.word_error_rate * 100.0,
