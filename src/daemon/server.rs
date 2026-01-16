@@ -103,18 +103,16 @@ impl DaemonServer {
         // Detect GPU status for status reporting
         let (gpu_enabled, gpu_name) = Self::detect_gpu();
 
-        // Extract model name from config (use model_id or path basename)
-        let model_name = if !config.model.model_id.is_empty() {
-            config.model.model_id.clone()
-        } else {
-            config
-                .model
-                .path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("unknown")
-                .to_string()
-        };
+        // Extract model name from path basename (unique per model variant)
+        // We use path instead of model_id because model_id is the HuggingFace repo
+        // which may be shared by multiple quantization variants (e.g., Q4, Q4K, Q8)
+        let model_name = config
+            .model
+            .path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown")
+            .to_string();
 
         Ok(Self {
             transcriber: Arc::new(Mutex::new(Box::new(transcriber))),
