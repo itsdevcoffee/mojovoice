@@ -39,6 +39,9 @@ pub enum DaemonResponse {
         model_name: String,
         gpu_enabled: bool,
         gpu_name: String,
+        /// Optional for backwards compatibility with older daemons
+        #[serde(default)]
+        uptime_secs: Option<u64>,
     },
 }
 
@@ -109,6 +112,7 @@ pub fn get_status() -> Result<DaemonStatusInfo> {
             model_loaded: false,
             gpu_enabled: false,
             gpu_name: None,
+            uptime_secs: None,
         });
     }
 
@@ -118,12 +122,14 @@ pub fn get_status() -> Result<DaemonStatusInfo> {
         DaemonResponse::Status {
             gpu_enabled,
             gpu_name,
+            uptime_secs,
             ..
         } => Ok(DaemonStatusInfo {
             running: true,
             model_loaded: true,
             gpu_enabled,
             gpu_name: Some(gpu_name),
+            uptime_secs, // Already Option<u64> for backwards compatibility
         }),
         DaemonResponse::Error { message } => {
             anyhow::bail!("Failed to get daemon status: {}", message)
@@ -133,9 +139,11 @@ pub fn get_status() -> Result<DaemonStatusInfo> {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DaemonStatusInfo {
     pub running: bool,
     pub model_loaded: bool,
     pub gpu_enabled: bool,
     pub gpu_name: Option<String>,
+    pub uptime_secs: Option<u64>,
 }

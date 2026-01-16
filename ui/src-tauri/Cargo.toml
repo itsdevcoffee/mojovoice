@@ -24,6 +24,10 @@ num_cpus = "1.16"
 dirs = "5"
 toml = "0.8"
 
+# System info
+sysinfo = "0.31"
+shell-words = "1.1"
+
 # Model downloads
 ureq = "2.9"
 sha2 = "0.10"

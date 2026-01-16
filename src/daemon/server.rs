@@ -78,6 +78,7 @@ struct DaemonServer {
     model_name: String,
     gpu_enabled: bool,
     gpu_name: String,
+    start_time: std::time::Instant,
 }
 
 impl DaemonServer {
@@ -125,6 +126,7 @@ impl DaemonServer {
             model_name,
             gpu_enabled,
             gpu_name,
+            start_time: std::time::Instant::now(),
         })
     }
 
@@ -219,6 +221,7 @@ impl DaemonServer {
                 model_name: self.model_name.clone(),
                 gpu_enabled: self.gpu_enabled,
                 gpu_name: self.gpu_name.clone(),
+                uptime_secs: self.start_time.elapsed().as_secs(),
             },
         };
 

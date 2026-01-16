@@ -1,8 +1,33 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Terminal, Network, Download, Trash2, Copy } from 'lucide-react';
+import { Terminal, Network, Download, Trash2, Copy, RefreshCw } from 'lucide-react';
+import { invoke } from '@tauri-apps/api/core';
 import { useAppStore } from '../stores/appStore';
 import { cn } from '../lib/utils';
+
+interface SystemInfo {
+  cpuCores: number;
+  totalRamGb: number;
+  gpuAvailable: boolean;
+  gpuName: string | null;
+  gpuVramMb: number | null;
+  platform: string;
+}
+
+interface DaemonStatus {
+  running: boolean;
+  modelLoaded: boolean;
+  gpuEnabled: boolean;
+  gpuName: string | null;
+  uptimeSecs: number | null;
+}
+
+interface AppConfig {
+  model: {
+    path: string;
+    modelId: string;
+  };
+}
 
 type DevTab = 'logs' | 'ipc' | 'diagnostics';
 
@@ -292,20 +317,146 @@ function IPCCallCard({ call }: IPCCallCardProps) {
 }
 
 function DiagnosticsTab() {
+  const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
+  const [daemonStatus, setDaemonStatus] = useState<DaemonStatus | null>(null);
+  const [config, setConfig] = useState<AppConfig | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchDiagnostics = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [sysInfo, status, appConfig] = await Promise.all([
+        invoke<SystemInfo>('get_system_info'),
+        invoke<DaemonStatus>('get_daemon_status'),
+        invoke<AppConfig>('get_config'),
+      ]);
+      setSystemInfo(sysInfo);
+      setDaemonStatus(status);
+      setConfig(appConfig);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to fetch diagnostics');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDiagnostics();
+  }, []);
+
+  const formatUptime = (secs: number | null | undefined): string => {
+    if (secs === null || secs === undefined) return 'N/A';
+    const hours = Math.floor(secs / 3600);
+    const minutes = Math.floor((secs % 3600) / 60);
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m`;
+  };
+
+  const formatRam = (gb: number): string => {
+    return `${gb.toFixed(1)} GB`;
+  };
+
+  const formatVram = (mb: number | null): string => {
+    if (mb === null) return 'N/A';
+    if (mb >= 1024) {
+      return `${(mb / 1024).toFixed(1)} GB`;
+    }
+    return `${mb} MB`;
+  };
+
+  const getBackend = (): string => {
+    if (!daemonStatus) return 'Unknown';
+    if (!daemonStatus.running) return 'Offline';
+    if (daemonStatus.gpuEnabled) {
+      return `Candle (${daemonStatus.gpuName || 'GPU'})`;
+    }
+    return 'Candle (CPU)';
+  };
+
+  const getModelName = (): string => {
+    if (!config) return 'Unknown';
+    // Extract model name from path or use modelId
+    const path = config.model.path;
+    const parts = path.split('/');
+    return parts[parts.length - 1] || config.model.modelId || 'Unknown';
+  };
+
+  const copyToClipboard = () => {
+    if (!systemInfo || !daemonStatus) return;
+
+    const info = `System Diagnostics
+==================
+Platform: ${systemInfo.platform}
+CPU Cores: ${systemInfo.cpuCores}
+Total RAM: ${formatRam(systemInfo.totalRamGb)}
+GPU: ${systemInfo.gpuName || 'None detected'}
+VRAM: ${formatVram(systemInfo.gpuVramMb)}
+
+Daemon Status
+=============
+Running: ${daemonStatus.running ? 'Yes' : 'No'}
+Model: ${getModelName()}
+Backend: ${getBackend()}
+Uptime: ${formatUptime(daemonStatus.uptimeSecs)}
+Socket: ~/.local/state/mojovoice/daemon.sock`;
+
+    navigator.clipboard.writeText(info);
+  };
+
+  if (loading) {
+    return (
+      <div className="glass-panel p-6">
+        <div className="flex items-center justify-center py-12">
+          <RefreshCw className="w-6 h-6 text-cyan-400 animate-spin" />
+          <span className="ml-3 text-gray-400">Loading diagnostics...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="glass-panel p-6">
+        <div className="text-center py-12">
+          <p className="text-red-400 mb-4">{error}</p>
+          <button
+            onClick={fetchDiagnostics}
+            className="glass-button px-4 py-2 text-sm text-white"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="glass-panel p-6">
-      <h2 className="text-xl font-semibold text-white mb-4">System Diagnostics</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-semibold text-white">System Diagnostics</h2>
+        <button
+          onClick={fetchDiagnostics}
+          className="glass-button px-3 py-1.5 text-sm flex items-center gap-2 text-gray-300"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Refresh
+        </button>
+      </div>
 
       <div className="space-y-4">
         {/* System Info */}
         <div className="glass-card p-4">
           <h3 className="text-white font-medium mb-3">System Information</h3>
           <div className="space-y-2 text-sm">
-            <InfoRow label="Platform" value="Linux (Fedora 42)" />
-            <InfoRow label="CPU Cores" value="16" />
-            <InfoRow label="Total RAM" value="32 GB" />
-            <InfoRow label="GPU" value="NVIDIA RTX 4090" />
-            <InfoRow label="VRAM" value="24 GB" />
+            <InfoRow label="Platform" value={systemInfo?.platform || 'Unknown'} />
+            <InfoRow label="CPU Cores" value={String(systemInfo?.cpuCores || 'Unknown')} />
+            <InfoRow label="Total RAM" value={systemInfo ? formatRam(systemInfo.totalRamGb) : 'Unknown'} />
+            <InfoRow label="GPU" value={systemInfo?.gpuName || 'None detected'} />
+            <InfoRow label="VRAM" value={systemInfo ? formatVram(systemInfo.gpuVramMb) : 'Unknown'} />
           </div>
         </div>
 
@@ -313,10 +464,11 @@ function DiagnosticsTab() {
         <div className="glass-card p-4">
           <h3 className="text-white font-medium mb-3">Daemon Status</h3>
           <div className="space-y-2 text-sm">
+            <InfoRow label="Status" value={daemonStatus?.running ? 'Running' : 'Offline'} />
             <InfoRow label="Socket Path" value="~/.local/state/mojovoice/daemon.sock" />
-            <InfoRow label="Model" value="whisper-large-v3-turbo" />
-            <InfoRow label="Backend" value="Candle (GPU)" />
-            <InfoRow label="Uptime" value="2h 34m" />
+            <InfoRow label="Model" value={getModelName()} />
+            <InfoRow label="Backend" value={getBackend()} />
+            <InfoRow label="Uptime" value={formatUptime(daemonStatus?.uptimeSecs)} />
           </div>
         </div>
 
@@ -326,7 +478,10 @@ function DiagnosticsTab() {
             <Download className="w-4 h-4" />
             Export Diagnostics
           </button>
-          <button className="glass-button px-4 py-2 text-sm flex items-center gap-2 text-white flex-1">
+          <button
+            onClick={copyToClipboard}
+            className="glass-button px-4 py-2 text-sm flex items-center gap-2 text-white flex-1"
+          >
             <Copy className="w-4 h-4" />
             Copy System Info
           </button>

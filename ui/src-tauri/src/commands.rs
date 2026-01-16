@@ -9,6 +9,7 @@ pub struct DaemonStatus {
     pub model_loaded: bool,
     pub gpu_enabled: bool,
     pub gpu_name: Option<String>,
+    pub uptime_secs: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -21,12 +22,146 @@ pub struct TranscriptionEntry {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SystemInfo {
     pub cpu_cores: usize,
     pub total_ram_gb: f32,
     pub gpu_available: bool,
+    pub gpu_name: Option<String>,
     pub gpu_vram_mb: Option<u32>,
     pub platform: String,
+}
+
+/// GPU information detected from the system
+#[derive(Debug, Default)]
+struct GpuInfo {
+    available: bool,
+    name: Option<String>,
+    vram_mb: Option<u32>,
+}
+
+/// Detect GPU information (cross-platform)
+fn detect_gpu_info() -> GpuInfo {
+    #[cfg(target_os = "linux")]
+    {
+        if let Some(info) = detect_nvidia_gpu() {
+            return info;
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(info) = detect_macos_gpu() {
+            return info;
+        }
+    }
+
+    GpuInfo::default()
+}
+
+/// Maximum output size to prevent DoS from malformed command output
+const MAX_CMD_OUTPUT_SIZE: usize = 10 * 1024; // 10 KB
+
+/// Safely convert command output to string with size limit
+fn safe_output_to_string(output: &[u8]) -> String {
+    let truncated = if output.len() > MAX_CMD_OUTPUT_SIZE {
+        &output[..MAX_CMD_OUTPUT_SIZE]
+    } else {
+        output
+    };
+    String::from_utf8_lossy(truncated).to_string()
+}
+
+/// Detect NVIDIA GPU using nvidia-smi (Linux)
+#[cfg(target_os = "linux")]
+fn detect_nvidia_gpu() -> Option<GpuInfo> {
+    let output = std::process::Command::new("nvidia-smi")
+        .args(["--query-gpu=name,memory.total", "--format=csv,noheader,nounits"])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = safe_output_to_string(&output.stdout);
+    let line = stdout.trim();
+
+    // Parse "NVIDIA GeForce RTX 4090, 24564"
+    let parts: Vec<&str> = line.splitn(2, ", ").collect();
+    if parts.len() >= 2 {
+        let name = parts[0].trim().to_string();
+        let vram_mb = parts[1].trim().parse::<u32>().ok();
+
+        Some(GpuInfo {
+            available: true,
+            name: Some(name),
+            vram_mb,
+        })
+    } else if !line.is_empty() {
+        // Got something but couldn't parse fully
+        Some(GpuInfo {
+            available: true,
+            name: Some(line.to_string()),
+            vram_mb: None,
+        })
+    } else {
+        None
+    }
+}
+
+/// Detect GPU using system_profiler (macOS)
+#[cfg(target_os = "macos")]
+fn detect_macos_gpu() -> Option<GpuInfo> {
+    let output = std::process::Command::new("system_profiler")
+        .args(["SPDisplaysDataType", "-json"])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = safe_output_to_string(&output.stdout);
+    let json: serde_json::Value = serde_json::from_str(&stdout).ok()?;
+
+    // Navigate to SPDisplaysDataType[0]._items[0]
+    let displays = json.get("SPDisplaysDataType")?.as_array()?;
+    let first_display = displays.first()?;
+
+    // Get GPU model name
+    let name = first_display
+        .get("sppci_model")
+        .or_else(|| first_display.get("_name"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    // Try to get VRAM (not available for Apple Silicon unified memory)
+    let vram_mb = first_display
+        .get("spdisplays_vram")
+        .or_else(|| first_display.get("_spdisplays_vram"))
+        .and_then(|v| v.as_str())
+        .and_then(|s| {
+            // Parse strings like "16 GB" or "8192 MB"
+            let s = s.trim();
+            if let Some(gb_str) = s.strip_suffix(" GB") {
+                gb_str.trim().parse::<u32>().ok().map(|gb| gb * 1024)
+            } else if let Some(mb_str) = s.strip_suffix(" MB") {
+                mb_str.trim().parse::<u32>().ok()
+            } else {
+                s.parse::<u32>().ok()
+            }
+        });
+
+    if name.is_some() {
+        Some(GpuInfo {
+            available: true,
+            name,
+            vram_mb,
+        })
+    } else {
+        None
+    }
 }
 
 /// Check if the mojovoice daemon is running
@@ -38,6 +173,7 @@ pub async fn get_daemon_status() -> Result<DaemonStatus, String> {
             model_loaded: status.model_loaded,
             gpu_enabled: status.gpu_enabled,
             gpu_name: status.gpu_name,
+            uptime_secs: status.uptime_secs,
         }),
         Err(e) => {
             eprintln!("Failed to get daemon status: {}", e);
@@ -47,6 +183,7 @@ pub async fn get_daemon_status() -> Result<DaemonStatus, String> {
                 model_loaded: false,
                 gpu_enabled: false,
                 gpu_name: None,
+                uptime_secs: None,
             })
         }
     }
@@ -160,19 +297,32 @@ fn refresh_statusbar() {
         return;
     };
 
-    // Parse command string into program + args (e.g., "pkill -RTMIN+8 waybar")
-    let parts: Vec<&str> = refresh_cmd.split_whitespace().collect();
-    if let Some((program, args)) = parts.split_first() {
-        let _ = std::process::Command::new(program)
-            .args(args)
-            .spawn()
-            .map(|mut child| {
-                // Detach immediately (non-blocking)
-                let _ = child.stdin.take();
-                let _ = child.stdout.take();
-                let _ = child.stderr.take();
-            });
+    // Parse command string using proper shell parsing (handles quotes, escapes, etc.)
+    let parts = match shell_words::split(refresh_cmd) {
+        Ok(parts) => parts,
+        Err(e) => {
+            eprintln!("Failed to parse refresh_command '{}': {}", refresh_cmd, e);
+            return;
+        }
+    };
+
+    if parts.is_empty() {
+        eprintln!("refresh_command is empty after parsing");
+        return;
     }
+
+    let program = &parts[0];
+    let args = &parts[1..];
+
+    let _ = std::process::Command::new(program)
+        .args(args)
+        .spawn()
+        .map(|mut child| {
+            // Detach immediately (non-blocking)
+            let _ = child.stdin.take();
+            let _ = child.stdout.take();
+            let _ = child.stderr.take();
+        });
 }
 
 /// Get transcription history
@@ -618,13 +768,78 @@ fn verify_sha256(path: &std::path::Path, expected: &str) -> Result<bool, String>
 /// Get system information
 #[tauri::command]
 pub async fn get_system_info() -> Result<SystemInfo, String> {
+    use sysinfo::System;
+
+    // Get RAM info
+    let mut sys = System::new_all();
+    sys.refresh_memory();
+    let total_ram_bytes = sys.total_memory();
+    let total_ram_gb = (total_ram_bytes as f64 / 1_073_741_824.0) as f32; // bytes to GB
+
+    // Get GPU info
+    let gpu_info = detect_gpu_info();
+
+    // Get platform with more detail
+    let platform = format_platform();
+
     Ok(SystemInfo {
         cpu_cores: num_cpus::get(),
-        total_ram_gb: 32.0, // TODO: Get actual RAM
-        gpu_available: true,
-        gpu_vram_mb: Some(24576), // TODO: Query actual VRAM
-        platform: std::env::consts::OS.to_string(),
+        total_ram_gb,
+        gpu_available: gpu_info.available,
+        gpu_name: gpu_info.name,
+        gpu_vram_mb: gpu_info.vram_mb,
+        platform,
     })
+}
+
+/// Format platform string with OS name and version
+fn format_platform() -> String {
+    #[cfg(target_os = "linux")]
+    {
+        // Try to get distro info from /etc/os-release
+        if let Ok(content) = std::fs::read_to_string("/etc/os-release") {
+            let mut name: Option<String> = None;
+            let mut version: Option<String> = None;
+
+            for line in content.lines() {
+                if let Some(val) = line.strip_prefix("NAME=") {
+                    name = Some(val.trim_matches('"').to_string());
+                } else if let Some(val) = line.strip_prefix("VERSION_ID=") {
+                    version = Some(val.trim_matches('"').to_string());
+                }
+            }
+
+            match (&name, &version) {
+                (Some(n), Some(v)) => return format!("Linux ({} {})", n, v),
+                (Some(n), None) => return format!("Linux ({})", n),
+                _ => {}
+            }
+        }
+        return "Linux".to_string();
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        // Get macOS version from sw_vers
+        if let Ok(output) = std::process::Command::new("sw_vers")
+            .arg("-productVersion")
+            .output()
+        {
+            if output.status.success() {
+                let version = safe_output_to_string(&output.stdout);
+                let version = version.trim();
+                if !version.is_empty() {
+                    return format!("macOS {}", version);
+                }
+            }
+        }
+        return "macOS".to_string();
+    }
+
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        std::env::consts::OS.to_string()
+    }
 }
 
 /// Configuration structure matching config.toml

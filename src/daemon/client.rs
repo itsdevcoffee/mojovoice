@@ -85,6 +85,7 @@ pub struct DaemonStatusInfo {
     pub model_name: String,
     pub gpu_enabled: bool,
     pub gpu_name: String,
+    pub uptime_secs: u64,
 }
 
 /// Get daemon status (model, GPU info)
@@ -98,10 +99,12 @@ pub fn daemon_get_status() -> Result<DaemonStatusInfo> {
             model_name,
             gpu_enabled,
             gpu_name,
+            uptime_secs,
         } => Ok(DaemonStatusInfo {
             model_name,
             gpu_enabled,
             gpu_name,
+            uptime_secs,
         }),
         DaemonResponse::Error { message } => anyhow::bail!("Status error: {}", message),
         _ => anyhow::bail!("Unexpected response from daemon"),

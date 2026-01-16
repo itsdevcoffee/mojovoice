@@ -40,5 +40,6 @@ pub enum DaemonResponse {
         model_name: String,
         gpu_enabled: bool,
         gpu_name: String,
+        uptime_secs: u64,
     },
 }
