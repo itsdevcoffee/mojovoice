@@ -32,6 +32,14 @@ interface Config {
   };
 }
 
+interface DownloadedModel {
+  name: string;
+  filename: string;
+  path: string;
+  sizeMb: number;
+  isActive: boolean;
+}
+
 // Settings that require daemon restart when changed
 const DAEMON_SETTINGS = ['model.model_id', 'model.language', 'model.path', 'audio.sample_rate'];
 
@@ -69,6 +77,7 @@ export default function Settings() {
   const { isRecording, setUIScale, setActiveView } = useAppStore();
   const [config, setConfig] = useState<Config | null>(null);
   const [originalConfig, setOriginalConfig] = useState<Config | null>(null);
+  const [downloadedModels, setDownloadedModels] = useState<DownloadedModel[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -80,7 +89,35 @@ export default function Settings() {
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
 
   useEffect(() => {
-    loadConfig();
+    let mounted = true;
+
+    const init = async () => {
+      try {
+        setLoading(true);
+        const cfg = await invoke<Config>('get_config');
+        if (!mounted) return;
+        setConfig(cfg);
+        setOriginalConfig(cfg);
+
+        // Load models after a brief delay
+        setTimeout(async () => {
+          if (!mounted) return;
+          try {
+            const models = await invoke<DownloadedModel[]>('list_downloaded_models');
+            if (mounted) setDownloadedModels(models);
+          } catch (err) {
+            console.error('Failed to load models:', err);
+          }
+        }, 50);
+      } catch (error) {
+        console.error('Failed to load config:', error);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    init();
+    return () => { mounted = false; };
   }, []);
 
   // Apply preview scale in real-time
@@ -92,17 +129,24 @@ export default function Settings() {
     }
   }, [previewScale, config]);
 
-  const loadConfig = async () => {
+  const loadDownloadedModels = async () => {
     try {
-      setLoading(true);
+      const models = await invoke<DownloadedModel[]>('list_downloaded_models');
+      setDownloadedModels(models);
+    } catch (error) {
+      console.error('Failed to load downloaded models:', error);
+    }
+  };
+
+  const reloadConfig = async () => {
+    try {
       const cfg = await invoke<Config>('get_config');
       setConfig(cfg);
       setOriginalConfig(cfg);
       setPreviewScale(null);
+      await loadDownloadedModels();
     } catch (error) {
-      console.error('Failed to load config:', error);
-    } finally {
-      setLoading(false);
+      console.error('Failed to reload config:', error);
     }
   };
 
@@ -120,25 +164,57 @@ export default function Settings() {
 
     try {
       setSaving(true);
-      await invoke('save_config', { config: validatedConfig });
+
+      // Check if model changed - use switch_model which handles path, model_id, and restart
+      const modelChanged = validatedConfig.model.path !== originalConfig.model.path;
+
+      if (modelChanged) {
+        // Extract filename from path for switch_model
+        const pathParts = validatedConfig.model.path.split('/');
+        const filename = pathParts[pathParts.length - 1];
+
+        // Save other config changes first (excluding model path since switch_model handles it)
+        const configWithoutModelChange = {
+          ...validatedConfig,
+          model: { ...validatedConfig.model, path: originalConfig.model.path },
+        };
+        await invoke('save_config', { config: configWithoutModelChange });
+
+        // Now switch model (this updates path, model_id, saves, and restarts daemon)
+        await invoke('switch_model', { filename });
+
+        // Reload config to get the updated model_id from switch_model
+        const updatedConfig = await invoke<Config>('get_config');
+        setConfig(updatedConfig);
+        setOriginalConfig(updatedConfig);
+
+        // Model switch already restarted daemon, show success
+        setRestartSuccess(true);
+        setNeedsRestart(false);
+        setTimeout(() => setRestartSuccess(false), 3000);
+      } else {
+        // No model change, just save normally
+        await invoke('save_config', { config: validatedConfig });
+
+        // Smart restart logic: only show banner if other daemon settings changed
+        if (hasDaemonSettingsChanged(validatedConfig, originalConfig)) {
+          setNeedsRestart(true);
+          setRestartSuccess(false);
+          setRestartError(null);
+        }
+
+        setOriginalConfig(validatedConfig);
+      }
 
       // Apply scale permanently
       setUIScale(validatedConfig.ui.scale_preset, validatedConfig.ui.custom_scale);
       setPreviewScale(null);
 
       setSaved(true);
-
-      // Smart restart logic: only show banner if daemon settings changed
-      if (hasDaemonSettingsChanged(validatedConfig, originalConfig)) {
-        setNeedsRestart(true);
-        setRestartSuccess(false);
-        setRestartError(null);
-      }
-
-      // Update original config to new saved state
-      setOriginalConfig(validatedConfig);
-
       setTimeout(() => setSaved(false), 3000);
+
+      // Reload downloaded models to update active status
+      loadDownloadedModels();
     } catch (error) {
       console.error('Failed to save config:', error);
       alert(`Failed to save: ${error}`);
@@ -180,8 +256,7 @@ export default function Settings() {
 
   const handleReset = () => {
     if (confirm('Reset all settings to loaded values?')) {
-      loadConfig();
-      setPreviewScale(null);
+      reloadConfig();
     }
   };
 
@@ -272,24 +347,36 @@ export default function Settings() {
           <SettingRow label="Model" description="Whisper model for transcription">
             <div className="flex gap-2">
               <select
-                value={config.model.model_id}
+                value={config.model.path}
                 onChange={(e) => {
                   if (e.target.value === '__manage__') {
                     handleManageModels();
                     return;
                   }
-                  setConfig({ ...config, model: { ...config.model, model_id: e.target.value }});
+                  // Find the selected model to update both path and model_id
+                  const selectedModel = downloadedModels.find(m => m.path === e.target.value);
+                  if (selectedModel) {
+                    setConfig({
+                      ...config,
+                      model: {
+                        ...config.model,
+                        path: selectedModel.path,
+                      }
+                    });
+                  }
                 }}
                 className="glass-input flex-1"
               >
-                <option value="openai/whisper-tiny">Tiny (fast, less accurate)</option>
-                <option value="openai/whisper-tiny.en">Tiny English-only</option>
-                <option value="openai/whisper-base">Base (balanced)</option>
-                <option value="openai/whisper-base.en">Base English-only</option>
-                <option value="openai/whisper-small">Small (more accurate)</option>
-                <option value="openai/whisper-small.en">Small English-only</option>
-                <option value="openai/whisper-large-v3-turbo">Large V3 Turbo (recommended)</option>
-                <option disabled>---</option>
+                {downloadedModels.length === 0 ? (
+                  <option value="" disabled>No models downloaded</option>
+                ) : (
+                  downloadedModels.map((model) => (
+                    <option key={model.path} value={model.path}>
+                      {model.name} ({model.sizeMb} MB){model.isActive ? ' ✓' : ''}
+                    </option>
+                  ))
+                )}
+                <option disabled>───────────</option>
                 <option value="__manage__">Manage Models...</option>
               </select>
             </div>
