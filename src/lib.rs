@@ -3,6 +3,7 @@ pub mod benchmark;
 pub mod config;
 pub mod daemon;
 pub mod error;
+pub mod history;
 pub mod model;
 pub mod output;
 pub mod state;

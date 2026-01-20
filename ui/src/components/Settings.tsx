@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Save, RotateCcw, Check, ChevronDown } from 'lucide-react';
 import { invoke } from '../lib/ipc';
 import { cn } from '../lib/utils';
@@ -29,6 +28,9 @@ interface Config {
   ui: {
     scale_preset: ScalePreset;
     custom_scale: number;
+  };
+  history: {
+    max_entries: number | null;
   };
 }
 
@@ -92,18 +94,31 @@ export default function Settings() {
     let mounted = true;
 
     const init = async () => {
+      console.time('Settings:init');
       try {
         setLoading(true);
+        console.time('Settings:get_config');
         const cfg = await invoke<Config>('get_config');
-        if (!mounted) return;
-        setConfig(cfg);
-        setOriginalConfig(cfg);
+        console.timeEnd('Settings:get_config');
 
-        // Load models after a brief delay
+        if (!mounted) return;
+
+        // Ensure history config has expected structure
+        const safeConfig: Config = {
+          ...cfg,
+          history: cfg.history ?? { max_entries: 500 },
+        };
+
+        setConfig(safeConfig);
+        setOriginalConfig(safeConfig);
+
+        // Load models after a brief delay (non-blocking)
         setTimeout(async () => {
           if (!mounted) return;
           try {
+            console.time('Settings:list_downloaded_models');
             const models = await invoke<DownloadedModel[]>('list_downloaded_models');
+            console.timeEnd('Settings:list_downloaded_models');
             if (mounted) setDownloadedModels(models);
           } catch (err) {
             console.error('Failed to load models:', err);
@@ -113,6 +128,7 @@ export default function Settings() {
         console.error('Failed to load config:', error);
       } finally {
         if (mounted) setLoading(false);
+        console.timeEnd('Settings:init');
       }
     };
 
@@ -120,14 +136,14 @@ export default function Settings() {
     return () => { mounted = false; };
   }, []);
 
-  // Apply preview scale in real-time
+  // Apply preview scale in real-time (with safety checks)
   useEffect(() => {
     if (previewScale !== null) {
       applyScale(previewScale);
-    } else if (config) {
+    } else if (config?.ui) {
       applyScale(getScaleValue(config.ui.scale_preset, config.ui.custom_scale));
     }
-  }, [previewScale, config]);
+  }, [previewScale, config?.ui?.scale_preset, config?.ui?.custom_scale]);
 
   const loadDownloadedModels = async () => {
     try {
@@ -294,25 +310,21 @@ export default function Settings() {
 
         {/* Action buttons */}
         <div className="flex gap-3">
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+          <button
             onClick={handleReset}
             disabled={saving}
-            className="glass-button px-4 py-2 text-sm flex items-center gap-2 text-gray-300"
+            className="glass-button px-4 py-2 text-sm flex items-center gap-2 text-gray-300 hover:scale-[1.02] active:scale-[0.98] transition-transform"
           >
             <RotateCcw className="w-4 h-4" />
             Reset
-          </motion.button>
+          </button>
 
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+          <button
             onClick={handleSave}
             disabled={saving}
             className={cn(
               'px-6 py-2 text-sm flex items-center gap-2 rounded-lg transition-all duration-200',
-              'backdrop-blur-md border-2 font-medium',
+              'backdrop-blur-md border-2 font-medium hover:scale-[1.02] active:scale-[0.98]',
               saved
                 ? 'bg-green-500/20 border-green-500 text-green-400'
                 : 'bg-cyan-500/20 border-cyan-500 text-cyan-400 hover:bg-cyan-500/30'
@@ -325,9 +337,7 @@ export default function Settings() {
               </>
             ) : saving ? (
               <>
-                <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}>
-                  <RotateCcw className="w-4 h-4" />
-                </motion.div>
+                <RotateCcw className="w-4 h-4 animate-spin" />
                 Saving...
               </>
             ) : (
@@ -336,7 +346,7 @@ export default function Settings() {
                 Save Changes
               </>
             )}
-          </motion.button>
+          </button>
         </div>
       </div>
 
@@ -482,86 +492,115 @@ export default function Settings() {
           )}
         </SettingsSection>
 
+        {/* History */}
+        <SettingsSection title="History">
+          <SettingRow label="Maximum Entries" description="Limit stored transcription history">
+            <div className="flex items-center gap-3">
+              <Toggle
+                checked={config.history.max_entries === null}
+                onChange={(unlimited) => {
+                  setConfig({
+                    ...config,
+                    history: {
+                      max_entries: unlimited ? null : 500,
+                    },
+                  });
+                }}
+              />
+              <span className="text-gray-400 text-sm">No limit</span>
+            </div>
+          </SettingRow>
+
+          {config.history.max_entries !== null && (
+            <SettingRow label="Entry Limit" description="Maximum transcriptions to keep (min: 5)">
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  min="5"
+                  max="10000"
+                  value={config.history.max_entries}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value) || 5;
+                    setConfig({
+                      ...config,
+                      history: {
+                        max_entries: Math.max(5, value),
+                      },
+                    });
+                  }}
+                  className="glass-input w-28 text-center"
+                />
+                <span className="text-gray-400 text-sm">entries</span>
+              </div>
+            </SettingRow>
+          )}
+        </SettingsSection>
+
         {/* Advanced (Collapsible) */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="glass-panel overflow-hidden"
-        >
+        <div className="glass-panel overflow-hidden">
           <button
             onClick={() => setAdvancedExpanded(!advancedExpanded)}
             className="w-full p-6 flex items-center justify-between text-left hover:bg-white/5 transition-colors"
           >
             <h2 className="text-xl font-semibold text-white">Advanced</h2>
-            <motion.div
-              animate={{ rotate: advancedExpanded ? 180 : 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <ChevronDown className="w-5 h-5 text-gray-400" />
-            </motion.div>
+            <ChevronDown className={cn(
+              "w-5 h-5 text-gray-400 transition-transform duration-200",
+              advancedExpanded && "rotate-180"
+            )} />
           </button>
 
-          <AnimatePresence>
-            {advancedExpanded && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.3, ease: 'easeInOut' }}
-              >
-                <div className="px-6 pb-6 space-y-6 border-t border-white/10 pt-6">
-                  <SettingRow label="Model Path Override" description="Custom path to model file or directory">
-                    <PathInput
-                      value={config.model.path}
-                      onChange={(newPath) => setConfig({ ...config, model: { ...config.model, path: newPath }})}
-                      type="any"
-                      placeholder="~/.local/share/mojovoice/models/..."
-                      label="Browse for model"
-                    />
-                  </SettingRow>
+          {advancedExpanded && (
+            <div className="px-6 pb-6 space-y-6 border-t border-white/10 pt-6">
+              <SettingRow label="Model Path Override" description="Custom path to model file or directory">
+                <PathInput
+                  value={config.model.path}
+                  onChange={(newPath) => setConfig({ ...config, model: { ...config.model, path: newPath }})}
+                  type="any"
+                  placeholder="~/.local/share/mojovoice/models/..."
+                  label="Browse for model"
+                />
+              </SettingRow>
 
-                  <SettingRow label="Technical Vocabulary" description="Custom prompts to bias transcription">
-                    <textarea
-                      value={config.model.prompt || ''}
-                      onChange={(e) => setConfig({ ...config, model: { ...config.model, prompt: e.target.value || null }})}
-                      className="glass-input font-mono text-xs h-20"
-                      placeholder="async, await, kubernetes, docker, typescript..."
-                    />
-                  </SettingRow>
+              <SettingRow label="Technical Vocabulary" description="Custom prompts to bias transcription">
+                <textarea
+                  value={config.model.prompt || ''}
+                  onChange={(e) => setConfig({ ...config, model: { ...config.model, prompt: e.target.value || null }})}
+                  className="glass-input font-mono text-xs h-20"
+                  placeholder="async, await, kubernetes, docker, typescript..."
+                />
+              </SettingRow>
 
-                  <SettingRow label="Status Bar Integration" description="Command to update Waybar/Polybar">
-                    <input
-                      type="text"
-                      value={config.output.refresh_command || ''}
-                      onChange={(e) => setConfig({ ...config, output: { ...config.output, refresh_command: e.target.value || null }})}
-                      className="glass-input font-mono text-xs"
-                      placeholder="pkill -RTMIN+8 waybar"
-                    />
-                  </SettingRow>
+              <SettingRow label="Status Bar Integration" description="Command to update Waybar/Polybar">
+                <input
+                  type="text"
+                  value={config.output.refresh_command || ''}
+                  onChange={(e) => setConfig({ ...config, output: { ...config.output, refresh_command: e.target.value || null }})}
+                  className="glass-input font-mono text-xs"
+                  placeholder="pkill -RTMIN+8 waybar"
+                />
+              </SettingRow>
 
-                  <SettingRow label="Save Audio Clips" description="Save recordings to disk for debugging">
-                    <Toggle
-                      checked={config.audio.save_audio_clips}
-                      onChange={(checked) => setConfig({ ...config, audio: { ...config.audio, save_audio_clips: checked }})}
-                    />
-                  </SettingRow>
+              <SettingRow label="Save Audio Clips" description="Save recordings to disk for debugging">
+                <Toggle
+                  checked={config.audio.save_audio_clips}
+                  onChange={(checked) => setConfig({ ...config, audio: { ...config.audio, save_audio_clips: checked }})}
+                />
+              </SettingRow>
 
-                  {config.audio.save_audio_clips && (
-                    <SettingRow label="Audio Clips Path" description="Directory to save WAV files">
-                      <PathInput
-                        value={config.audio.audio_clips_path}
-                        onChange={(newPath) => setConfig({ ...config, audio: { ...config.audio, audio_clips_path: newPath }})}
-                        type="directory"
-                        placeholder="~/.local/share/mojovoice/recordings"
-                        label="Browse for folder"
-                      />
-                    </SettingRow>
-                  )}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.div>
+              {config.audio.save_audio_clips && (
+                <SettingRow label="Audio Clips Path" description="Directory to save WAV files">
+                  <PathInput
+                    value={config.audio.audio_clips_path}
+                    onChange={(newPath) => setConfig({ ...config, audio: { ...config.audio, audio_clips_path: newPath }})}
+                    type="directory"
+                    placeholder="~/.local/share/mojovoice/recordings"
+                    label="Browse for folder"
+                  />
+                </SettingRow>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -574,14 +613,10 @@ interface SettingsSectionProps {
 
 function SettingsSection({ title, children }: SettingsSectionProps) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="glass-panel p-6"
-    >
+    <div className="glass-panel p-6">
       <h2 className="text-xl font-semibold text-white mb-6">{title}</h2>
       <div className="space-y-6">{children}</div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -620,12 +655,10 @@ function Toggle({ checked, onChange }: ToggleProps) {
           : 'bg-white/10 border-white/20'
       )}
     >
-      <motion.div
-        animate={{ x: checked ? 24 : 2 }}
-        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+      <div
         className={cn(
-          'absolute top-0.5 w-5 h-5 rounded-full',
-          checked ? 'bg-cyan-500' : 'bg-gray-400'
+          'absolute top-0.5 w-5 h-5 rounded-full transition-transform duration-200',
+          checked ? 'bg-cyan-500 translate-x-6' : 'bg-gray-400 translate-x-0.5'
         )}
       />
     </button>

@@ -11,6 +11,8 @@ pub struct Config {
     pub output: OutputConfig,
     #[serde(default)]
     pub ui: UiConfig,
+    #[serde(default)]
+    pub history: HistoryConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,6 +104,49 @@ impl UiConfig {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HistoryConfig {
+    /// Maximum number of history entries to keep (None = unlimited)
+    #[serde(default = "default_max_entries")]
+    pub max_entries: Option<u32>,
+}
+
+fn default_max_entries() -> Option<u32> {
+    Some(500)
+}
+
+impl Default for HistoryConfig {
+    fn default() -> Self {
+        Self {
+            max_entries: default_max_entries(),
+        }
+    }
+}
+
+/// Maximum allowed value for max_entries (prevents unbounded memory usage)
+const MAX_ENTRIES_UPPER_BOUND: u32 = 100_000;
+
+impl HistoryConfig {
+    /// Validate history config values
+    pub fn validate(&mut self) {
+        if let Some(max) = self.max_entries {
+            // Enforce minimum of 5 entries
+            if max < 5 {
+                eprintln!("max_entries {} too low, setting to 5", max);
+                self.max_entries = Some(5);
+            }
+            // Enforce maximum of 100,000 entries to prevent unbounded memory usage
+            else if max > MAX_ENTRIES_UPPER_BOUND {
+                eprintln!(
+                    "max_entries {} exceeds maximum ({}), capping",
+                    max, MAX_ENTRIES_UPPER_BOUND
+                );
+                self.max_entries = Some(MAX_ENTRIES_UPPER_BOUND);
+            }
+        }
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         let data_dir = directories::BaseDirs::new()
@@ -131,6 +176,7 @@ impl Default for Config {
                 scale_preset: default_scale_preset(),
                 custom_scale: default_custom_scale(),
             },
+            history: HistoryConfig::default(),
         }
     }
 }
@@ -138,16 +184,18 @@ impl Default for Config {
 /// Load configuration from disk, creating default if not exists
 pub fn load() -> Result<Config> {
     let mut config: Config = confy::load(APP_NAME, "config")?;
-    // Validate and sanitize UI config values
+    // Validate and sanitize config values
     config.ui.validate();
+    config.history.validate();
     Ok(config)
 }
 
 /// Save configuration to disk
 pub fn save(config: &Config) -> Result<()> {
     let mut validated_config = config.clone();
-    // Validate UI config before saving
+    // Validate config before saving
     validated_config.ui.validate();
+    validated_config.history.validate();
     confy::store(APP_NAME, "config", &validated_config)?;
     Ok(())
 }

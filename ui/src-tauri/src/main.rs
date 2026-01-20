@@ -24,6 +24,8 @@ fn main() {
             commands::stop_recording,
             commands::cancel_recording,
             commands::get_transcription_history,
+            commands::delete_history_entry,
+            commands::clear_history,
             commands::download_model,
             commands::get_system_info,
             commands::get_config,

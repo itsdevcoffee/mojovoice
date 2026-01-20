@@ -11,6 +11,7 @@ mod commands;
 mod config;
 mod daemon;
 mod error;
+mod history;
 mod model;
 mod output;
 mod state;

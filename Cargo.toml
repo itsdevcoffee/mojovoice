@@ -53,6 +53,12 @@ rubato = "0.16"
 # Dynamic library loading for mojo-audio FFI
 libloading = "0.8"
 
+# UUID generation for history entries
+uuid = { version = "1", features = ["v4"] }
+
+# File locking for history concurrent access
+fs2 = "0.4"
+
 # Clipboard - always available
 arboard = "3.6"
 

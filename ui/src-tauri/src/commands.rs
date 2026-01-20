@@ -12,13 +12,25 @@ pub struct DaemonStatus {
     pub uptime_secs: Option<u64>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TranscriptionEntry {
     pub id: String,
     pub text: String,
     pub timestamp: i64,
     pub duration_ms: u64,
     pub model: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audio_path: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryResponse {
+    pub entries: Vec<TranscriptionEntry>,
+    pub total: usize,
+    pub has_more: bool,
+    pub models: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -321,19 +333,66 @@ fn refresh_statusbar() {
         });
 }
 
-/// Get transcription history
+/// Convert library HistoryEntry to UI TranscriptionEntry
+fn convert_history_entry(entry: mojovoice::history::HistoryEntry) -> TranscriptionEntry {
+    TranscriptionEntry {
+        id: entry.id,
+        text: entry.text,
+        timestamp: entry.timestamp,
+        duration_ms: entry.duration_ms,
+        model: entry.model,
+        audio_path: entry.audio_path,
+    }
+}
+
+/// Get transcription history with pagination and filtering
 #[tauri::command]
-pub async fn get_transcription_history() -> Result<Vec<TranscriptionEntry>, String> {
-    // TODO: Query transcription history from daemon or local DB
-    Ok(vec![
-        TranscriptionEntry {
-            id: "1".to_string(),
-            text: "This is a test transcription from earlier".to_string(),
-            timestamp: 1704067200,
-            duration_ms: 1500,
-            model: "whisper-large-v3-turbo".to_string(),
-        },
-    ])
+pub async fn get_transcription_history(
+    limit: Option<u32>,
+    offset: Option<u32>,
+    search: Option<String>,
+    model_filter: Option<String>,
+) -> Result<HistoryResponse, String> {
+    // Get unique models first (before filtering)
+    let models = mojovoice::history::get_unique_models()
+        .map_err(|e| format!("Failed to get models: {}", e))?;
+
+    // Load entries with pagination and filtering using library function
+    let result = mojovoice::history::load_entries(
+        limit.unwrap_or(100) as usize,
+        offset.unwrap_or(0) as usize,
+        search.as_deref(),
+        model_filter.as_deref(),
+    )
+    .map_err(|e| format!("Failed to load history: {}", e))?;
+
+    // Convert library types to UI types
+    let entries: Vec<TranscriptionEntry> = result
+        .entries
+        .into_iter()
+        .map(convert_history_entry)
+        .collect();
+
+    Ok(HistoryResponse {
+        entries,
+        total: result.total,
+        has_more: result.has_more,
+        models,
+    })
+}
+
+/// Delete a single history entry by ID
+#[tauri::command]
+pub async fn delete_history_entry(id: String) -> Result<(), String> {
+    mojovoice::history::delete_entry(&id)
+        .map_err(|e| format!("Failed to delete entry: {}", e))
+}
+
+/// Clear all history entries
+#[tauri::command]
+pub async fn clear_history() -> Result<(), String> {
+    mojovoice::history::clear_history()
+        .map_err(|e| format!("Failed to clear history: {}", e))
 }
 
 /// Progress update for model downloads
@@ -846,6 +905,8 @@ pub struct AppConfig {
     pub output: OutputConfig,
     #[serde(default)]
     pub ui: UiConfig,
+    #[serde(default)]
+    pub history: HistoryConfig,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -882,6 +943,19 @@ impl Default for UiConfig {
         Self {
             scale_preset: "medium".to_string(),
             custom_scale: 1.0,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct HistoryConfig {
+    pub max_entries: Option<u32>,
+}
+
+impl Default for HistoryConfig {
+    fn default() -> Self {
+        Self {
+            max_entries: Some(500),
         }
     }
 }

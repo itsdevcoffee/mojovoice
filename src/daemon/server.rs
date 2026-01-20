@@ -10,6 +10,7 @@ use tracing::{error, info, warn};
 
 use crate::audio::capture_toggle;
 use crate::daemon::protocol::{DaemonRequest, DaemonResponse};
+use crate::history::{self, enforce_max_entries, HistoryEntry};
 use crate::state;
 // Transcriber trait is now used via Box<dyn ...>
 
@@ -145,7 +146,12 @@ impl DaemonServer {
     }
 
     /// Save audio recording as WAV file with timestamp
-    fn save_audio_recording(samples: &[f32], output_dir: &Path, sample_rate: u32) -> Result<()> {
+    /// Returns the path to the saved file on success
+    fn save_audio_recording(
+        samples: &[f32],
+        output_dir: &Path,
+        sample_rate: u32,
+    ) -> Result<PathBuf> {
         // Create output directory if it doesn't exist
         std::fs::create_dir_all(output_dir).context("Failed to create audio clips directory")?;
 
@@ -174,7 +180,7 @@ impl DaemonServer {
         writer.finalize().context("Failed to finalize WAV file")?;
 
         info!("Audio saved to: {}", filepath.display());
-        Ok(())
+        Ok(filepath)
     }
 
     fn handle_client(&self, mut stream: UnixStream) -> Result<()> {
@@ -352,17 +358,23 @@ impl DaemonServer {
             });
         }
 
-        // Save audio if enabled in config
+        // Save audio if enabled in config, capture the saved path
         let config = crate::config::load()?;
-        if config.audio.save_audio_clips {
-            if let Err(e) = Self::save_audio_recording(
+        let saved_audio_path = if config.audio.save_audio_clips {
+            match Self::save_audio_recording(
                 &samples,
                 &config.audio.audio_clips_path,
                 config.audio.sample_rate,
             ) {
-                warn!("Failed to save audio recording: {}", e);
+                Ok(path) => Some(path),
+                Err(e) => {
+                    warn!("Failed to save audio recording: {}", e);
+                    None
+                }
             }
-        }
+        } else {
+            None
+        };
 
         // CRITICAL: Remove recording.pid BEFORE creating processing file
         // Otherwise Waybar keeps showing "recording" (checks recording.pid first)
@@ -401,6 +413,28 @@ impl DaemonServer {
         }
 
         info!("Transcribed: {}", text);
+
+        // Calculate recording duration from sample count
+        // samples / sample_rate * 1000 = duration_ms
+        let duration_ms = (samples.len() as u64 * 1000) / config.audio.sample_rate as u64;
+
+        // Convert saved audio path to string for history entry
+        let audio_path = saved_audio_path.map(|p| p.to_string_lossy().to_string());
+
+        // Save to history
+        let history_entry =
+            HistoryEntry::new(text.clone(), duration_ms, self.model_name.clone(), audio_path);
+
+        if let Err(e) = history::append_entry(&history_entry) {
+            warn!("Failed to save history entry: {}", e);
+        } else {
+            // Enforce max_entries limit if set
+            if let Some(max) = config.history.max_entries {
+                if let Err(e) = enforce_max_entries(max as usize) {
+                    warn!("Failed to enforce max_entries: {}", e);
+                }
+            }
+        }
 
         // Clean up processing state file (recording.pid already removed above)
         state::toggle::cleanup_processing()?;

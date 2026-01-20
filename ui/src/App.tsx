@@ -6,6 +6,7 @@ import Dashboard from './components/Dashboard';
 import DevTools from './components/DevTools';
 import Settings from './components/Settings';
 import ModelManagement from './components/ModelManagement';
+import TranscriptionHistory from './components/TranscriptionHistory';
 import './styles/globals.css';
 import { type ScalePreset, isValidPreset, clampScale } from './lib/scale';
 
@@ -82,18 +83,9 @@ function App() {
 
       {activeView === 'dashboard' && <Dashboard />}
       {activeView === 'devtools' && <DevTools />}
-      {activeView === 'history' && <PlaceholderView title="Transcription History" />}
+      {activeView === 'history' && <TranscriptionHistory />}
       {activeView === 'models' && <ModelManagement />}
       {activeView === 'settings' && <Settings />}
-    </div>
-  );
-}
-
-function PlaceholderView({ title }: { title: string }) {
-  return (
-    <div className="glass-panel p-12 text-center">
-      <h2 className="text-2xl font-semibold text-white mb-2">{title}</h2>
-      <p className="text-gray-400">Coming soon...</p>
     </div>
   );
 }

@@ -34,6 +34,12 @@ sha2 = "0.10"
 hex = "0.4"
 lazy_static = "1.4"
 
+# History
+uuid = { version = "1", features = ["v4"] }
+
+# Core library for shared history functionality
+mojovoice = { path = "../.." }
+
 [features]
 # This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!
 custom-protocol = ["tauri/custom-protocol"]

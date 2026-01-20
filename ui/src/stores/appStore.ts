@@ -15,6 +15,14 @@ interface TranscriptionEntry {
   timestamp: number;
   durationMs: number;
   model: string;
+  audioPath?: string;
+}
+
+interface HistoryResponse {
+  entries: TranscriptionEntry[];
+  total: number;
+  hasMore: boolean;
+  models: string[];
 }
 
 interface IPCCall {
@@ -41,8 +49,17 @@ interface AppState {
   isRecording: boolean;
   isProcessing: boolean;
 
-  // Transcription history
+  // Session transcriptions (for dashboard)
   transcriptions: TranscriptionEntry[];
+
+  // History state (persistent)
+  historyEntries: TranscriptionEntry[];
+  historyTotal: number;
+  historyLoading: boolean;
+  historyHasMore: boolean;
+  historyModels: string[];
+  searchQuery: string;
+  modelFilter: string;
 
   // Dev tools
   ipcCalls: IPCCall[];
@@ -68,6 +85,14 @@ interface AppState {
   clearLogs: () => void;
   clearIPCCalls: () => void;
   setUIScale: (preset: ScalePreset, customValue?: number) => void;
+
+  // History actions
+  loadHistory: (limit?: number, offset?: number) => Promise<void>;
+  loadMoreHistory: () => Promise<void>;
+  deleteHistoryEntry: (id: string) => Promise<void>;
+  clearHistory: () => Promise<void>;
+  setSearchQuery: (query: string) => void;
+  setModelFilter: (model: string) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -80,6 +105,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   isRecording: false,
   isProcessing: false,
   transcriptions: [],
+
+  // History initial state
+  historyEntries: [],
+  historyTotal: 0,
+  historyLoading: false,
+  historyHasMore: false,
+  historyModels: [],
+  searchQuery: '',
+  modelFilter: '',
+
   ipcCalls: [],
   logs: [],
   activeView: 'dashboard',
@@ -132,5 +167,88 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
 
     applyScale(effectiveScale);
+  },
+
+  // History actions
+  loadHistory: async (limit = 100, offset = 0) => {
+    const { searchQuery, modelFilter } = get();
+    set({ historyLoading: true });
+    try {
+      const response = await invoke<HistoryResponse>('get_transcription_history', {
+        limit,
+        offset,
+        search: searchQuery || null,
+        modelFilter: modelFilter || null,
+      });
+      set({
+        historyEntries: response.entries,
+        historyTotal: response.total,
+        historyHasMore: response.hasMore,
+        historyModels: response.models,
+        historyLoading: false,
+      });
+    } catch (error) {
+      console.error('Failed to load history:', error);
+      set({ historyLoading: false });
+    }
+  },
+
+  loadMoreHistory: async () => {
+    const { historyEntries, searchQuery, modelFilter, historyHasMore } = get();
+    if (!historyHasMore) return;
+
+    set({ historyLoading: true });
+    try {
+      const response = await invoke<HistoryResponse>('get_transcription_history', {
+        limit: 100,
+        offset: historyEntries.length,
+        search: searchQuery || null,
+        modelFilter: modelFilter || null,
+      });
+      set({
+        historyEntries: [...historyEntries, ...response.entries],
+        historyTotal: response.total,
+        historyHasMore: response.hasMore,
+        historyLoading: false,
+      });
+    } catch (error) {
+      console.error('Failed to load more history:', error);
+      set({ historyLoading: false });
+    }
+  },
+
+  deleteHistoryEntry: async (id: string) => {
+    try {
+      await invoke('delete_history_entry', { id });
+      // Reload history to get accurate state
+      get().loadHistory();
+    } catch (error) {
+      console.error('Failed to delete history entry:', error);
+    }
+  },
+
+  clearHistory: async () => {
+    try {
+      await invoke('clear_history');
+      set({
+        historyEntries: [],
+        historyTotal: 0,
+        historyHasMore: false,
+      });
+    } catch (error) {
+      console.error('Failed to clear history:', error);
+    }
+  },
+
+  setSearchQuery: (query: string) => {
+    set({ searchQuery: query });
+    // Reload history with new filter
+    get().loadHistory();
+  },
+
+  setModelFilter: (model: string) => {
+    set({ modelFilter: model });
+    // Reload history with new filter
+    get().loadHistory();
   },
 }));

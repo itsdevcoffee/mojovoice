@@ -33,6 +33,21 @@ pub fn get_daemon_pid_file() -> Result<PathBuf> {
     Ok(get_state_dir()?.join("daemon.pid"))
 }
 
+/// Get the data directory for mojovoice (~/.local/share/mojovoice)
+pub fn get_data_dir() -> Result<PathBuf> {
+    let proj_dirs = ProjectDirs::from("", "", "mojovoice")
+        .context("Failed to determine project directories")?;
+
+    let data_dir = proj_dirs.data_local_dir();
+    std::fs::create_dir_all(data_dir)?;
+    Ok(data_dir.to_path_buf())
+}
+
+/// Get the transcription history file path (~/.local/share/mojovoice/history.jsonl)
+pub fn get_history_file() -> Result<PathBuf> {
+    Ok(get_data_dir()?.join("history.jsonl"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
