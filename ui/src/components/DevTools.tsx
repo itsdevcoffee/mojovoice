@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Terminal, Network, Download, Trash2, Copy, RefreshCw } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
+import { save } from '@tauri-apps/plugin-dialog';
+import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { useAppStore } from '../stores/appStore';
 import { cn } from '../lib/utils';
 
@@ -399,6 +401,56 @@ Socket: ~/.local/state/mojovoice/daemon.sock`;
     navigator.clipboard.writeText(info);
   };
 
+  const exportDiagnostics = async () => {
+    if (!systemInfo || !daemonStatus || !config) return;
+
+    // Prepare diagnostics data as JSON
+    const diagnosticsData = {
+      timestamp: new Date().toISOString(),
+      system: {
+        platform: systemInfo.platform,
+        cpuCores: systemInfo.cpuCores,
+        totalRamGb: systemInfo.totalRamGb,
+        gpuAvailable: systemInfo.gpuAvailable,
+        gpuName: systemInfo.gpuName,
+        gpuVramMb: systemInfo.gpuVramMb,
+      },
+      daemon: {
+        running: daemonStatus.running,
+        modelLoaded: daemonStatus.modelLoaded,
+        gpuEnabled: daemonStatus.gpuEnabled,
+        gpuName: daemonStatus.gpuName,
+        uptimeSecs: daemonStatus.uptimeSecs,
+      },
+      config: {
+        modelPath: config.model.path,
+        modelId: config.model.modelId,
+      },
+    };
+
+    try {
+      // Prompt user for save location
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const defaultPath = `mojovoice-diagnostics-${timestamp}.json`;
+
+      const filePath = await save({
+        defaultPath,
+        filters: [{
+          name: 'JSON',
+          extensions: ['json']
+        }]
+      });
+
+      if (filePath) {
+        // Write diagnostics to file
+        await writeTextFile(filePath, JSON.stringify(diagnosticsData, null, 2));
+      }
+    } catch (error) {
+      console.error('Failed to export diagnostics:', error);
+      alert(`Failed to export: ${error}`);
+    }
+  };
+
   if (loading) {
     return (
       <div className="glass-panel p-6">
@@ -466,7 +518,10 @@ Socket: ~/.local/state/mojovoice/daemon.sock`;
 
         {/* Actions */}
         <div className="flex gap-3">
-          <button className="glass-button px-4 py-2 text-sm flex items-center gap-2 text-white flex-1">
+          <button
+            onClick={exportDiagnostics}
+            className="glass-button px-4 py-2 text-sm flex items-center gap-2 text-white flex-1"
+          >
             <Download className="w-4 h-4" />
             Export Diagnostics
           </button>
