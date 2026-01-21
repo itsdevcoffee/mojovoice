@@ -17,10 +17,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Dynamic mel bins:** Automatic detection of 80 vs 128 mel bins based on model architecture
 - **Audio test samples:** Organized test samples with manifest and Harvard sentences
 - **justfile:** Build automation with commands for build, install, daemon management
+- **Transcription history:** Persistent JSONL storage with search, filter, copy, and delete functionality
+- **Audio device selection:** Choose input device from Settings UI (requires daemon restart)
+- **Export Diagnostics:** DevTools button to save system/daemon info as JSON file
+- **Real system diagnostics:** DevTools shows CPU cores, RAM, GPU name and VRAM from actual hardware
+- **Benchmark CLI:** `mojovoice benchmark` command with HTML report generation
+- **Model management UI:** Download, cancel, and delete models from Settings
+- **GGUF quantized models:** 7 new quantized model variants for lower memory usage
+- **English-only models:** Support for .en Whisper variants (tiny.en, base.en, etc.)
+- **Config commands:** `--check` and `--migrate` now validate all current config fields
 
 ### Changed
 - **Settings UI redesign:** Cleaner layout with recording timeout now configurable from UI
 - **Recording timeout:** Now uses config value (default 180s) instead of hardcoded 5-minute limit
+- **Model registry:** Switched from GGUF to safetensors format for Candle engine compatibility
+- **Config validation:** Uses ℹ (info) vs ⚠ (warning) to distinguish optional vs migratable fields
 
 ### Fixed
 - **Daemon shutdown:** Fixed blocking listener that prevented graceful shutdown
@@ -29,12 +40,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Mojo-audio RFFT:** Fixed audio library to produce correct ~3000 frames for 30s audio
 - **Daemon restart:** Now properly waits for daemon to stop before restarting (was using fixed 500ms sleep)
 - **Daemon start:** Now checks if daemon is already running before attempting to start
+- **Settings async loading:** Prevented UI freeze when loading config on Settings tab
+- **Model registry sizes:** Now shows accurate download sizes matching actual files
+- **Config migrate:** No longer creates backup when no changes needed
 
 ### Refactored
 - Simplified main.rs CLI entry point
 - Removed dead whisper module and privatized mojo_ffi
 - Simplified audio capture, output, daemon client, and transcription modules
 - Cleaned up legacy binary name checks (mojovoice-gpu/mojovoice-cuda)
+- Simplified audio device selection code
+- Simplified diagnostics code in DevTools
+- Simplified config check/migrate command code
 
 ## [0.4.1] - 2025-01-01
 
@@ -128,7 +145,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
-- **v0.5.0:** Daemon subcommands (up/down), daemon control UI, justfile, mojo-audio FFI, expanded model registry
+- **v0.5.0:** Daemon subcommands, transcription history, audio device selection, model management UI, benchmark CLI, export diagnostics
 - **v0.4.1:** Premium Settings Panel, UI scaling, cancel recording
 - **v0.4.0:** Tauri UI with glassmorphic design
 - **v0.3.0:** Renamed to mojovoice
