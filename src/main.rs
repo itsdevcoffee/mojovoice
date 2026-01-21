@@ -467,90 +467,62 @@ fn cmd_config_check() -> Result<()> {
 
     println!("Configuration Validation\n");
 
-    let mut has_warnings = false;
+    /// Print check result and return whether it passed
+    fn check(ok: bool, field: &str, value: &str) -> bool {
+        println!("{} {} = {}", if ok { "✓" } else { "⚠" }, field, value);
+        ok
+    }
 
-    // Check model_id (required for Candle engine)
+    let mut all_ok = true;
+
+    // Required field - use ✗ for critical missing
     if current.model.model_id.is_empty() {
         println!("✗ model.model_id = (missing, required for Candle engine)");
-        has_warnings = true;
+        all_ok = false;
     } else {
         println!("✓ model.model_id = \"{}\"", current.model.model_id);
     }
 
-    // Check model path
-    let model_exists = current.model.path.exists();
-    println!(
-        "{} model.path = {}",
-        if model_exists { "✓" } else { "✗" },
-        current.model.path.display()
-    );
-    if !model_exists {
-        has_warnings = true;
-    }
+    // Path checks
+    all_ok &= check(current.model.path.exists(), "model.path", &current.model.path.display().to_string());
 
-    // Check draft model
-    match &current.model.draft_model_path {
-        Some(path) => {
-            let exists = path.exists();
-            println!(
-                "{} model.draft_model_path = {}",
-                if exists { "✓" } else { "⚠" },
-                path.display()
-            );
-            if !exists {
-                has_warnings = true;
-            }
-        },
+    all_ok &= match &current.model.draft_model_path {
+        Some(path) => check(path.exists(), "model.draft_model_path", &path.display().to_string()),
+        None => check(false, "model.draft_model_path", "(missing, speculative decoding disabled)"),
+    };
+
+    // Optional field checks
+    all_ok &= match &current.model.prompt {
+        Some(p) if !p.is_empty() => check(true, "model.prompt", &format!("(set, {} chars)", p.len())),
+        _ => check(false, "model.prompt", "(missing, using no technical biasing)"),
+    };
+
+    all_ok &= match &current.audio.device_name {
+        Some(name) => check(true, "audio.device_name", &format!("\"{}\"", name)),
+        None => check(false, "audio.device_name", "(missing, using system default)"),
+    };
+
+    all_ok &= match &current.output.refresh_command {
+        Some(cmd) => check(true, "output.refresh_command", &format!("\"{}\"", cmd)),
         None => {
-            println!("⚠ model.draft_model_path = (missing, speculative decoding disabled)");
-            has_warnings = true;
-        },
-    }
-
-    // Check prompt
-    match &current.model.prompt {
-        Some(p) if !p.is_empty() => println!("✓ model.prompt = (set, {} chars)", p.len()),
-        _ => {
-            println!("⚠ model.prompt = (missing, using no technical biasing)");
-            has_warnings = true;
-        },
-    }
-
-    // Check audio device selection
-    match &current.audio.device_name {
-        Some(name) => println!("✓ audio.device_name = \"{}\"", name),
-        None => {
-            println!("⚠ audio.device_name = (missing, using system default)");
-            has_warnings = true;
-        },
-    }
-
-    // Check refresh_command
-    match &current.output.refresh_command {
-        Some(cmd) => println!("✓ output.refresh_command = \"{}\"", cmd),
-        None => {
+            let result = check(false, "output.refresh_command", "(missing, no UI refresh)");
             if let Some(default_cmd) = &defaults.output.refresh_command {
-                println!("⚠ output.refresh_command = (missing, no UI refresh)");
                 println!("  Suggestion: {}", default_cmd);
-                has_warnings = true;
             }
-        },
-    }
+            result
+        }
+    };
 
-    // Check history max_entries
-    match current.history.max_entries {
-        Some(n) => println!("✓ history.max_entries = {} entries", n),
-        None => {
-            println!("⚠ history.max_entries = (missing, unlimited history)");
-            has_warnings = true;
-        },
-    }
+    all_ok &= match current.history.max_entries {
+        Some(n) => check(true, "history.max_entries", &format!("{} entries", n)),
+        None => check(false, "history.max_entries", "(missing, unlimited history)"),
+    };
 
-    // Show appropriate message based on validation results
-    if has_warnings {
-        println!("\nRun 'mojovoice config --migrate' to auto-update missing fields.");
-    } else {
+    // Summary
+    if all_ok {
         println!("\n✓ Your config is valid and up to date.");
+    } else {
+        println!("\nRun 'mojovoice config --migrate' to auto-update missing fields.");
     }
 
     Ok(())
@@ -560,7 +532,6 @@ fn cmd_config_check() -> Result<()> {
 ///
 /// MAINTENANCE: When adding new config fields with defaults, add migration logic here.
 /// This allows users to automatically populate new optional fields without manual editing.
-/// Always create a backup before modifying the config file.
 fn cmd_config_migrate() -> Result<()> {
     use std::fs;
     use std::time::SystemTime;
@@ -578,51 +549,45 @@ fn cmd_config_migrate() -> Result<()> {
     println!("Creating backup: {}", backup_path.display());
     fs::copy(&config_path, &backup_path)?;
 
-    // Load current and defaults
     let mut current = config::load()?;
     let defaults = config::Config::default();
+    let mut changes = 0;
 
-    let mut changes_made = false;
-
-    // Merge: Keep user values, add missing fields from defaults
+    // Required field
     if current.model.model_id.is_empty() {
-        current.model.model_id = "openai/whisper-large-v3-turbo".to_string();
+        current.model.model_id = defaults.model.model_id.clone();
         println!("✓ Added model.model_id");
-        changes_made = true;
+        changes += 1;
     }
 
-    if current.model.draft_model_path.is_none() {
+    // Optional fields with non-None defaults
+    // Note: Fields like model.prompt and audio.device_name default to None, so no migration needed
+    if current.model.draft_model_path.is_none() && defaults.model.draft_model_path.is_some() {
         current.model.draft_model_path = defaults.model.draft_model_path;
         println!("✓ Added model.draft_model_path");
-        changes_made = true;
+        changes += 1;
     }
 
-    // Note: model.prompt defaults to None (disabled by default) via #[serde(default)]
-    // Note: audio.device_name defaults to None (system default) via #[serde(default)]
-    // No migration needed for optional None fields - they work correctly with defaults
-
-    if current.output.refresh_command.is_none() {
+    if current.output.refresh_command.is_none() && defaults.output.refresh_command.is_some() {
         current.output.refresh_command = defaults.output.refresh_command;
         println!("✓ Added output.refresh_command");
-        changes_made = true;
+        changes += 1;
     }
 
-    if current.history.max_entries.is_none() {
-        current.history.max_entries = Some(500); // Default to 500 entries
-        println!("✓ Added history.max_entries (500 entries)");
-        changes_made = true;
+    if current.history.max_entries.is_none() && defaults.history.max_entries.is_some() {
+        current.history.max_entries = defaults.history.max_entries;
+        println!("✓ Added history.max_entries");
+        changes += 1;
     }
 
-    if !changes_made {
+    if changes == 0 {
         println!("No changes needed - config is already up to date.");
-        // Remove unnecessary backup since no changes were made
         let _ = fs::remove_file(&backup_path);
         return Ok(());
     }
 
-    // Save updated config
     config::save(&current)?;
-    println!("\nMigration complete! Config updated with new fields.");
+    println!("\nMigration complete! Config updated with {} field(s).", changes);
     println!("Backup saved to: {}", backup_path.display());
 
     Ok(())
