@@ -120,29 +120,12 @@ export default function Settings() {
         setConfig(safeConfig);
         setOriginalConfig(safeConfig);
 
-        // Load models and audio devices after a brief delay (non-blocking)
+        // Load models and devices after brief delay (non-blocking to prevent freeze)
         setTimeout(async () => {
           if (!mounted) return;
-          try {
-            console.time('Settings:list_downloaded_models');
-            const models = await invoke<DownloadedModel[]>('list_downloaded_models');
-            console.timeEnd('Settings:list_downloaded_models');
-            if (mounted) setDownloadedModels(models);
-          } catch (err) {
-            console.error('Failed to load models:', err);
-          }
-          try {
-            console.time('Settings:list_audio_devices');
-            const devices = await invoke<AudioDevice[]>('list_audio_devices');
-            console.timeEnd('Settings:list_audio_devices');
-            if (mounted) {
-              setAudioDevices(devices);
-              setDeviceLoadError(null);
-            }
-          } catch (err) {
-            console.error('Failed to load audio devices:', err);
-            if (mounted) setDeviceLoadError(String(err));
-          }
+          await loadDownloadedModels();
+          if (!mounted) return;
+          await loadAudioDevices();
         }, 50);
       } catch (error) {
         console.error('Failed to load config:', error);

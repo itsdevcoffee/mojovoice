@@ -57,22 +57,27 @@ fn setup_audio_device(device_name: Option<&str>) -> Result<AudioSetup> {
 
     let device = match device_name {
         Some(name) => {
-            // Find device by exact name match - fail if not found
-            let available_devices: Vec<String> = host
+            // Collect devices once, then find by name
+            let devices: Vec<_> = host
                 .input_devices()
                 .context("Failed to enumerate input devices")?
-                .filter_map(|d| d.name().ok())
                 .collect();
 
-            host.input_devices()
-                .context("Failed to enumerate input devices")?
+            devices
+                .into_iter()
                 .find(|d| d.name().ok().as_deref() == Some(name))
                 .ok_or_else(|| {
+                    // Re-enumerate for error message (devices consumed by find)
+                    let available: Vec<String> = host
+                        .input_devices()
+                        .ok()
+                        .map(|devs| devs.filter_map(|d| d.name().ok()).collect())
+                        .unwrap_or_default();
                     anyhow::anyhow!(
-                        "Audio device '{}' not found. Available devices: {:?}. \
-                        Update your config or select 'System Default' in Settings.",
+                        "Audio device '{}' not found. Available: {:?}. \
+                        Update config or select 'System Default' in Settings.",
                         name,
-                        available_devices
+                        available
                     )
                 })?
         }
