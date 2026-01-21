@@ -458,6 +458,9 @@ fn cmd_config(show_path: bool, reset: bool, check: bool, migrate: bool) -> Resul
 }
 
 /// Check config for missing or outdated fields
+///
+/// MAINTENANCE: When adding new config fields, update this function to check for them.
+/// This ensures users can validate their config after updates.
 fn cmd_config_check() -> Result<()> {
     let current = config::load()?;
     let defaults = config::Config::default();
@@ -513,6 +516,15 @@ fn cmd_config_check() -> Result<()> {
         },
     }
 
+    // Check audio device selection
+    match &current.audio.device_name {
+        Some(name) => println!("✓ audio.device_name = \"{}\"", name),
+        None => {
+            println!("⚠ audio.device_name = (missing, using system default)");
+            has_warnings = true;
+        },
+    }
+
     // Check refresh_command
     match &current.output.refresh_command {
         Some(cmd) => println!("✓ output.refresh_command = \"{}\"", cmd),
@@ -522,6 +534,15 @@ fn cmd_config_check() -> Result<()> {
                 println!("  Suggestion: {}", default_cmd);
                 has_warnings = true;
             }
+        },
+    }
+
+    // Check history max_entries
+    match current.history.max_entries {
+        Some(n) => println!("✓ history.max_entries = {} entries", n),
+        None => {
+            println!("⚠ history.max_entries = (missing, unlimited history)");
+            has_warnings = true;
         },
     }
 
@@ -536,6 +557,10 @@ fn cmd_config_check() -> Result<()> {
 }
 
 /// Migrate config to latest schema with backup
+///
+/// MAINTENANCE: When adding new config fields with defaults, add migration logic here.
+/// This allows users to automatically populate new optional fields without manual editing.
+/// Always create a backup before modifying the config file.
 fn cmd_config_migrate() -> Result<()> {
     use std::fs;
     use std::time::SystemTime;
@@ -557,25 +582,49 @@ fn cmd_config_migrate() -> Result<()> {
     let mut current = config::load()?;
     let defaults = config::Config::default();
 
+    let mut changes_made = false;
+
     // Merge: Keep user values, add missing fields from defaults
     if current.model.model_id.is_empty() {
         current.model.model_id = "openai/whisper-large-v3-turbo".to_string();
         println!("✓ Added model.model_id");
+        changes_made = true;
     }
 
     if current.model.draft_model_path.is_none() {
         current.model.draft_model_path = defaults.model.draft_model_path;
         println!("✓ Added model.draft_model_path");
+        changes_made = true;
     }
 
     if current.model.prompt.is_none() {
         current.model.prompt = defaults.model.prompt;
         println!("✓ Added model.prompt (technical vocabulary)");
+        changes_made = true;
+    }
+
+    if current.audio.device_name.is_none() {
+        current.audio.device_name = None; // Explicitly use system default
+        println!("✓ Added audio.device_name (using system default)");
+        changes_made = true;
     }
 
     if current.output.refresh_command.is_none() {
         current.output.refresh_command = defaults.output.refresh_command;
         println!("✓ Added output.refresh_command");
+        changes_made = true;
+    }
+
+    if current.history.max_entries.is_none() {
+        current.history.max_entries = Some(500); // Default to 500 entries
+        println!("✓ Added history.max_entries (500 entries)");
+        changes_made = true;
+    }
+
+    if !changes_made {
+        println!("No changes needed - config is already up to date.");
+        println!("Backup saved anyway to: {}", backup_path.display());
+        return Ok(());
     }
 
     // Save updated config

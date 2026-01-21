@@ -4,6 +4,11 @@ use std::path::PathBuf;
 
 const APP_NAME: &str = "mojovoice";
 
+/// MAINTENANCE: When adding new config fields, also update:
+/// 1. `cmd_config_check()` in main.rs - to validate the new field
+/// 2. `cmd_config_migrate()` in main.rs - to add the field with a default value
+/// 3. Add `#[serde(default)]` if the field is optional
+/// This ensures users can validate and migrate their configs after updates.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub model: ModelConfig,
