@@ -597,17 +597,9 @@ fn cmd_config_migrate() -> Result<()> {
         changes_made = true;
     }
 
-    if current.model.prompt.is_none() {
-        current.model.prompt = defaults.model.prompt;
-        println!("✓ Added model.prompt (technical vocabulary)");
-        changes_made = true;
-    }
-
-    if current.audio.device_name.is_none() {
-        current.audio.device_name = None; // Explicitly use system default
-        println!("✓ Added audio.device_name (using system default)");
-        changes_made = true;
-    }
+    // Note: model.prompt defaults to None (disabled by default) via #[serde(default)]
+    // Note: audio.device_name defaults to None (system default) via #[serde(default)]
+    // No migration needed for optional None fields - they work correctly with defaults
 
     if current.output.refresh_command.is_none() {
         current.output.refresh_command = defaults.output.refresh_command;
@@ -623,7 +615,8 @@ fn cmd_config_migrate() -> Result<()> {
 
     if !changes_made {
         println!("No changes needed - config is already up to date.");
-        println!("Backup saved anyway to: {}", backup_path.display());
+        // Remove unnecessary backup since no changes were made
+        let _ = fs::remove_file(&backup_path);
         return Ok(());
     }
 
