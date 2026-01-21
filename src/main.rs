@@ -361,7 +361,7 @@ fn cmd_start_fixed(model_override: Option<String>, duration: u32, clipboard: boo
     info!("Model loaded successfully");
 
     info!("Recording for {} seconds...", duration);
-    let audio_data = audio::capture(duration, cfg.audio.sample_rate)?;
+    let audio_data = audio::capture(duration, cfg.audio.sample_rate, cfg.audio.device_name.as_deref())?;
     info!("Captured {} samples", audio_data.len());
 
     let processing_file = state::get_state_dir()?.join("processing");

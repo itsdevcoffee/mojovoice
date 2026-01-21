@@ -10,6 +10,39 @@ use tracing::{info, warn};
 
 const TARGET_SAMPLE_RATE: u32 = 16000;
 
+/// Audio device info for UI display
+#[allow(dead_code)] // Public API - called from Tauri UI
+#[derive(Debug, Clone)]
+pub struct AudioDeviceInfo {
+    /// Device name (used as identifier)
+    pub name: String,
+    /// Whether this is the system default device
+    pub is_default: bool,
+}
+
+/// List available audio input devices
+#[allow(dead_code)] // Public API - called from Tauri UI
+pub fn list_input_devices() -> Result<Vec<AudioDeviceInfo>> {
+    let host = cpal::default_host();
+    let default_device_name = host
+        .default_input_device()
+        .and_then(|d| d.name().ok());
+
+    let devices: Vec<AudioDeviceInfo> = host
+        .input_devices()
+        .context("Failed to enumerate input devices")?
+        .filter_map(|device| {
+            let name = device.name().ok()?;
+            Some(AudioDeviceInfo {
+                is_default: default_device_name.as_ref() == Some(&name),
+                name,
+            })
+        })
+        .collect();
+
+    Ok(devices)
+}
+
 /// Audio device configuration
 struct AudioSetup {
     device: Device,
@@ -18,12 +51,36 @@ struct AudioSetup {
     channels: u16,
 }
 
-/// Set up the default audio input device
-fn setup_audio_device() -> Result<AudioSetup> {
+/// Set up an audio input device by name, or the default if None
+fn setup_audio_device(device_name: Option<&str>) -> Result<AudioSetup> {
     let host = cpal::default_host();
-    let device = host
-        .default_input_device()
-        .context("No input device available. Check microphone permissions.")?;
+
+    let device = match device_name {
+        Some(name) => {
+            // Find device by exact name match - fail if not found
+            let available_devices: Vec<String> = host
+                .input_devices()
+                .context("Failed to enumerate input devices")?
+                .filter_map(|d| d.name().ok())
+                .collect();
+
+            host.input_devices()
+                .context("Failed to enumerate input devices")?
+                .find(|d| d.name().ok().as_deref() == Some(name))
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Audio device '{}' not found. Available devices: {:?}. \
+                        Update your config or select 'System Default' in Settings.",
+                        name,
+                        available_devices
+                    )
+                })?
+        }
+        None => {
+            host.default_input_device()
+                .context("No input device available. Check microphone permissions.")?
+        }
+    };
 
     let default_config = device
         .default_input_config()
@@ -84,12 +141,12 @@ fn to_mono(samples: Vec<f32>, channels: u16) -> Vec<f32> {
     }
 }
 
-/// Capture audio from default microphone for fixed duration.
+/// Capture audio from microphone for fixed duration.
 /// Returns f32 PCM samples at 16kHz mono (Whisper requirement).
-pub fn capture(duration_secs: u32, _sample_rate: u32) -> Result<Vec<f32>> {
+pub fn capture(duration_secs: u32, _sample_rate: u32, device_name: Option<&str>) -> Result<Vec<f32>> {
     info!("Starting audio capture: {}s", duration_secs);
 
-    let setup = setup_audio_device()?;
+    let setup = setup_audio_device(device_name)?;
     let expected_samples =
         (setup.sample_rate * duration_secs) as usize * setup.channels as usize;
     let buffer = Arc::new(Mutex::new(Vec::with_capacity(expected_samples)));
@@ -107,12 +164,12 @@ pub fn capture(duration_secs: u32, _sample_rate: u32) -> Result<Vec<f32>> {
 }
 
 /// Capture in toggle mode - stops when signal received or max duration reached
-pub fn capture_toggle(max_duration_secs: u32, _sample_rate: u32) -> Result<Vec<f32>> {
+pub fn capture_toggle(max_duration_secs: u32, _sample_rate: u32, device_name: Option<&str>) -> Result<Vec<f32>> {
     use crate::state::toggle::should_stop;
 
     info!("Starting toggle mode capture (max {}s)", max_duration_secs);
 
-    let setup = setup_audio_device()?;
+    let setup = setup_audio_device(device_name)?;
     let expected_samples =
         (setup.sample_rate * max_duration_secs) as usize * setup.channels as usize;
     let buffer = Arc::new(Mutex::new(Vec::with_capacity(expected_samples)));

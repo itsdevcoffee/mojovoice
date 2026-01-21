@@ -41,6 +41,9 @@ pub struct AudioConfig {
     /// Directory to save audio clips (WAV format with timestamps)
     #[serde(default = "default_audio_clips_path")]
     pub audio_clips_path: PathBuf,
+    /// Audio input device name (None = system default)
+    #[serde(default)]
+    pub device_name: Option<String>,
 }
 
 fn default_audio_clips_path() -> PathBuf {
@@ -166,6 +169,7 @@ impl Default for Config {
                 timeout_secs: 180,
                 save_audio_clips: false,
                 audio_clips_path: default_audio_clips_path(),
+                device_name: None,
             },
             output: OutputConfig {
                 display_server: None,

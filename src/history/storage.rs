@@ -31,6 +31,7 @@ fn acquire_exclusive_lock(history_path: &Path) -> Result<File> {
 }
 
 /// Acquire a shared lock for read operations
+#[allow(dead_code)] // Used by load_entries/get_unique_models (called from Tauri UI)
 fn acquire_shared_lock(history_path: &Path) -> Result<File> {
     let lock_path = get_lock_file_path(history_path);
     let lock_file = OpenOptions::new()
@@ -158,6 +159,7 @@ impl HistoryEntry {
 }
 
 /// Response containing history entries with pagination info
+#[allow(dead_code)] // Constructed by load_entries, used via Tauri UI
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HistoryResponse {
     pub entries: Vec<HistoryEntry>,
@@ -198,6 +200,7 @@ pub fn append_entry(entry: &HistoryEntry) -> Result<()> {
 /// * `model_filter` - Optional model name to filter by
 ///
 /// Entries are returned in reverse chronological order (newest first)
+#[allow(dead_code)] // Public API - called from Tauri UI
 pub fn load_entries(
     limit: usize,
     offset: usize,
@@ -242,6 +245,7 @@ pub fn load_entries(
 }
 
 /// Delete a single entry by ID (uses atomic write to prevent data loss)
+#[allow(dead_code)] // Public API - called from Tauri UI
 pub fn delete_entry(id: &str) -> Result<()> {
     let history_file = get_history_file()?;
 
@@ -263,6 +267,7 @@ pub fn delete_entry(id: &str) -> Result<()> {
 }
 
 /// Clear all history entries (uses atomic write to prevent partial state)
+#[allow(dead_code)] // Public API - called from Tauri UI
 pub fn clear_history() -> Result<()> {
     let history_file = get_history_file()?;
 
@@ -313,6 +318,7 @@ pub fn enforce_max_entries(max_entries: usize) -> Result<()> {
 }
 
 /// Get list of unique model names from history
+#[allow(dead_code)] // Public API - called from Tauri UI
 pub fn get_unique_models() -> Result<Vec<String>> {
     let history_file = get_history_file()?;
 
@@ -338,6 +344,7 @@ mod tests {
     use tempfile::TempDir;
 
     // Helper to create a temp history file for testing
+    #[allow(dead_code)] // Test utility for future tests
     fn setup_temp_history() -> (TempDir, std::path::PathBuf) {
         let temp_dir = TempDir::new().unwrap();
         let history_path = temp_dir.path().join("history.jsonl");

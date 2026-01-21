@@ -80,6 +80,7 @@ pub fn daemon_shutdown() -> Result<()> {
 }
 
 /// Status info returned from daemon
+#[allow(dead_code)] // Fields populated from daemon response, may not all be read directly
 #[derive(Debug)]
 pub struct DaemonStatusInfo {
     pub model_name: String,

@@ -197,6 +197,29 @@ pub async fn get_daemon_status() -> Result<DaemonStatus, String> {
     }
 }
 
+/// Audio device information for the frontend
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioDevice {
+    pub name: String,
+    pub is_default: bool,
+}
+
+/// List available audio input devices
+#[tauri::command]
+pub async fn list_audio_devices() -> Result<Vec<AudioDevice>, String> {
+    let devices = mojovoice::audio::list_input_devices()
+        .map_err(|e| format!("Failed to list audio devices: {}", e))?;
+
+    Ok(devices
+        .into_iter()
+        .map(|d| AudioDevice {
+            name: d.name,
+            is_default: d.is_default,
+        })
+        .collect())
+}
+
 /// Start recording audio
 #[tauri::command]
 pub async fn start_recording() -> Result<(), String> {
@@ -924,6 +947,7 @@ pub struct AudioConfig {
     pub timeout_secs: u32,
     pub save_audio_clips: bool,
     pub audio_clips_path: String,
+    pub device_name: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

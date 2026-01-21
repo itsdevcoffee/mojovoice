@@ -5,6 +5,7 @@ use serde::Deserialize;
 use std::path::Path;
 
 /// Audio sample manifest structure.
+#[allow(dead_code)] // Fields populated by serde deserialization
 #[derive(Debug, Deserialize)]
 pub struct SampleManifest {
     pub description: String,
@@ -12,6 +13,7 @@ pub struct SampleManifest {
 }
 
 /// Individual audio sample metadata.
+#[allow(dead_code)] // Fields populated by serde deserialization
 #[derive(Debug, Deserialize)]
 pub struct AudioSample {
     pub file: String,

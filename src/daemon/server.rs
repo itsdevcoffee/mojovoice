@@ -253,6 +253,10 @@ impl DaemonServer {
 
         info!("Starting background recording (max {}s)", max_duration);
 
+        // Load config to get device_name
+        let config = crate::config::load()?;
+        let device_name = config.audio.device_name.clone();
+
         // Create PID file for UI state (Waybar uses this)
         state::toggle::start_recording()?;
 
@@ -260,7 +264,7 @@ impl DaemonServer {
         state::toggle::setup_signal_handler()?;
 
         // Spawn recording thread
-        let handle = thread::spawn(move || capture_toggle(max_duration, 16000));
+        let handle = thread::spawn(move || capture_toggle(max_duration, 16000, device_name.as_deref()));
 
         state.handle = Some(handle);
         state.audio = None;

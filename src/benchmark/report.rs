@@ -74,8 +74,8 @@ fn render_html(results: &[(String, BenchmarkResult)]) -> String {
     let css = include_str!("report_style.css");
     let models_json = serde_json::to_string(results).unwrap_or_else(|_| "[]".to_string());
 
-    // Get unique models for comparison
-    let models: Vec<&str> = results
+    // Get unique models for comparison (reserved for future use)
+    let _models: Vec<&str> = results
         .iter()
         .map(|(_, r)| r.benchmark_info.model_name.as_str())
         .collect::<std::collections::HashSet<_>>()

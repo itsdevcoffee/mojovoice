@@ -20,6 +20,7 @@ interface Config {
     timeout_secs: number;
     save_audio_clips: boolean;
     audio_clips_path: string;
+    device_name: string | null;
   };
   output: {
     append_space: boolean;
@@ -34,6 +35,11 @@ interface Config {
   };
 }
 
+interface AudioDevice {
+  name: string;
+  isDefault: boolean;
+}
+
 interface DownloadedModel {
   name: string;
   filename: string;
@@ -43,7 +49,7 @@ interface DownloadedModel {
 }
 
 // Settings that require daemon restart when changed
-const DAEMON_SETTINGS = ['model.model_id', 'model.language', 'model.path', 'audio.sample_rate'];
+const DAEMON_SETTINGS = ['model.model_id', 'model.language', 'model.path', 'audio.sample_rate', 'audio.device_name'];
 
 // Language options with display name and code
 const LANGUAGE_OPTIONS = [
@@ -80,6 +86,7 @@ export default function Settings() {
   const [config, setConfig] = useState<Config | null>(null);
   const [originalConfig, setOriginalConfig] = useState<Config | null>(null);
   const [downloadedModels, setDownloadedModels] = useState<DownloadedModel[]>([]);
+  const [audioDevices, setAudioDevices] = useState<AudioDevice[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -89,6 +96,7 @@ export default function Settings() {
   const [restartError, setRestartError] = useState<string | null>(null);
   const [previewScale, setPreviewScale] = useState<number | null>(null);
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
+  const [deviceLoadError, setDeviceLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -112,7 +120,7 @@ export default function Settings() {
         setConfig(safeConfig);
         setOriginalConfig(safeConfig);
 
-        // Load models after a brief delay (non-blocking)
+        // Load models and audio devices after a brief delay (non-blocking)
         setTimeout(async () => {
           if (!mounted) return;
           try {
@@ -122,6 +130,18 @@ export default function Settings() {
             if (mounted) setDownloadedModels(models);
           } catch (err) {
             console.error('Failed to load models:', err);
+          }
+          try {
+            console.time('Settings:list_audio_devices');
+            const devices = await invoke<AudioDevice[]>('list_audio_devices');
+            console.timeEnd('Settings:list_audio_devices');
+            if (mounted) {
+              setAudioDevices(devices);
+              setDeviceLoadError(null);
+            }
+          } catch (err) {
+            console.error('Failed to load audio devices:', err);
+            if (mounted) setDeviceLoadError(String(err));
           }
         }, 50);
       } catch (error) {
@@ -154,6 +174,17 @@ export default function Settings() {
     }
   };
 
+  const loadAudioDevices = async () => {
+    try {
+      const devices = await invoke<AudioDevice[]>('list_audio_devices');
+      setAudioDevices(devices);
+      setDeviceLoadError(null);
+    } catch (error) {
+      console.error('Failed to load audio devices:', error);
+      setDeviceLoadError(String(error));
+    }
+  };
+
   const reloadConfig = async () => {
     try {
       const cfg = await invoke<Config>('get_config');
@@ -161,6 +192,7 @@ export default function Settings() {
       setOriginalConfig(cfg);
       setPreviewScale(null);
       await loadDownloadedModels();
+      await loadAudioDevices();
     } catch (error) {
       console.error('Failed to reload config:', error);
     }
@@ -229,8 +261,9 @@ export default function Settings() {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
 
-      // Reload downloaded models to update active status
+      // Reload models and devices to update status
       loadDownloadedModels();
+      loadAudioDevices();
     } catch (error) {
       console.error('Failed to save config:', error);
       alert(`Failed to save: ${error}`);
@@ -423,14 +456,33 @@ export default function Settings() {
             </div>
           </SettingRow>
 
-          <SettingRow label="Audio Device" description="Input device for recording">
-            <select
-              className="glass-input"
-              disabled
-              title="Audio device selection coming soon"
-            >
-              <option>System Default</option>
-            </select>
+          <SettingRow label="Audio Device" description="Input device for recording (requires restart)">
+            <div className="space-y-1">
+              <select
+                value={config.audio.device_name ?? ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setConfig({
+                    ...config,
+                    audio: {
+                      ...config.audio,
+                      device_name: value === '' ? null : value,
+                    },
+                  });
+                }}
+                className="glass-input w-full"
+              >
+                <option value="">System Default (auto-detect)</option>
+                {audioDevices.map((device) => (
+                  <option key={device.name} value={device.name}>
+                    {device.name}{device.isDefault ? ' (current default)' : ''}
+                  </option>
+                ))}
+              </select>
+              {deviceLoadError && (
+                <p className="text-red-400 text-xs">Failed to load devices: {deviceLoadError}</p>
+              )}
+            </div>
           </SettingRow>
         </SettingsSection>
 

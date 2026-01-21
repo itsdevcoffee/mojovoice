@@ -40,6 +40,8 @@ fn main() {
             commands::delete_model,
             commands::switch_model,
             commands::cancel_download,
+            // Audio devices
+            commands::list_audio_devices,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
