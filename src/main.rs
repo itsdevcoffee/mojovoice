@@ -555,11 +555,30 @@ fn cmd_config_migrate() -> Result<()> {
     use std::fs;
     use std::time::SystemTime;
 
+    let mut current = config::load()?;
+    let defaults = config::Config::default();
+
+    // Check what needs to be migrated FIRST (before creating backup)
+    let needs_model_id = current.model.model_id.is_empty();
+    let needs_draft_model = current.model.draft_model_path.is_none()
+        && defaults.model.draft_model_path.is_some();
+    let needs_refresh_cmd = current.output.refresh_command.is_none()
+        && defaults.output.refresh_command.is_some();
+    let needs_max_entries = current.history.max_entries.is_none()
+        && defaults.history.max_entries.is_some();
+
+    let has_changes = needs_model_id || needs_draft_model || needs_refresh_cmd || needs_max_entries;
+
+    if !has_changes {
+        println!("No changes needed - config is already up to date.");
+        return Ok(());
+    }
+
+    // Only create backup if we have changes to make
     let config_path = config::config_path()?;
     let backup_dir = config_path.parent().unwrap().join("backups");
     fs::create_dir_all(&backup_dir)?;
 
-    // Create timestamped backup
     let timestamp = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)?
         .as_secs();
@@ -568,41 +587,31 @@ fn cmd_config_migrate() -> Result<()> {
     println!("Creating backup: {}", backup_path.display());
     fs::copy(&config_path, &backup_path)?;
 
-    let mut current = config::load()?;
-    let defaults = config::Config::default();
+    // Apply migrations
     let mut changes = 0;
 
-    // Required field
-    if current.model.model_id.is_empty() {
+    if needs_model_id {
         current.model.model_id = defaults.model.model_id.clone();
         println!("✓ Added model.model_id");
         changes += 1;
     }
 
-    // Optional fields with non-None defaults
-    // Note: Fields like model.prompt and audio.device_name default to None, so no migration needed
-    if current.model.draft_model_path.is_none() && defaults.model.draft_model_path.is_some() {
+    if needs_draft_model {
         current.model.draft_model_path = defaults.model.draft_model_path;
         println!("✓ Added model.draft_model_path");
         changes += 1;
     }
 
-    if current.output.refresh_command.is_none() && defaults.output.refresh_command.is_some() {
+    if needs_refresh_cmd {
         current.output.refresh_command = defaults.output.refresh_command;
         println!("✓ Added output.refresh_command");
         changes += 1;
     }
 
-    if current.history.max_entries.is_none() && defaults.history.max_entries.is_some() {
+    if needs_max_entries {
         current.history.max_entries = defaults.history.max_entries;
         println!("✓ Added history.max_entries");
         changes += 1;
-    }
-
-    if changes == 0 {
-        println!("No changes needed - config is already up to date.");
-        let _ = fs::remove_file(&backup_path);
-        return Ok(());
     }
 
     config::save(&current)?;
