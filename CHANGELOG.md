@@ -5,7 +5,7 @@ All notable changes to mojovoice will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.0] - Unreleased
+## [0.5.0] - 2026-01-22
 
 ### Added
 - **Daemon subcommands:** New CLI structure with `daemon up`, `down`, `restart`, `status`, `logs`, `pid`
@@ -43,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Settings async loading:** Prevented UI freeze when loading config on Settings tab
 - **Model registry sizes:** Now shows accurate download sizes matching actual files
 - **Config migrate:** No longer creates backup when no changes needed
+- **Export Diagnostics permissions:** Added missing Tauri fs write permissions
 
 ### Refactored
 - Simplified main.rs CLI entry point
