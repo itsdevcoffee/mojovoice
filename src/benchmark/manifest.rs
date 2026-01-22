@@ -67,7 +67,7 @@ pub fn load_audio_samples(path: &Path) -> Result<Vec<f32>> {
                 .into_iter()
                 .map(|s| s as f32 / max_val)
                 .collect()
-        }
+        },
     };
 
     // Convert stereo to mono if needed (handle odd sample counts)

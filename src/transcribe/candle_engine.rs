@@ -79,8 +79,8 @@ pub struct CandleEngine {
     language: String,
     initial_prompt: Option<String>,
     suppress_tokens: Tensor,
-    num_mel_bins: usize,    // 128 for large-v3/turbo, 80 for others
-    is_english_only: bool,  // True for .en models (skip lang/task tokens)
+    num_mel_bins: usize,   // 128 for large-v3/turbo, 80 for others
+    is_english_only: bool, // True for .en models (skip lang/task tokens)
 }
 
 impl CandleEngine {
@@ -109,7 +109,8 @@ impl CandleEngine {
         // 1. Direct GGUF file: /path/to/model.gguf
         // 2. Directory with GGUF: /path/to/model_dir/model.gguf
         // 3. Directory with safetensors: /path/to/model_dir/model.safetensors
-        let is_direct_gguf = is_local && (model_id.ends_with(".gguf") || model_id.ends_with(".bin"));
+        let is_direct_gguf =
+            is_local && (model_id.ends_with(".gguf") || model_id.ends_with(".bin"));
         let is_dir_gguf = is_local && model_path.is_dir() && model_path.join("model.gguf").exists();
         let is_quantized = is_direct_gguf || is_dir_gguf;
 
@@ -143,7 +144,8 @@ impl CandleEngine {
 
                     if config_path.exists() && tokenizer_path.exists() {
                         info!("Using local config and tokenizer");
-                        let config: Config = serde_json::from_str(&std::fs::read_to_string(&config_path)?)?;
+                        let config: Config =
+                            serde_json::from_str(&std::fs::read_to_string(&config_path)?)?;
                         let tokenizer = Tokenizer::from_file(&tokenizer_path)
                             .map_err(|e| anyhow::anyhow!("Failed to load tokenizer: {}", e))?;
                         (config, tokenizer)
@@ -156,10 +158,12 @@ impl CandleEngine {
                              Consider downloading the model via the UI to get matching config files."
                         );
                         let api = Api::new()?;
-                        let repo = api.repo(Repo::model("openai/whisper-large-v3-turbo".to_string()));
+                        let repo =
+                            api.repo(Repo::model("openai/whisper-large-v3-turbo".to_string()));
                         let config_filename = repo.get("config.json")?;
                         let tokenizer_filename = repo.get("tokenizer.json")?;
-                        let config: Config = serde_json::from_str(&std::fs::read_to_string(config_filename)?)?;
+                        let config: Config =
+                            serde_json::from_str(&std::fs::read_to_string(config_filename)?)?;
                         let tokenizer = Tokenizer::from_file(tokenizer_filename)
                             .map_err(|e| anyhow::anyhow!("Failed to load tokenizer: {}", e))?;
                         (config, tokenizer)
@@ -175,7 +179,8 @@ impl CandleEngine {
                     let repo = api.repo(Repo::model("openai/whisper-large-v3-turbo".to_string()));
                     let config_filename = repo.get("config.json")?;
                     let tokenizer_filename = repo.get("tokenizer.json")?;
-                    let config: Config = serde_json::from_str(&std::fs::read_to_string(config_filename)?)?;
+                    let config: Config =
+                        serde_json::from_str(&std::fs::read_to_string(config_filename)?)?;
                     let tokenizer = Tokenizer::from_file(tokenizer_filename)
                         .map_err(|e| anyhow::anyhow!("Failed to load tokenizer: {}", e))?;
                     (config, tokenizer)
@@ -419,7 +424,10 @@ impl CandleEngine {
         debug!("Got {} prompt tokens", prompt_tokens.len());
 
         // Run encoder
-        debug!("Running encoder forward pass on mel shape: {:?}", mel.shape());
+        debug!(
+            "Running encoder forward pass on mel shape: {:?}",
+            mel.shape()
+        );
         let audio_features = self.model.encoder_forward(mel, true)?;
         debug!(
             "Encoder output: batch={}, frames={}, d_model={}",
@@ -433,10 +441,7 @@ impl CandleEngine {
         // - English-only: <|sot|><|notimestamps|>[prompt]
         let mut current_tokens = if self.is_english_only {
             // English-only models expect simplified sequence (no language/task tokens)
-            vec![
-                special_tokens.sot_token,
-                special_tokens.no_timestamps_token,
-            ]
+            vec![special_tokens.sot_token, special_tokens.no_timestamps_token]
         } else {
             // Multilingual models need full sequence
             vec![
@@ -462,7 +467,10 @@ impl CandleEngine {
 
         // Decoder has hard limit of 448 total positions
         let max_tokens = 448_usize.saturating_sub(start_result_idx);
-        debug!("Max new tokens: {} (start_idx={})", max_tokens, start_result_idx);
+        debug!(
+            "Max new tokens: {} (start_idx={})",
+            max_tokens, start_result_idx
+        );
 
         // Quality metrics tracking
         let mut sum_logprob = 0.0f64;
@@ -514,7 +522,9 @@ impl CandleEngine {
                     if repeat_count >= MAX_REPEATS {
                         warn!(
                             "Token {} repeated {} times, breaking loop ({} tokens generated)",
-                            next_token, repeat_count, result_tokens.len()
+                            next_token,
+                            repeat_count,
+                            result_tokens.len()
                         );
                         break;
                     }
@@ -578,10 +588,7 @@ impl CandleEngine {
                         return Ok(text);
                     }
 
-                    debug!(
-                        "Quality check failed at temp {}, trying next",
-                        temp
-                    );
+                    debug!("Quality check failed at temp {}, trying next", temp);
                 },
                 Err(e) => {
                     warn!("Decoding failed at temp {}: {}", temp, e);

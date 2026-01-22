@@ -32,6 +32,7 @@ fn acquire_exclusive_lock(history_path: &Path) -> Result<File> {
 
 /// Acquire a shared lock for read operations
 #[allow(dead_code)] // Used by load_entries/get_unique_models (called from Tauri UI)
+#[allow(clippy::incompatible_msrv)] // Using fs2::FileExt::lock_shared, not std
 fn acquire_shared_lock(history_path: &Path) -> Result<File> {
     let lock_path = get_lock_file_path(history_path);
     let lock_file = OpenOptions::new()
@@ -40,9 +41,7 @@ fn acquire_shared_lock(history_path: &Path) -> Result<File> {
         .truncate(true)
         .open(&lock_path)
         .context("Failed to open lock file")?;
-    lock_file
-        .lock_shared()
-        .context("Failed to acquire shared lock")?;
+    fs2::FileExt::lock_shared(&lock_file).context("Failed to acquire shared lock")?;
     Ok(lock_file)
 }
 
@@ -67,7 +66,7 @@ fn read_all_entries(path: &Path) -> Result<Vec<HistoryEntry>> {
                 Err(e) => {
                     warn!("Skipping corrupted history line: {}", e);
                     None
-                }
+                },
             }
         })
         .collect();
@@ -100,7 +99,9 @@ fn write_entries_atomic(path: &Path, entries: &[HistoryEntry]) -> Result<()> {
             writeln!(writer, "{}", line).context("Failed to write entry")?;
         }
 
-        writer.flush().context("Failed to flush temp history file")?;
+        writer
+            .flush()
+            .context("Failed to flush temp history file")?;
         // Ensure data is synced to disk before rename
         writer
             .into_inner()
@@ -327,10 +328,8 @@ pub fn get_unique_models() -> Result<Vec<String>> {
 
     let entries = read_all_entries(&history_file)?;
 
-    let model_set: std::collections::HashSet<String> = entries
-        .into_iter()
-        .map(|e| e.model)
-        .collect();
+    let model_set: std::collections::HashSet<String> =
+        entries.into_iter().map(|e| e.model).collect();
 
     let mut models: Vec<String> = model_set.into_iter().collect();
     models.sort();

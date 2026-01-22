@@ -8,6 +8,7 @@ const APP_NAME: &str = "mojovoice";
 /// 1. `cmd_config_check()` in main.rs - to validate the new field
 /// 2. `cmd_config_migrate()` in main.rs - to add the field with a default value
 /// 3. Add `#[serde(default)]` if the field is optional
+///
 /// This ensures users can validate and migrate their configs after updates.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -100,13 +101,19 @@ impl UiConfig {
         // Validate scale preset
         let valid_presets = ["small", "medium", "large", "custom"];
         if !valid_presets.contains(&self.scale_preset.as_str()) {
-            eprintln!("Invalid scale_preset '{}', using 'medium'", self.scale_preset);
+            eprintln!(
+                "Invalid scale_preset '{}', using 'medium'",
+                self.scale_preset
+            );
             self.scale_preset = "medium".to_string();
         }
 
         // Clamp custom scale to valid bounds (0.5 to 2.0)
         if self.custom_scale < 0.5 || self.custom_scale > 2.0 {
-            eprintln!("Custom scale {} out of bounds, clamping to [0.5, 2.0]", self.custom_scale);
+            eprintln!(
+                "Custom scale {} out of bounds, clamping to [0.5, 2.0]",
+                self.custom_scale
+            );
             self.custom_scale = self.custom_scale.clamp(0.5, 2.0);
         }
     }

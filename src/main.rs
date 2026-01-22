@@ -23,7 +23,11 @@ fn validate_model_path(cfg: &config::Config) -> Result<()> {
         anyhow::bail!(
             "Model not found: {}\nRun: mojovoice download {}",
             cfg.model.path.display(),
-            cfg.model.path.file_stem().unwrap_or_default().to_string_lossy()
+            cfg.model
+                .path
+                .file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
         );
     }
     Ok(())
@@ -203,18 +207,30 @@ fn main() -> Result<()> {
     init_logging(cli.verbose)?;
 
     match cli.command {
-        Commands::Start { model, duration, clipboard } => cmd_start(model, duration, clipboard)?,
+        Commands::Start {
+            model,
+            duration,
+            clipboard,
+        } => cmd_start(model, duration, clipboard)?,
         Commands::Stop => cmd_stop()?,
         Commands::Cancel => cmd_cancel()?,
         Commands::Download { model } => cmd_download(&model)?,
-        Commands::Config { path, reset, check, migrate } => cmd_config(path, reset, check, migrate)?,
+        Commands::Config {
+            path,
+            reset,
+            check,
+            migrate,
+        } => cmd_config(path, reset, check, migrate)?,
         Commands::Doctor => cmd_doctor()?,
         Commands::Daemon { command } => cmd_daemon(command)?,
         Commands::EnigoTest { text, clipboard } => commands::enigo_test(&text, clipboard)?,
         Commands::TranscribeFile { path, model } => cmd_transcribe_file(&path, model)?,
-        Commands::Benchmark { samples_dir, output_dir, stdout_only, report } => {
-            cmd_benchmark(samples_dir, output_dir, stdout_only, report)?
-        }
+        Commands::Benchmark {
+            samples_dir,
+            output_dir,
+            stdout_only,
+            report,
+        } => cmd_benchmark(samples_dir, output_dir, stdout_only, report)?,
     }
 
     Ok(())
@@ -307,7 +323,7 @@ fn cmd_stop_recording(clipboard: bool) -> Result<()> {
 
             send_notification("Transcription Complete", &truncate_preview(&text), "normal");
             Ok(())
-        }
+        },
         daemon::DaemonResponse::Error { message } => anyhow::bail!("Daemon error: {}", message),
         _ => anyhow::bail!("Unexpected response from daemon"),
     }
@@ -315,7 +331,10 @@ fn cmd_stop_recording(clipboard: bool) -> Result<()> {
 
 /// Start recording (called from toggle mode)
 fn cmd_start_recording(timeout_secs: u32) -> Result<()> {
-    info!("Starting recording via daemon (max {} seconds)", timeout_secs);
+    info!(
+        "Starting recording via daemon (max {} seconds)",
+        timeout_secs
+    );
     println!("Recording started. Run 'mojovoice start' again or 'mojovoice stop' to finish.");
 
     if !daemon::is_daemon_running() {
@@ -331,8 +350,10 @@ fn cmd_start_recording(timeout_secs: u32) -> Result<()> {
             info!("Daemon started recording");
             println!("Recording... Press Super+V again to stop and transcribe.");
             Ok(())
-        }
-        daemon::DaemonResponse::Error { message } => anyhow::bail!("Failed to start recording: {}", message),
+        },
+        daemon::DaemonResponse::Error { message } => {
+            anyhow::bail!("Failed to start recording: {}", message)
+        },
         _ => anyhow::bail!("Unexpected response from daemon"),
     }
 }
@@ -354,14 +375,21 @@ fn cmd_start_fixed(model_override: Option<String>, duration: u32, clipboard: boo
 
     info!("Loading whisper model...");
     let mut transcriber = transcribe::candle_engine::CandleEngine::with_options(
-        cfg.model.path.to_str().ok_or_else(|| anyhow::anyhow!("Invalid model path"))?,
+        cfg.model
+            .path
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("Invalid model path"))?,
         &cfg.model.language,
         cfg.model.prompt.clone(),
     )?;
     info!("Model loaded successfully");
 
     info!("Recording for {} seconds...", duration);
-    let audio_data = audio::capture(duration, cfg.audio.sample_rate, cfg.audio.device_name.as_deref())?;
+    let audio_data = audio::capture(
+        duration,
+        cfg.audio.sample_rate,
+        cfg.audio.device_name.as_deref(),
+    )?;
     info!("Captured {} samples", audio_data.len());
 
     let processing_file = state::get_state_dir()?.join("processing");
@@ -484,7 +512,10 @@ fn cmd_config_check() -> Result<()> {
     if current.model.path.exists() {
         println!("✓ model.path = {}", current.model.path.display());
     } else {
-        println!("✗ model.path = {} (not found)", current.model.path.display());
+        println!(
+            "✗ model.path = {} (not found)",
+            current.model.path.display()
+        );
         has_errors = true;
     }
 
@@ -492,15 +523,15 @@ fn cmd_config_check() -> Result<()> {
     match &current.model.draft_model_path {
         Some(path) if path.exists() => {
             println!("✓ model.draft_model_path = {}", path.display());
-        }
+        },
         Some(path) => {
             println!("⚠ model.draft_model_path = {} (not found)", path.display());
             has_errors = true;
-        }
+        },
         None => {
             println!("⚠ model.draft_model_path = (missing, speculative decoding disabled)");
             can_migrate = true;
-        }
+        },
     }
 
     match &current.output.refresh_command {
@@ -511,7 +542,7 @@ fn cmd_config_check() -> Result<()> {
                 println!("  Suggestion: {}", default_cmd);
             }
             can_migrate = true;
-        }
+        },
     }
 
     match current.history.max_entries {
@@ -519,7 +550,7 @@ fn cmd_config_check() -> Result<()> {
         None => {
             println!("⚠ history.max_entries = (missing, unlimited history)");
             can_migrate = true;
-        }
+        },
     }
 
     // Fields that default to None (informational only - not migratable)
@@ -560,12 +591,12 @@ fn cmd_config_migrate() -> Result<()> {
 
     // Check what needs to be migrated FIRST (before creating backup)
     let needs_model_id = current.model.model_id.is_empty();
-    let needs_draft_model = current.model.draft_model_path.is_none()
-        && defaults.model.draft_model_path.is_some();
-    let needs_refresh_cmd = current.output.refresh_command.is_none()
-        && defaults.output.refresh_command.is_some();
-    let needs_max_entries = current.history.max_entries.is_none()
-        && defaults.history.max_entries.is_some();
+    let needs_draft_model =
+        current.model.draft_model_path.is_none() && defaults.model.draft_model_path.is_some();
+    let needs_refresh_cmd =
+        current.output.refresh_command.is_none() && defaults.output.refresh_command.is_some();
+    let needs_max_entries =
+        current.history.max_entries.is_none() && defaults.history.max_entries.is_some();
 
     let has_changes = needs_model_id || needs_draft_model || needs_refresh_cmd || needs_max_entries;
 
@@ -615,7 +646,10 @@ fn cmd_config_migrate() -> Result<()> {
     }
 
     config::save(&current)?;
-    println!("\nMigration complete! Config updated with {} field(s).", changes);
+    println!(
+        "\nMigration complete! Config updated with {} field(s).",
+        changes
+    );
     println!("Backup saved to: {}", backup_path.display());
 
     Ok(())
@@ -652,7 +686,7 @@ fn cmd_daemon(command: Option<DaemonCommands>) -> Result<()> {
             println!("  pid       Print daemon PID");
             println!("\nRun 'mojovoice daemon <COMMAND> --help' for more info");
             Ok(())
-        }
+        },
         Some(DaemonCommands::Up { model }) => cmd_daemon_up(model),
         Some(DaemonCommands::Down) => cmd_daemon_down(),
         Some(DaemonCommands::Restart { model }) => cmd_daemon_restart(model),
@@ -707,7 +741,9 @@ fn cmd_daemon_restart(model_override: Option<String>) -> Result<()> {
         }
 
         if daemon::is_daemon_running() {
-            anyhow::bail!("Daemon did not shut down within 5 seconds. Try 'mojovoice daemon shutdown' manually.");
+            anyhow::bail!(
+                "Daemon did not shut down within 5 seconds. Try 'mojovoice daemon shutdown' manually."
+            );
         }
         println!("Daemon stopped.");
     }
@@ -733,7 +769,11 @@ fn cmd_daemon_status() -> Result<()> {
     }
 
     let status = daemon::daemon_get_status()?;
-    let gpu_status = if status.gpu_enabled { "Enabled" } else { "Disabled" };
+    let gpu_status = if status.gpu_enabled {
+        "Enabled"
+    } else {
+        "Disabled"
+    };
 
     println!("Status: Running");
     println!("Model:  {}", status.model_name);
@@ -767,7 +807,7 @@ fn cmd_daemon_logs(follow: bool, lines: usize) -> Result<()> {
         None => {
             println!("No log files found in: {}", log_dir.display());
             return Ok(());
-        }
+        },
     };
 
     println!("Log file: {}\n", log_file.display());
@@ -855,7 +895,8 @@ fn cmd_benchmark(
     report: bool,
 ) -> Result<()> {
     // Default paths relative to current working directory
-    let samples_dir = samples_dir.unwrap_or_else(|| std::path::PathBuf::from("assets/audio/samples"));
+    let samples_dir =
+        samples_dir.unwrap_or_else(|| std::path::PathBuf::from("assets/audio/samples"));
     let output_dir = output_dir.unwrap_or_else(|| std::path::PathBuf::from("benchmarks"));
 
     // If --report flag is set, generate HTML report from existing results
@@ -878,7 +919,9 @@ fn cmd_benchmark(
 /// Transcribe a WAV file via daemon (for testing/debugging)
 fn cmd_transcribe_file(path: &std::path::Path, _model_override: Option<String>) -> Result<()> {
     use hound::WavReader;
-    use rubato::{Resampler, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction};
+    use rubato::{
+        Resampler, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
+    };
 
     const TARGET_SAMPLE_RATE: u32 = 16000;
 
@@ -903,21 +946,30 @@ fn cmd_transcribe_file(path: &std::path::Path, _model_override: Option<String>) 
         hound::SampleFormat::Float => reader.samples::<f32>().map(|s| s.unwrap()).collect(),
         hound::SampleFormat::Int => {
             let max_val = (1 << (spec.bits_per_sample - 1)) as f32;
-            reader.samples::<i32>().map(|s| s.unwrap() as f32 / max_val).collect()
-        }
+            reader
+                .samples::<i32>()
+                .map(|s| s.unwrap() as f32 / max_val)
+                .collect()
+        },
     };
     info!("Loaded {} raw samples", samples.len());
 
     let mono_samples: Vec<f32> = if spec.channels == 2 {
         info!("Converting stereo to mono...");
-        samples.chunks(2).map(|chunk| (chunk[0] + chunk[1]) / 2.0).collect()
+        samples
+            .chunks(2)
+            .map(|chunk| (chunk[0] + chunk[1]) / 2.0)
+            .collect()
     } else {
         samples
     };
     info!("Mono samples: {}", mono_samples.len());
 
     let audio_16k: Vec<f32> = if spec.sample_rate != TARGET_SAMPLE_RATE {
-        info!("Resampling from {}Hz to {}Hz...", spec.sample_rate, TARGET_SAMPLE_RATE);
+        info!(
+            "Resampling from {}Hz to {}Hz...",
+            spec.sample_rate, TARGET_SAMPLE_RATE
+        );
 
         let params = SincInterpolationParameters {
             sinc_len: 256,
@@ -943,14 +995,22 @@ fn cmd_transcribe_file(path: &std::path::Path, _model_override: Option<String>) 
     };
 
     let duration_secs = audio_16k.len() as f32 / TARGET_SAMPLE_RATE as f32;
-    info!("Final audio: {} samples ({:.2}s at {}Hz)", audio_16k.len(), duration_secs, TARGET_SAMPLE_RATE);
+    info!(
+        "Final audio: {} samples ({:.2}s at {}Hz)",
+        audio_16k.len(),
+        duration_secs,
+        TARGET_SAMPLE_RATE
+    );
 
     info!("Sending to daemon for transcription...");
-    let response = daemon::send_request(&daemon::DaemonRequest::TranscribeAudio { samples: audio_16k })?;
+    let response =
+        daemon::send_request(&daemon::DaemonRequest::TranscribeAudio { samples: audio_16k })?;
 
     match response {
         daemon::DaemonResponse::Success { text } => println!("\n=== Transcription ===\n{}\n", text),
-        daemon::DaemonResponse::Error { message } => anyhow::bail!("Transcription failed: {}", message),
+        daemon::DaemonResponse::Error { message } => {
+            anyhow::bail!("Transcription failed: {}", message)
+        },
         _ => anyhow::bail!("Unexpected response from daemon"),
     }
 

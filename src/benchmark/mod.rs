@@ -14,15 +14,14 @@ use std::time::Instant;
 use tracing::{info, warn};
 
 use crate::daemon::{
-    is_daemon_running, send_request, daemon_get_status,
-    DaemonRequest, DaemonResponse,
+    DaemonRequest, DaemonResponse, daemon_get_status, is_daemon_running, send_request,
 };
 
 use manifest::{load_audio_samples, load_manifest};
 use metrics::{character_error_rate, exact_match, word_error_rate};
 use output::{
-    calculate_aggregates, create_output_dir, generate_timestamp, get_git_info, write_results,
-    BenchmarkInfo, BenchmarkResult, SampleResult,
+    BenchmarkInfo, BenchmarkResult, SampleResult, calculate_aggregates, create_output_dir,
+    generate_timestamp, get_git_info, write_results,
 };
 
 /// Run benchmark on all samples in the given directory.
@@ -34,14 +33,25 @@ pub fn run_benchmark(samples_dir: &Path, output_dir: &Path, stdout_only: bool) -
 
     // Get daemon status for model info
     let status = daemon_get_status()?;
-    info!("Daemon status: model={}, gpu={}", status.model_name, status.gpu_name);
+    info!(
+        "Daemon status: model={}, gpu={}",
+        status.model_name, status.gpu_name
+    );
 
     // Extract model name from path (last component)
     let model_name = extract_model_name(&status.model_name);
     let (format, quantization) = detect_model_format(&model_name);
 
     println!("Benchmarking model: {}", model_name);
-    println!("GPU: {} ({})", if status.gpu_enabled { "Enabled" } else { "Disabled" }, status.gpu_name);
+    println!(
+        "GPU: {} ({})",
+        if status.gpu_enabled {
+            "Enabled"
+        } else {
+            "Disabled"
+        },
+        status.gpu_name
+    );
     println!();
 
     // Load manifest
@@ -58,11 +68,21 @@ pub fn run_benchmark(samples_dir: &Path, output_dir: &Path, stdout_only: bool) -
 
         if !audio_path.exists() {
             warn!("Sample not found: {}", audio_path.display());
-            println!("[{}/{}] SKIP {} (file not found)", i + 1, manifest.samples.len(), sample.file);
+            println!(
+                "[{}/{}] SKIP {} (file not found)",
+                i + 1,
+                manifest.samples.len(),
+                sample.file
+            );
             continue;
         }
 
-        print!("[{}/{}] {} ... ", i + 1, manifest.samples.len(), sample.file);
+        print!(
+            "[{}/{}] {} ... ",
+            i + 1,
+            manifest.samples.len(),
+            sample.file
+        );
 
         match process_sample(&audio_path, sample) {
             Ok(result) => {
@@ -73,11 +93,11 @@ pub fn run_benchmark(samples_dir: &Path, output_dir: &Path, stdout_only: bool) -
                     if result.exact_match { " (exact)" } else { "" }
                 );
                 results.push(result);
-            }
+            },
             Err(e) => {
                 println!("ERROR: {}", e);
                 warn!("Failed to process {}: {}", sample.file, e);
-            }
+            },
         }
     }
 
@@ -115,16 +135,30 @@ pub fn run_benchmark(samples_dir: &Path, output_dir: &Path, stdout_only: bool) -
     // Print summary
     println!();
     println!("=== Summary ===");
-    println!("Samples:     {}/{}", benchmark_result.aggregate_stats.total_samples, manifest.samples.len());
-    println!("Total audio: {:.1}s", benchmark_result.aggregate_stats.total_audio_duration_secs);
-    println!("Total time:  {:.2}s", benchmark_result.aggregate_stats.total_transcription_time_secs);
+    println!(
+        "Samples:     {}/{}",
+        benchmark_result.aggregate_stats.total_samples,
+        manifest.samples.len()
+    );
+    println!(
+        "Total audio: {:.1}s",
+        benchmark_result.aggregate_stats.total_audio_duration_secs
+    );
+    println!(
+        "Total time:  {:.2}s",
+        benchmark_result
+            .aggregate_stats
+            .total_transcription_time_secs
+    );
     println!();
     println!("--- Speed ---");
-    println!("Avg RTF:     {:.3} ({:.1}x real-time)",
+    println!(
+        "Avg RTF:     {:.3} ({:.1}x real-time)",
         benchmark_result.aggregate_stats.average_real_time_factor,
         1.0 / benchmark_result.aggregate_stats.average_real_time_factor
     );
-    println!("Median RTF:  {:.3} ({:.1}x real-time)",
+    println!(
+        "Median RTF:  {:.3} ({:.1}x real-time)",
         benchmark_result.aggregate_stats.median_real_time_factor,
         1.0 / benchmark_result.aggregate_stats.median_real_time_factor
     );
@@ -137,21 +171,28 @@ pub fn run_benchmark(samples_dir: &Path, output_dir: &Path, stdout_only: bool) -
     }
     println!();
     println!("--- Accuracy ---");
-    println!("Avg WER:     {:.1}% (median: {:.1}%, std: {:.1}%)",
+    println!(
+        "Avg WER:     {:.1}% (median: {:.1}%, std: {:.1}%)",
         benchmark_result.aggregate_stats.average_word_error_rate * 100.0,
         benchmark_result.aggregate_stats.median_word_error_rate * 100.0,
         benchmark_result.aggregate_stats.std_dev_word_error_rate * 100.0
     );
-    println!("Avg CER:     {:.1}% (median: {:.1}%)",
-        benchmark_result.aggregate_stats.average_character_error_rate * 100.0,
+    println!(
+        "Avg CER:     {:.1}% (median: {:.1}%)",
+        benchmark_result
+            .aggregate_stats
+            .average_character_error_rate
+            * 100.0,
         benchmark_result.aggregate_stats.median_character_error_rate * 100.0
     );
-    println!("Errors:      {} subs, {} dels, {} ins",
+    println!(
+        "Errors:      {} subs, {} dels, {} ins",
         benchmark_result.aggregate_stats.total_word_substitutions,
         benchmark_result.aggregate_stats.total_word_deletions,
         benchmark_result.aggregate_stats.total_word_insertions
     );
-    println!("Exact match: {}/{} ({:.0}%)",
+    println!(
+        "Exact match: {}/{} ({:.0}%)",
         benchmark_result.aggregate_stats.exact_match_count,
         benchmark_result.aggregate_stats.total_samples,
         benchmark_result.aggregate_stats.exact_match_rate * 100.0
@@ -162,7 +203,8 @@ pub fn run_benchmark(samples_dir: &Path, output_dir: &Path, stdout_only: bool) -
         println!();
         println!("--- By Sample Rate ---");
         for group in &benchmark_result.aggregate_stats.by_sample_rate {
-            println!("{:>5}Hz: {} samples, WER {:.1}%, RTF {:.3}",
+            println!(
+                "{:>5}Hz: {} samples, WER {:.1}%, RTF {:.3}",
                 group.sample_rate,
                 group.sample_count,
                 group.average_wer * 100.0,
@@ -188,24 +230,23 @@ pub fn run_benchmark(samples_dir: &Path, output_dir: &Path, stdout_only: bool) -
 }
 
 /// Process a single audio sample.
-fn process_sample(
-    audio_path: &Path,
-    sample: &manifest::AudioSample,
-) -> Result<SampleResult> {
+fn process_sample(audio_path: &Path, sample: &manifest::AudioSample) -> Result<SampleResult> {
     // Load and resample audio
     let audio_samples = load_audio_samples(audio_path)
         .with_context(|| format!("Failed to load audio: {}", audio_path.display()))?;
 
     // Time the transcription
     let start = Instant::now();
-    let response = send_request(&DaemonRequest::TranscribeAudio { samples: audio_samples })?;
+    let response = send_request(&DaemonRequest::TranscribeAudio {
+        samples: audio_samples,
+    })?;
     let transcription_time = start.elapsed();
 
     let transcription = match response {
         DaemonResponse::Success { text } => text,
         DaemonResponse::Error { message } => {
             anyhow::bail!("Transcription failed: {}", message);
-        }
+        },
         _ => anyhow::bail!("Unexpected response from daemon"),
     };
 

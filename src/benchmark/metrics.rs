@@ -56,6 +56,7 @@ pub fn exact_match(reference: &str, hypothesis: &str) -> bool {
 
 /// Generic Levenshtein distance calculation.
 /// Returns (total_distance, substitutions, deletions, insertions).
+#[allow(clippy::needless_range_loop)] // Index-based loops clearer for DP algorithms
 fn levenshtein_distance<T: PartialEq>(a: &[T], b: &[T]) -> (usize, usize, usize, usize) {
     let m = a.len();
     let n = b.len();

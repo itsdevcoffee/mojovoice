@@ -64,7 +64,11 @@ fn collect_benchmark_results(output_dir: &Path) -> Result<Vec<(String, Benchmark
     }
 
     // Sort by timestamp (newest first)
-    results.sort_by(|a, b| b.1.benchmark_info.timestamp.cmp(&a.1.benchmark_info.timestamp));
+    results.sort_by(|a, b| {
+        b.1.benchmark_info
+            .timestamp
+            .cmp(&a.1.benchmark_info.timestamp)
+    });
 
     Ok(results)
 }
@@ -315,9 +319,21 @@ fn render_html(results: &[(String, BenchmarkResult)]) -> String {
 "##,
         model_name = latest.benchmark_info.model_name,
         app_version = latest.benchmark_info.app_version,
-        git_commit = latest.benchmark_info.git_commit.as_deref().unwrap_or("unknown"),
-        dirty_marker = if latest.benchmark_info.git_dirty.unwrap_or(false) { "*" } else { "" },
-        git_branch = latest.benchmark_info.git_branch.as_deref().unwrap_or("unknown"),
+        git_commit = latest
+            .benchmark_info
+            .git_commit
+            .as_deref()
+            .unwrap_or("unknown"),
+        dirty_marker = if latest.benchmark_info.git_dirty.unwrap_or(false) {
+            "*"
+        } else {
+            ""
+        },
+        git_branch = latest
+            .benchmark_info
+            .git_branch
+            .as_deref()
+            .unwrap_or("unknown"),
         timestamp = &latest.benchmark_info.timestamp[..19].replace('T', " "),
         css = css,
         models_json = models_json,
@@ -328,7 +344,13 @@ fn render_html(results: &[(String, BenchmarkResult)]) -> String {
         std_rtf = latest.aggregate_stats.std_dev_real_time_factor,
         // Accuracy metrics
         wer = latest.aggregate_stats.average_word_error_rate * 100.0,
-        wer_class = if latest.aggregate_stats.average_word_error_rate < 0.05 { "accent" } else if latest.aggregate_stats.average_word_error_rate < 0.15 { "warning" } else { "error" },
+        wer_class = if latest.aggregate_stats.average_word_error_rate < 0.05 {
+            "accent"
+        } else if latest.aggregate_stats.average_word_error_rate < 0.15 {
+            "warning"
+        } else {
+            "error"
+        },
         median_wer = latest.aggregate_stats.median_word_error_rate * 100.0,
         cer = latest.aggregate_stats.average_character_error_rate * 100.0,
         std_wer = latest.aggregate_stats.std_dev_word_error_rate * 100.0,
@@ -336,13 +358,22 @@ fn render_html(results: &[(String, BenchmarkResult)]) -> String {
         exact_match_count = latest.aggregate_stats.exact_match_count,
         total_samples = latest.aggregate_stats.total_samples,
         exact_match_rate = latest.aggregate_stats.exact_match_rate * 100.0,
-        match_class = if latest.aggregate_stats.exact_match_rate > 0.8 { "accent" } else if latest.aggregate_stats.exact_match_rate > 0.5 { "warning" } else { "error" },
+        match_class = if latest.aggregate_stats.exact_match_rate > 0.8 {
+            "accent"
+        } else if latest.aggregate_stats.exact_match_rate > 0.5 {
+            "warning"
+        } else {
+            "error"
+        },
         total_subs = latest.aggregate_stats.total_word_substitutions,
         total_dels = latest.aggregate_stats.total_word_deletions,
         total_ins = latest.aggregate_stats.total_word_insertions,
         // Warmup
         warmup_rtf = latest.aggregate_stats.warmup_rtf.unwrap_or(0.0),
-        post_warmup_rtf = latest.aggregate_stats.post_warmup_average_rtf.unwrap_or(0.0),
+        post_warmup_rtf = latest
+            .aggregate_stats
+            .post_warmup_average_rtf
+            .unwrap_or(0.0),
         warmup_penalty = calculate_warmup_penalty(latest),
         gpu_name = latest.benchmark_info.gpu_name,
         // Dynamic sections
@@ -356,7 +387,10 @@ fn render_html(results: &[(String, BenchmarkResult)]) -> String {
 }
 
 fn calculate_warmup_penalty(result: &BenchmarkResult) -> f64 {
-    match (result.aggregate_stats.warmup_rtf, result.aggregate_stats.post_warmup_average_rtf) {
+    match (
+        result.aggregate_stats.warmup_rtf,
+        result.aggregate_stats.post_warmup_average_rtf,
+    ) {
         (Some(warmup), Some(post)) if post > 0.0 => ((warmup - post) / post) * 100.0,
         _ => 0.0,
     }
@@ -421,7 +455,11 @@ fn render_sample_rows(result: &BenchmarkResult) -> String {
                 "error"
             };
             let match_icon = if sample.exact_match { "✓" } else { "✗" };
-            let match_class = if sample.exact_match { "accent" } else { "error" };
+            let match_class = if sample.exact_match {
+                "accent"
+            } else {
+                "error"
+            };
             format!(
                 r#"<tr>
                     <td class="mono">{file}</td>
@@ -455,7 +493,11 @@ fn render_history_rows(results: &[(String, BenchmarkResult)]) -> String {
         .map(|(_, result)| {
             let timestamp = &result.benchmark_info.timestamp[..19].replace('T', " ");
             let commit = result.benchmark_info.git_commit.as_deref().unwrap_or("-");
-            let dirty = if result.benchmark_info.git_dirty.unwrap_or(false) { "*" } else { "" };
+            let dirty = if result.benchmark_info.git_dirty.unwrap_or(false) {
+                "*"
+            } else {
+                ""
+            };
             format!(
                 r#"<tr>
                     <td class="mono">{timestamp}</td>

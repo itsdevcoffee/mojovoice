@@ -69,7 +69,11 @@ pub fn get_git_info() -> GitInfo {
         .filter(|o| o.status.success())
         .map(|o| !o.stdout.is_empty());
 
-    GitInfo { commit, branch, dirty }
+    GitInfo {
+        commit,
+        branch,
+        dirty,
+    }
 }
 
 /// Per-sample transcription result.
@@ -164,7 +168,13 @@ pub fn create_output_dir(output_base: &Path, model_name: &str) -> Result<PathBuf
     // Sanitize model name for filesystem
     let safe_name: String = model_name
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect();
 
     let dir = output_base.join(&safe_name);
@@ -190,8 +200,8 @@ pub fn write_results(dir: &Path, result: &BenchmarkResult) -> Result<PathBuf> {
     let filename = generate_filename();
     let path = dir.join(&filename);
 
-    let json = serde_json::to_string_pretty(result)
-        .context("Failed to serialize benchmark results")?;
+    let json =
+        serde_json::to_string_pretty(result).context("Failed to serialize benchmark results")?;
 
     std::fs::write(&path, json)
         .with_context(|| format!("Failed to write results to: {}", path.display()))?;
@@ -217,7 +227,8 @@ fn std_dev(values: &[f64], mean: f64) -> f64 {
     if values.len() < 2 {
         return 0.0;
     }
-    let variance: f64 = values.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / values.len() as f64;
+    let variance: f64 =
+        values.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / values.len() as f64;
     variance.sqrt()
 }
 
@@ -251,7 +262,8 @@ pub fn calculate_aggregates(samples: &[SampleResult]) -> AggregateStats {
 
     let total_samples = samples.len();
     let total_audio_duration_secs: f64 = samples.iter().map(|s| s.duration_secs).sum();
-    let total_transcription_time_secs: f64 = samples.iter().map(|s| s.transcription_time_secs).sum();
+    let total_transcription_time_secs: f64 =
+        samples.iter().map(|s| s.transcription_time_secs).sum();
 
     // RTF statistics
     let rtf_values: Vec<f64> = samples.iter().map(|s| s.real_time_factor).collect();
@@ -329,7 +341,10 @@ pub fn calculate_aggregates(samples: &[SampleResult]) -> AggregateStats {
     let mut rate_groups: std::collections::HashMap<u32, Vec<&SampleResult>> =
         std::collections::HashMap::new();
     for sample in samples {
-        rate_groups.entry(sample.sample_rate).or_default().push(sample);
+        rate_groups
+            .entry(sample.sample_rate)
+            .or_default()
+            .push(sample);
     }
 
     let mut by_sample_rate: Vec<SampleRateGroup> = rate_groups
@@ -342,9 +357,14 @@ pub fn calculate_aggregates(samples: &[SampleResult]) -> AggregateStats {
                 sample_rate: rate,
                 sample_count: count,
                 total_duration_secs: duration,
-                average_rtf: if duration > 0.0 { trans_time / duration } else { 0.0 },
+                average_rtf: if duration > 0.0 {
+                    trans_time / duration
+                } else {
+                    0.0
+                },
                 average_wer: group.iter().map(|s| s.word_error_rate).sum::<f64>() / count as f64,
-                average_cer: group.iter().map(|s| s.character_error_rate).sum::<f64>() / count as f64,
+                average_cer: group.iter().map(|s| s.character_error_rate).sum::<f64>()
+                    / count as f64,
                 exact_match_count: group.iter().filter(|s| s.exact_match).count(),
             }
         })

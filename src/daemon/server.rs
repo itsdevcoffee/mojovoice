@@ -10,7 +10,7 @@ use tracing::{error, info, warn};
 
 use crate::audio::capture_toggle;
 use crate::daemon::protocol::{DaemonRequest, DaemonResponse};
-use crate::history::{self, enforce_max_entries, HistoryEntry};
+use crate::history::{self, HistoryEntry, enforce_max_entries};
 use crate::state;
 // Transcriber trait is now used via Box<dyn ...>
 
@@ -195,11 +195,14 @@ impl DaemonServer {
         // Log request type (not full content for large payloads like TranscribeAudio)
         match &request {
             DaemonRequest::TranscribeAudio { samples } => {
-                info!("Received TranscribeAudio request ({} samples)", samples.len());
-            }
+                info!(
+                    "Received TranscribeAudio request ({} samples)",
+                    samples.len()
+                );
+            },
             _ => {
                 info!("Received from client: {}", line.trim());
-            }
+            },
         }
 
         let response = match request {
@@ -211,9 +214,7 @@ impl DaemonServer {
             },
             DaemonRequest::StopRecording => self.handle_stop_recording()?,
             DaemonRequest::CancelRecording => self.handle_cancel_recording()?,
-            DaemonRequest::TranscribeAudio { samples } => {
-                self.handle_transcribe_audio(samples)?
-            },
+            DaemonRequest::TranscribeAudio { samples } => self.handle_transcribe_audio(samples)?,
             DaemonRequest::Shutdown => {
                 info!("Shutdown requested");
                 self.shutdown.store(true, Ordering::SeqCst);
@@ -264,7 +265,8 @@ impl DaemonServer {
         state::toggle::setup_signal_handler()?;
 
         // Spawn recording thread
-        let handle = thread::spawn(move || capture_toggle(max_duration, 16000, device_name.as_deref()));
+        let handle =
+            thread::spawn(move || capture_toggle(max_duration, 16000, device_name.as_deref()));
 
         state.handle = Some(handle);
         state.audio = None;
@@ -374,7 +376,7 @@ impl DaemonServer {
                 Err(e) => {
                     warn!("Failed to save audio recording: {}", e);
                     None
-                }
+                },
             }
         } else {
             None
@@ -426,8 +428,12 @@ impl DaemonServer {
         let audio_path = saved_audio_path.map(|p| p.to_string_lossy().to_string());
 
         // Save to history
-        let history_entry =
-            HistoryEntry::new(text.clone(), duration_ms, self.model_name.clone(), audio_path);
+        let history_entry = HistoryEntry::new(
+            text.clone(),
+            duration_ms,
+            self.model_name.clone(),
+            audio_path,
+        );
 
         if let Err(e) = history::append_entry(&history_entry) {
             warn!("Failed to save history entry: {}", e);
@@ -512,12 +518,18 @@ pub fn run_daemon(model_path: &Path) -> Result<()> {
     let listener = UnixListener::bind(&socket_path).context("Failed to bind Unix socket")?;
 
     // Set non-blocking so we can check shutdown flag periodically
-    listener.set_nonblocking(true).context("Failed to set socket non-blocking")?;
+    listener
+        .set_nonblocking(true)
+        .context("Failed to set socket non-blocking")?;
 
     // Write daemon PID file
     let daemon_pid_file = state::paths::get_daemon_pid_file()?;
     fs::write(&daemon_pid_file, std::process::id().to_string())?;
-    info!("Daemon PID {} written to {}", std::process::id(), daemon_pid_file.display());
+    info!(
+        "Daemon PID {} written to {}",
+        std::process::id(),
+        daemon_pid_file.display()
+    );
 
     info!("Daemon listening on {}", socket_path.display());
 

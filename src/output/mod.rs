@@ -35,11 +35,11 @@ pub fn inject_text(text: &str, mode: OutputMode) -> Result<()> {
         OutputMode::Clipboard => {
             copy_to_clipboard(text)?;
             info!("Copied to clipboard: {} chars", text.len());
-        }
+        },
         OutputMode::Type => {
             type_text(text)?;
             info!("Typed {} chars at cursor", text.len());
-        }
+        },
     }
     Ok(())
 }
@@ -62,7 +62,12 @@ fn copy_to_clipboard(text: &str) -> Result<()> {
             .args(&args)
             .stdin(Stdio::piped())
             .spawn()
-            .with_context(|| format!("Failed to spawn {}. Install with: sudo dnf install {}", cmd, install_hint))?;
+            .with_context(|| {
+                format!(
+                    "Failed to spawn {}. Install with: sudo dnf install {}",
+                    cmd, install_hint
+                )
+            })?;
 
         if let Some(mut stdin) = child.stdin.take() {
             stdin.write_all(text.as_bytes())?;

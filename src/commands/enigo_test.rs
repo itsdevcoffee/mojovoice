@@ -8,7 +8,11 @@ use crate::output::{self, OutputMode};
 pub fn run(text: &str, clipboard: bool) -> Result<()> {
     println!("\n=== Enigo Test Suite ===\n");
 
-    let mode = if clipboard { OutputMode::Clipboard } else { OutputMode::Type };
+    let mode = if clipboard {
+        OutputMode::Clipboard
+    } else {
+        OutputMode::Type
+    };
     println!("Mode: {:?}", mode);
     println!("Test text: {:?}\n", text);
 

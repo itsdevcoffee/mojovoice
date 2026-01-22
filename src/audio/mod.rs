@@ -24,9 +24,7 @@ pub struct AudioDeviceInfo {
 #[allow(dead_code)] // Public API - called from Tauri UI
 pub fn list_input_devices() -> Result<Vec<AudioDeviceInfo>> {
     let host = cpal::default_host();
-    let default_device_name = host
-        .default_input_device()
-        .and_then(|d| d.name().ok());
+    let default_device_name = host.default_input_device().and_then(|d| d.name().ok());
 
     let devices: Vec<AudioDeviceInfo> = host
         .input_devices()
@@ -80,11 +78,10 @@ fn setup_audio_device(device_name: Option<&str>) -> Result<AudioSetup> {
                         available
                     )
                 })?
-        }
-        None => {
-            host.default_input_device()
-                .context("No input device available. Check microphone permissions.")?
-        }
+        },
+        None => host
+            .default_input_device()
+            .context("No input device available. Check microphone permissions.")?,
     };
 
     let default_config = device
@@ -148,12 +145,15 @@ fn to_mono(samples: Vec<f32>, channels: u16) -> Vec<f32> {
 
 /// Capture audio from microphone for fixed duration.
 /// Returns f32 PCM samples at 16kHz mono (Whisper requirement).
-pub fn capture(duration_secs: u32, _sample_rate: u32, device_name: Option<&str>) -> Result<Vec<f32>> {
+pub fn capture(
+    duration_secs: u32,
+    _sample_rate: u32,
+    device_name: Option<&str>,
+) -> Result<Vec<f32>> {
     info!("Starting audio capture: {}s", duration_secs);
 
     let setup = setup_audio_device(device_name)?;
-    let expected_samples =
-        (setup.sample_rate * duration_secs) as usize * setup.channels as usize;
+    let expected_samples = (setup.sample_rate * duration_secs) as usize * setup.channels as usize;
     let buffer = Arc::new(Mutex::new(Vec::with_capacity(expected_samples)));
     let started = Arc::new(AtomicBool::new(false));
 
@@ -169,7 +169,11 @@ pub fn capture(duration_secs: u32, _sample_rate: u32, device_name: Option<&str>)
 }
 
 /// Capture in toggle mode - stops when signal received or max duration reached
-pub fn capture_toggle(max_duration_secs: u32, _sample_rate: u32, device_name: Option<&str>) -> Result<Vec<f32>> {
+pub fn capture_toggle(
+    max_duration_secs: u32,
+    _sample_rate: u32,
+    device_name: Option<&str>,
+) -> Result<Vec<f32>> {
     use crate::state::toggle::should_stop;
 
     info!("Starting toggle mode capture (max {}s)", max_duration_secs);
@@ -214,8 +218,7 @@ pub fn capture_toggle(max_duration_secs: u32, _sample_rate: u32, device_name: Op
 }
 
 fn log_capture_stats(samples: &[f32], setup: &AudioSetup) {
-    let actual_duration =
-        samples.len() as f32 / (setup.sample_rate * setup.channels as u32) as f32;
+    let actual_duration = samples.len() as f32 / (setup.sample_rate * setup.channels as u32) as f32;
     info!(
         "Captured {} samples ({:.2}s at {}Hz)",
         samples.len(),
@@ -259,19 +262,14 @@ fn resample(samples: &[f32], from_rate: u32, to_rate: u32) -> Vec<f32> {
     let samples_f64: Vec<f64> = samples.iter().map(|&s| s as f64).collect();
     let chunk_size = 1024;
 
-    let mut resampler = match FftFixedIn::<f64>::new(
-        from_rate as usize,
-        to_rate as usize,
-        chunk_size,
-        2,
-        1,
-    ) {
-        Ok(r) => r,
-        Err(e) => {
-            warn!("Resampler init failed: {}, using linear fallback", e);
-            return resample_linear(samples, from_rate as f32 / to_rate as f32);
-        },
-    };
+    let mut resampler =
+        match FftFixedIn::<f64>::new(from_rate as usize, to_rate as usize, chunk_size, 2, 1) {
+            Ok(r) => r,
+            Err(e) => {
+                warn!("Resampler init failed: {}, using linear fallback", e);
+                return resample_linear(samples, from_rate as f32 / to_rate as f32);
+            },
+        };
 
     let mut output_f64: Vec<f64> = Vec::new();
 

@@ -12,7 +12,9 @@ use std::path::Path;
 /// Load WAV file and return audio samples as f32 (16kHz mono)
 fn load_wav_file(path: &Path) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
     use hound::WavReader;
-    use rubato::{Resampler, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction};
+    use rubato::{
+        Resampler, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
+    };
 
     const TARGET_SAMPLE_RATE: u32 = 16000;
 
@@ -28,7 +30,7 @@ fn load_wav_file(path: &Path) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
                 .samples::<i32>()
                 .map(|s| s.unwrap() as f32 / max_val)
                 .collect()
-        }
+        },
     };
 
     // Convert stereo to mono if needed
@@ -115,13 +117,13 @@ fn test_transcribe_sample_audio() {
             );
 
             println!("Transcription successful: {}", text);
-        }
+        },
         DaemonResponse::Error { message } => {
             panic!("Transcription failed with error: {}", message);
-        }
+        },
         other => {
             panic!("Unexpected response: {:?}", other);
-        }
+        },
     }
 }
 
@@ -141,11 +143,12 @@ fn test_transcribe_empty_audio_returns_error() {
     match response {
         DaemonResponse::Error { message } => {
             assert!(
-                message.to_lowercase().contains("empty") || message.to_lowercase().contains("no audio"),
+                message.to_lowercase().contains("empty")
+                    || message.to_lowercase().contains("no audio"),
                 "Error message should mention empty/no audio, got: {}",
                 message
             );
-        }
+        },
         DaemonResponse::Success { text } => {
             // Some implementations return success with "no speech detected"
             assert!(
@@ -153,10 +156,10 @@ fn test_transcribe_empty_audio_returns_error() {
                 "Expected error or 'no speech detected', got success: {}",
                 text
             );
-        }
+        },
         other => {
             panic!("Expected Error response for empty audio, got: {:?}", other);
-        }
+        },
     }
 }
 
@@ -187,13 +190,13 @@ fn test_transcribe_silence_returns_minimal_output() {
                 text
             );
             println!("Silence produced: {:?}", text);
-        }
+        },
         DaemonResponse::Error { message } => {
             // Also acceptable - some implementations error on pure silence
             println!("Silence produced error (acceptable): {}", message);
-        }
+        },
         other => {
             panic!("Unexpected response for silence: {:?}", other);
-        }
+        },
     }
 }

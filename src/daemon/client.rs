@@ -30,7 +30,7 @@ pub fn send_request(request: &DaemonRequest) -> Result<DaemonResponse> {
                 samples.len(),
                 request_json.len()
             );
-        }
+        },
         _ => info!("Sending to daemon: {}", request_json),
     }
     stream.write_all(request_json.as_bytes())?;

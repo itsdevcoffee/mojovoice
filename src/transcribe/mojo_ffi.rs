@@ -3,7 +3,7 @@
 //! Uses dynamic loading via libloading to call into libmojo_audio.so.
 //! This replaces Candle's pcm_to_mel which produces incorrect frame counts.
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use libloading::{Library, Symbol};
 use std::path::Path;
 use std::sync::OnceLock;
@@ -171,22 +171,20 @@ impl MojoAudio {
                 Some(std::path::PathBuf::from("/usr/local/lib/libmojo_audio.so")),
             ];
 
-            for path_opt in paths.iter() {
-                if let Some(path) = path_opt {
-                    if path.exists() {
-                        match Self::load_from_path(path) {
-                            Ok(lib) => {
-                                tracing::info!("Loaded mojo-audio from: {}", path.display());
-                                return Ok(lib);
-                            }
-                            Err(e) => {
-                                tracing::warn!(
-                                    "Failed to load mojo-audio from {}: {}",
-                                    path.display(),
-                                    e
-                                );
-                            }
-                        }
+            for path in paths.iter().flatten() {
+                if path.exists() {
+                    match Self::load_from_path(path) {
+                        Ok(lib) => {
+                            tracing::info!("Loaded mojo-audio from: {}", path.display());
+                            return Ok(lib);
+                        },
+                        Err(e) => {
+                            tracing::warn!(
+                                "Failed to load mojo-audio from {}: {}",
+                                path.display(),
+                                e
+                            );
+                        },
                     }
                 }
             }
@@ -194,15 +192,17 @@ impl MojoAudio {
             Err("Could not find libmojo_audio.so in any search path".to_string())
         });
 
-        result
-            .as_ref()
-            .map_err(|e| anyhow!("{}", e))
+        result.as_ref().map_err(|e| anyhow!("{}", e))
     }
 
     /// Compute mel spectrogram from audio samples
     ///
     /// Returns (n_mels, n_frames, data) where data is row-major [n_mels][n_frames]
-    pub fn compute_mel(&self, audio: &[f32], config: &MojoMelConfig) -> Result<(usize, usize, Vec<f32>)> {
+    pub fn compute_mel(
+        &self,
+        audio: &[f32],
+        config: &MojoMelConfig,
+    ) -> Result<(usize, usize, Vec<f32>)> {
         if audio.is_empty() {
             return Err(anyhow!("Empty audio input"));
         }
@@ -210,20 +210,26 @@ impl MojoAudio {
         // Debug: Log config and audio stats
         tracing::info!(
             "MOJO CONFIG: sample_rate={}, n_fft={}, hop_length={}, n_mels={}, normalization={}",
-            config.sample_rate, config.n_fft, config.hop_length, config.n_mels, config.normalization
+            config.sample_rate,
+            config.n_fft,
+            config.hop_length,
+            config.n_mels,
+            config.normalization
         );
         let audio_min = audio.iter().cloned().fold(f32::INFINITY, f32::min);
         let audio_max = audio.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
         let audio_mean = audio.iter().sum::<f32>() / audio.len() as f32;
         tracing::info!(
             "AUDIO INPUT: len={}, min={:.4}, max={:.4}, mean={:.6}",
-            audio.len(), audio_min, audio_max, audio_mean
+            audio.len(),
+            audio_min,
+            audio_max,
+            audio_mean
         );
 
         // Call mojo to compute mel spectrogram
-        let handle = unsafe {
-            (self.compute)(audio.as_ptr(), audio.len(), config as *const MojoMelConfig)
-        };
+        let handle =
+            unsafe { (self.compute)(audio.as_ptr(), audio.len(), config as *const MojoMelConfig) };
 
         // Check for errors (negative values are error codes)
         if handle <= 0 {
