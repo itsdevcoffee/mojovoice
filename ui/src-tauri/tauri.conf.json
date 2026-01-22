@@ -33,9 +33,11 @@
           "windows": ["main"],
           "permissions": [
             "dialog:allow-open",
+            "dialog:allow-save",
             "dialog:default",
             "shell:allow-execute",
-            "core:event:default"
+            "core:event:default",
+            "fs:allow-write-text-file"
           ]
         }
       ]
