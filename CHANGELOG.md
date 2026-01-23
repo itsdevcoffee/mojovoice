@@ -5,6 +5,22 @@ All notable changes to mojovoice will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-01-23
+
+### Added
+- **Model card visual meters:** Replaced text labels (Slower/Fast/Best Quality) with 5-dot visual indicators for Speed and Quality
+- **Language badges:** Color-coded pills for Multilingual (teal) vs English-only (amber) models
+- **Ghost download button:** Transparent button style that fills with color on hover
+- **Download progress transformation:** Download button morphs into progress bar with real-time stats (size, speed, ETA)
+- **Model Manager UI polish:** Enhanced spacing, discoverability, and visual hierarchy across model cards
+
+### Fixed
+- **Active badge overflow:** Prevented badge from overflowing in installed model cards
+- **Audio device enumeration:** Improved Linux audio device detection with better PipeWire support
+- **JSX syntax error:** Fixed spacer div and comment syntax in Model Manager
+- **CUDA CI build:** Made CUDA build non-blocking and fixed verification step
+- **CI linting:** Resolved rustfmt and clippy failures
+
 ## [0.5.0] - 2026-01-22
 
 ### Added
