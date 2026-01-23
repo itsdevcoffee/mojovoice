@@ -121,7 +121,7 @@
   .model-card:hover {
     transform: translateY(-2px);
     box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
-    border-color: rgba(20, 184, 166, 0.4);
+    border-color: rgba(20, 184, 166, 0.5);
   }
 
   /* Installed model card - fixed height */
@@ -131,27 +131,43 @@
     flex-direction: column;
   }
 
-  /* Active model card - green glow + left accent */
+  /* Active model card - enhanced green glow + prominence */
   .model-card-active {
-    border: 1px solid rgba(16, 185, 129, 0.3);
-    border-left: 2px solid hsl(var(--success));
+    border: 2px solid rgba(16, 185, 129, 0.4);
+    background-color: hsl(var(--card-hover));
     box-shadow:
       0 2px 8px rgba(0, 0, 0, 0.2),
-      0 0 20px rgba(16, 185, 129, 0.1);
+      0 0 24px rgba(16, 185, 129, 0.2),
+      inset 0 0 1px rgba(16, 185, 129, 0.3);
+    transform: translateY(-1px);
   }
 
   .model-card-active:hover {
     box-shadow:
       0 8px 16px rgba(0, 0, 0, 0.3),
-      0 0 24px rgba(16, 185, 129, 0.15);
-    border-color: rgba(16, 185, 129, 0.4);
-    border-left: 2px solid hsl(var(--success));
+      0 0 32px rgba(16, 185, 129, 0.25);
+    border-color: rgba(16, 185, 129, 0.5);
+    transform: translateY(-3px);
   }
 
-  /* Available model card - taller for button */
+  /* Inactive model card - slightly dimmed for hierarchy */
+  .model-card-inactive {
+    opacity: 0.92;
+  }
+
+  .model-card-inactive:hover {
+    opacity: 1;
+  }
+
+  /* Available model card - taller for button, slightly different opacity */
   .model-card-available {
     display: flex;
     flex-direction: column;
+    opacity: 0.95;
+  }
+
+  .model-card-available:hover {
+    opacity: 1;
   }
 
   /* Glass card (legacy support + downloads) */
@@ -193,6 +209,7 @@
     background-color: hsl(var(--primary));
     color: hsl(var(--primary-foreground));
     transform: scale(1.02);
+    box-shadow: 0 0 12px rgba(20, 184, 166, 0.3);
   }
 
   .btn-primary:active {
@@ -424,6 +441,8 @@
     color: hsl(var(--muted-foreground));
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    margin: 0;
+    padding: 0;
   }
 
   /* Typography classes per spec */
@@ -525,6 +544,26 @@
   }
 }
 
+@keyframes pulse-badge {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+@keyframes hint-pulse {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.15);
+  }
+}
+
 @keyframes completion-flash {
   0% {
     background-color: hsl(var(--primary));
@@ -551,6 +590,10 @@
 
 .animate-pulse-dot {
   animation: pulse-dot 2s ease-in-out infinite;
+}
+
+.animate-pulse-badge {
+  animation: pulse-badge 2s ease-in-out infinite;
 }
 
 /* Stagger delay utilities */

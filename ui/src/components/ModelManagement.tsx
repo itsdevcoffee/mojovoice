@@ -14,6 +14,10 @@ import {
   ChevronRight,
   Settings,
   Target,
+  MoreVertical,
+  Zap,
+  Award,
+  CircleDot,
 } from 'lucide-react';
 import { invoke } from '../lib/ipc';
 import { cn } from '../lib/utils';
@@ -82,12 +86,50 @@ function getModelTier(name: string): { label: string; speed: string; language: s
 // Estimate download time based on size (assuming 10 MB/s average connection)
 function getEstimatedDownloadTime(sizeMb: number): string {
   const secondsAtTenMBs = sizeMb / 10;
+  if (secondsAtTenMBs < 30) return '~30 sec';
   if (secondsAtTenMBs < 60) return '~1 min';
   if (secondsAtTenMBs < 180) return '~2-3 min';
   if (secondsAtTenMBs < 300) return '~3-5 min';
   if (secondsAtTenMBs < 600) return '~5-10 min';
   return '~10-15 min';
 }
+
+// Get color class for speed indicator
+function getSpeedColor(speed: string): string {
+  switch (speed) {
+    case 'Very Fast':
+      return 'text-success';
+    case 'Fast':
+      return 'text-primary';
+    case 'Medium':
+      return 'text-warning';
+    case 'Slower':
+      return 'text-muted-foreground';
+    default:
+      return 'text-muted-foreground';
+  }
+}
+
+// Get icon for quality tier
+function getQualityIcon(label: string): React.ReactNode {
+  switch (label) {
+    case 'Best Quality':
+      return <Award className="w-3 h-3 text-success inline-block mr-1" />;
+    case 'Balanced':
+      return <CircleDot className="w-3 h-3 text-primary inline-block mr-1" />;
+    case 'Fast':
+    case 'Good Quality':
+      return <Zap className="w-3 h-3 text-warning inline-block mr-1" />;
+    default:
+      return null;
+  }
+}
+
+// Detect if device supports touch
+const isTouchDevice = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+};
 
 export default function ModelManagement() {
   const [availableModels, setAvailableModels] = useState<RegistryModel[]>([]);
@@ -101,6 +143,8 @@ export default function ModelManagement() {
   const [downloadError, setDownloadError] = useState<{ modelName: string; error: string } | null>(null);
   const [showAllInstalled, setShowAllInstalled] = useState(false);
   const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
+  const [isTouch, setIsTouch] = useState(false);
+  const [showHint, setShowHint] = useState(true);
 
   const { downloads, startDownload, cancelDownload, isDownloading, activeDownloads } = useModelDownload();
 
@@ -111,6 +155,11 @@ export default function ModelManagement() {
   useEffect(() => {
     loadModels();
     loadStorageInfo();
+    setIsTouch(isTouchDevice());
+
+    // Hide hint after 3 seconds
+    const hintTimer = setTimeout(() => setShowHint(false), 3000);
+    return () => clearTimeout(hintTimer);
   }, []);
 
   const loadModels = async () => {
@@ -246,7 +295,7 @@ export default function ModelManagement() {
 
   // Storage warning levels
   const storagePercent = storageInfo ? (storageInfo.used / storageInfo.total) * 100 : 0;
-  const storageWarning = storagePercent >= 90 ? 'critical' : storagePercent >= 80 ? 'warning' : 'normal';
+  const storageWarning = storagePercent >= 90 ? 'critical' : storagePercent >= 70 ? 'warning' : 'normal';
 
   // Show downloads section only when there are active downloads
   const showDownloadsSection = activeDownloads.length > 0;
@@ -364,19 +413,19 @@ export default function ModelManagement() {
           <p className="text-muted-foreground">Loading models...</p>
         </div>
       ) : downloadedModels.length > 0 ? (
-        <section>
+        <section aria-labelledby="installed-models-heading">
           <div className="section-header">
-            <span className="section-title">
+            <h2 id="installed-models-heading" className="section-title">
               Installed ({downloadedModels.length})
-            </span>
+            </h2>
             {hasMoreInstalled && (
               <button
                 onClick={() => setShowAllInstalled(!showAllInstalled)}
-                className="btn-ghost text-xs flex items-center gap-1"
+                className="btn-ghost text-sm flex items-center gap-1 text-primary hover:text-primary-hover font-medium"
               >
                 {showAllInstalled ? 'Show Less' : `+${hiddenCount} more`}
                 <ChevronRight className={cn(
-                  "w-3 h-3 transition-transform duration-200",
+                  "w-4 h-4 transition-transform duration-200",
                   showAllInstalled && "rotate-90"
                 )} />
               </button>
@@ -393,6 +442,8 @@ export default function ModelManagement() {
                   onActivate={() => handleSwitch(model)}
                   onDelete={() => setDeleteConfirm(model)}
                   isSwitching={switching === model.filename}
+                  isTouch={isTouch}
+                  showHint={showHint && index === 0 && !model.isActive}
                 />
               ))}
             </AnimatePresence>
@@ -407,13 +458,13 @@ export default function ModelManagement() {
       )}
 
       {/* Available Models Section */}
-      <section>
+      <section aria-labelledby="available-models-heading">
         <div className="section-header">
-          <span className="section-title">
+          <h2 id="available-models-heading" className="section-title">
             Available Models ({filteredAvailableModels.length})
-          </span>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-muted-tertiary text-xs uppercase tracking-wide mr-1">Size:</span>
+          </h2>
+          <div className="flex items-center gap-2 flex-wrap" role="radiogroup" aria-label="Filter by size">
+            <span className="text-muted-tertiary text-xs uppercase tracking-wide mr-1" id="size-filter-label">Size:</span>
             {(['all', '<500MB', '<1GB', '1-2GB', '>2GB'] as SizeFilter[]).map(size => (
               <FilterPill
                 key={size}
@@ -475,18 +526,23 @@ export default function ModelManagement() {
                 "w-5 h-5",
                 storageWarning === 'critical' ? "text-destructive" :
                 storageWarning === 'warning' ? "text-warning" :
-                "text-muted-foreground"
+                "text-success"
               )} />
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-base font-medium text-foreground">
+                  <span className={cn(
+                    "text-base font-medium transition-colors duration-200",
+                    storageWarning === 'critical' ? "text-destructive" :
+                    storageWarning === 'warning' ? "text-warning" :
+                    "text-success"
+                  )}>
                     {formatBytes(storageInfo.used)} / {formatBytes(storageInfo.total)}
                   </span>
                   <span className={cn(
-                    "text-xs font-medium px-2 py-0.5 rounded-full",
+                    "text-xs font-medium px-2 py-0.5 rounded-full transition-all duration-200",
                     storageWarning === 'critical' && "bg-destructive/20 text-destructive",
                     storageWarning === 'warning' && "bg-warning/20 text-warning",
-                    storageWarning === 'normal' && "bg-primary/20 text-primary"
+                    storageWarning === 'normal' && "bg-success/20 text-success"
                   )}>
                     {Math.round(storagePercent)}%
                   </span>
@@ -512,15 +568,16 @@ export default function ModelManagement() {
             )}
           </div>
           <div className={cn(
-            "storage-bar",
+            "storage-bar transition-all duration-300",
             storageWarning === 'critical' && "storage-bar-critical",
             storageWarning === 'warning' && "storage-bar-warning"
           )}>
             <div
               className={cn(
-                "storage-bar-fill",
-                storageWarning === 'critical' && "bg-destructive",
-                storageWarning === 'warning' && "bg-warning"
+                "storage-bar-fill transition-all duration-300",
+                storageWarning === 'critical' && "bg-gradient-to-r from-destructive to-destructive/80",
+                storageWarning === 'warning' && "bg-gradient-to-r from-warning to-warning/80",
+                storageWarning === 'normal' && "bg-gradient-to-r from-success to-primary"
               )}
               style={{ width: `${Math.min(storagePercent, 100)}%` }}
             />
@@ -606,9 +663,12 @@ function FilterPill({
     <button
       onClick={onClick}
       className={cn(
-        "filter-pill",
+        "filter-pill focus-ring",
         active && "filter-pill-active"
       )}
+      role="radio"
+      aria-checked={active}
+      tabIndex={0}
     >
       {children}
     </button>
@@ -621,14 +681,20 @@ function InstalledModelCard({
   onActivate,
   onDelete,
   isSwitching,
+  isTouch = false,
+  showHint = false,
 }: {
   model: DownloadedModel;
   index: number;
   onActivate: () => void;
   onDelete: () => void;
   isSwitching: boolean;
+  isTouch?: boolean;
+  showHint?: boolean;
 }) {
   const tier = getModelTier(model.name);
+  const speedColor = getSpeedColor(tier.speed);
+  const qualityIcon = getQualityIcon(tier.label);
 
   return (
     <motion.div
@@ -638,14 +704,30 @@ function InstalledModelCard({
       transition={{ delay: index * 0.05, duration: 0.3 }}
       className={cn(
         "model-card model-card-installed group relative",
-        model.isActive && "model-card-active"
+        model.isActive && "model-card-active",
+        !model.isActive && "model-card-inactive"
       )}
     >
-      {/* Action hint indicator (top-right corner) */}
+      {/* Action menu indicator (top-right corner) - persistent for discoverability */}
       {!model.isActive && (
-        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-          <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-        </div>
+        <motion.div
+          initial={{ opacity: isTouch ? 0.6 : 0.4 }}
+          animate={showHint ? {
+            opacity: [0.4, 0.8, 0.4],
+            scale: [1, 1.1, 1]
+          } : {}}
+          transition={showHint ? {
+            duration: 1.5,
+            repeat: 2,
+            delay: 1
+          } : {}}
+          className={cn(
+            "absolute top-3 right-3 transition-all duration-200",
+            isTouch ? "opacity-60" : "opacity-40 group-hover:opacity-100"
+          )}
+        >
+          <MoreVertical className="w-4 h-4 text-muted-foreground" />
+        </motion.div>
       )}
 
       {/* Model ID - PRIMARY */}
@@ -658,8 +740,15 @@ function InstalledModelCard({
       </div>
 
       {/* Model tier info - SECONDARY */}
-      <div className="mb-3">
-        <p className="text-metadata truncate">{tier.label} • {tier.language}</p>
+      <div className="mb-3 space-y-1">
+        <p className="text-metadata truncate flex items-center">
+          {qualityIcon}
+          {tier.label} • {tier.language}
+        </p>
+        <p className={cn("text-size flex items-center gap-1", speedColor)}>
+          <Zap className="w-3 h-3" />
+          {tier.speed}
+        </p>
       </div>
 
       {/* Size - TERTIARY */}
@@ -673,26 +762,28 @@ function InstalledModelCard({
 
       {/* Status + Actions */}
       <div className="flex items-center justify-between">
-        <span className={cn(
-          "text-label px-2 py-1 rounded-md transition-all duration-200",
-          model.isActive
-            ? "text-label-active bg-success/20 border border-success/30"
-            : "text-label-inactive bg-border/20 border border-transparent"
-        )}>
-          {model.isActive ? 'Active' : 'Inactive'}
-        </span>
+        {/* Only show "Active" badge, not "Inactive" */}
+        {model.isActive ? (
+          <span className="text-label px-2 py-1 rounded-md bg-success/20 border border-success/30 text-label-active animate-pulse-badge">
+            Active
+          </span>
+        ) : (
+          <div /> {/* Spacer */}
+        )}
 
+        {/* Action buttons */}
         <div className={cn(
           "flex items-center gap-1 transition-opacity duration-200",
-          "opacity-30 group-hover:opacity-100"
+          isTouch ? "opacity-60" : "opacity-0 group-hover:opacity-100"
         )}>
           {!model.isActive && (
             <>
               <button
                 onClick={onActivate}
                 disabled={isSwitching}
-                className="btn-ghost p-1.5 text-xs hover:bg-primary/20 hover:text-primary rounded"
+                className="btn-ghost p-1.5 text-xs hover:bg-primary/20 hover:text-primary rounded transition-all duration-150 hover:scale-110"
                 title="Activate this model"
+                aria-label="Activate this model"
               >
                 {isSwitching ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -702,8 +793,9 @@ function InstalledModelCard({
               </button>
               <button
                 onClick={onDelete}
-                className="btn-ghost p-1.5 text-xs hover:bg-destructive/20 hover:text-destructive rounded"
+                className="btn-ghost p-1.5 text-xs hover:bg-destructive/20 hover:text-destructive rounded transition-all duration-150 hover:scale-110"
                 title="Delete model"
+                aria-label="Delete model"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -736,6 +828,8 @@ function AvailableModelCard({
 
   const tier = getModelTier(model.name);
   const estimatedTime = getEstimatedDownloadTime(model.sizeMb);
+  const speedColor = getSpeedColor(tier.speed);
+  const qualityIcon = getQualityIcon(tier.label);
 
   // Don't show "Full" quantization badge - it adds no value
   const showQuantBadge = model.quantization !== 'Full';
@@ -745,7 +839,7 @@ function AvailableModelCard({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: Math.min(index * 0.03, 0.3), duration: 0.3 }}
-      className="model-card model-card-available"
+      className="model-card model-card-available group"
     >
       {/* Model ID - PRIMARY */}
       <div className="mb-2">
@@ -753,21 +847,26 @@ function AvailableModelCard({
       </div>
 
       {/* Model tier info - SECONDARY */}
-      <div className="mb-3">
-        <p className="text-metadata truncate">{tier.label} • {tier.language}</p>
-        <p className="text-size mt-1">Speed: {tier.speed}</p>
+      <div className="mb-3 space-y-1">
+        <p className="text-metadata truncate flex items-center">
+          {qualityIcon}
+          {tier.label} • {tier.language}
+        </p>
+        <p className={cn("text-size flex items-center gap-1", speedColor)}>
+          <Zap className="w-3 h-3" />
+          {tier.speed}
+        </p>
       </div>
 
-      {/* Size + Quant badge - TERTIARY */}
+      {/* Size + Download time - TERTIARY */}
       <div className="flex items-center justify-between mb-3">
-        <div className="flex flex-col">
-          <span className="text-size">{formatSize(model.sizeMb)}</span>
-          {!isDownloading && (
-            <span className="text-[10px] text-muted-tertiary">{estimatedTime}</span>
-          )}
+        <div className="flex flex-col gap-0.5">
+          <span className="text-size font-medium">{formatSize(model.sizeMb)}</span>
+          {/* Always show download time estimate */}
+          <span className="text-[10px] text-muted-tertiary">{estimatedTime}</span>
         </div>
         {showQuantBadge && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/50 text-muted-foreground">
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/50 text-muted-foreground uppercase">
             {model.quantization}
           </span>
         )}
@@ -778,7 +877,7 @@ function AvailableModelCard({
         <div className="mb-3">
           <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
             <span>{progress.status === 'verifying' ? 'Verifying' : 'Downloading'}</span>
-            <span>{Math.round(percent)}%</span>
+            <span className="font-medium text-primary">{Math.round(percent)}%</span>
           </div>
           <div className="progress-bar h-1.5">
             <div
@@ -789,11 +888,11 @@ function AvailableModelCard({
         </div>
       )}
 
-      {/* Action button - OUTLINED style */}
+      {/* Action button - OUTLINED style with enhanced hover */}
       {isDownloading ? (
         <button
           onClick={onCancel}
-          className="btn-danger w-full flex items-center justify-center gap-2 py-2 text-sm"
+          className="btn-danger w-full flex items-center justify-center gap-2 py-2 text-sm transition-all duration-150"
         >
           <X className="w-4 h-4" />
           Cancel
@@ -801,7 +900,7 @@ function AvailableModelCard({
       ) : (
         <button
           onClick={onDownload}
-          className="btn-primary flex items-center justify-center gap-2"
+          className="btn-primary flex items-center justify-center gap-2 transition-all duration-150 hover:scale-[1.02]"
         >
           <Download className="w-4 h-4" />
           Download
