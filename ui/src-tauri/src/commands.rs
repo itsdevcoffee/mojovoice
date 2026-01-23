@@ -201,8 +201,14 @@ pub async fn get_daemon_status() -> Result<DaemonStatus, String> {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AudioDevice {
+    /// Human-readable device name (displayed in UI)
     pub name: String,
+    /// Whether this is the system default device
     pub is_default: bool,
+    /// Internal device identifier (PipeWire source name or ALSA device name)
+    /// When None, the name field is used directly
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub internal_name: Option<String>,
 }
 
 /// List available audio input devices
@@ -214,8 +220,9 @@ pub async fn list_audio_devices() -> Result<Vec<AudioDevice>, String> {
     Ok(devices
         .into_iter()
         .map(|d| AudioDevice {
-            name: d.name,
+            name: d.name.clone(),
             is_default: d.is_default,
+            internal_name: d.internal_name,
         })
         .collect())
 }
@@ -1593,4 +1600,86 @@ pub async fn switch_model(filename: String) -> Result<(), String> {
 
     eprintln!("Switched to model: {}", filename);
     Ok(())
+}
+
+/// Storage information for the models directory
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StorageInfo {
+    pub used: u64,   // bytes used by models
+    pub free: u64,   // bytes free on disk
+    pub total: u64,  // total disk space
+}
+
+/// Get storage information for models directory
+#[tauri::command]
+pub async fn get_storage_info() -> Result<StorageInfo, String> {
+    use sysinfo::Disks;
+
+    let models_dir = get_models_dir()?;
+
+    // Calculate total size of all models
+    let mut used: u64 = 0;
+    if models_dir.exists() {
+        used = calculate_dir_size(&models_dir);
+    }
+
+    // Get disk space info
+    let disks = Disks::new_with_refreshed_list();
+
+    // Find the disk that contains the models directory
+    let models_path = if models_dir.exists() {
+        models_dir.canonicalize().unwrap_or(models_dir.clone())
+    } else {
+        models_dir.clone()
+    };
+
+    // Find the best matching disk (longest mount point that is a prefix of models_path)
+    let mut best_disk: Option<&sysinfo::Disk> = None;
+    let mut best_mount_len = 0;
+
+    for disk in disks.list() {
+        let mount = disk.mount_point();
+        if models_path.starts_with(mount) && mount.as_os_str().len() > best_mount_len {
+            best_mount_len = mount.as_os_str().len();
+            best_disk = Some(disk);
+        }
+    }
+
+    let (free, total) = if let Some(disk) = best_disk {
+        (disk.available_space(), disk.total_space())
+    } else {
+        // Fallback: use first disk or zeros
+        disks.list().first()
+            .map(|d| (d.available_space(), d.total_space()))
+            .unwrap_or((0, 0))
+    };
+
+    Ok(StorageInfo { used, free, total })
+}
+
+/// Calculate total size of a directory recursively
+fn calculate_dir_size(path: &std::path::Path) -> u64 {
+    let mut total: u64 = 0;
+
+    if let Ok(entries) = std::fs::read_dir(path) {
+        for entry in entries.flatten() {
+            let entry_path = entry.path();
+            if entry_path.is_dir() {
+                // Skip temp download directories
+                if let Some(name) = entry_path.file_name().and_then(|n| n.to_str()) {
+                    if name.ends_with(".download") {
+                        continue;
+                    }
+                }
+                total += calculate_dir_size(&entry_path);
+            } else if entry_path.is_file() {
+                if let Ok(metadata) = entry_path.metadata() {
+                    total += metadata.len();
+                }
+            }
+        }
+    }
+
+    total
 }

@@ -14,31 +14,198 @@ const TARGET_SAMPLE_RATE: u32 = 16000;
 #[allow(dead_code)] // Public API - called from Tauri UI
 #[derive(Debug, Clone)]
 pub struct AudioDeviceInfo {
-    /// Device name (used as identifier)
+    /// Human-readable device name (displayed in UI)
     pub name: String,
     /// Whether this is the system default device
     pub is_default: bool,
+    /// Internal device identifier for CPAL (ALSA device name on Linux)
+    /// When None, uses the name field directly
+    pub internal_name: Option<String>,
 }
 
 /// List available audio input devices
+/// On Linux with PipeWire, this queries both CPAL/ALSA and PipeWire sources
 #[allow(dead_code)] // Public API - called from Tauri UI
 pub fn list_input_devices() -> Result<Vec<AudioDeviceInfo>> {
+    #[cfg(target_os = "linux")]
+    {
+        // Try to get devices from PipeWire first (more comprehensive on modern Linux)
+        if let Ok(pipewire_devices) = list_pipewire_devices() {
+            if !pipewire_devices.is_empty() {
+                info!("Found {} PipeWire audio source(s)", pipewire_devices.len());
+                return Ok(pipewire_devices);
+            }
+        }
+        warn!("PipeWire enumeration failed or empty, falling back to CPAL/ALSA");
+    }
+
+    // Fallback: Use CPAL's ALSA backend (works on all platforms)
+    list_cpal_devices()
+}
+
+/// List devices using CPAL's native backend (ALSA on Linux, CoreAudio on macOS, WASAPI on Windows)
+fn list_cpal_devices() -> Result<Vec<AudioDeviceInfo>> {
     let host = cpal::default_host();
     let default_device_name = host.default_input_device().and_then(|d| d.name().ok());
 
-    let devices: Vec<AudioDeviceInfo> = host
+    let mut devices = Vec::new();
+    let mut skipped_count = 0;
+
+    for (idx, device) in host
         .input_devices()
         .context("Failed to enumerate input devices")?
-        .filter_map(|device| {
-            let name = device.name().ok()?;
-            Some(AudioDeviceInfo {
-                is_default: default_device_name.as_ref() == Some(&name),
-                name,
-            })
-        })
-        .collect();
+        .enumerate()
+    {
+        match device.name() {
+            Ok(name) => {
+                devices.push(AudioDeviceInfo {
+                    is_default: default_device_name.as_ref() == Some(&name),
+                    name: name.clone(),
+                    internal_name: Some(name),
+                });
+            }
+            Err(e) => {
+                skipped_count += 1;
+                warn!("Skipped device {}: failed to get name ({})", idx, e);
+            }
+        }
+    }
+
+    if skipped_count > 0 {
+        warn!(
+            "Skipped {} device(s) - they may be virtual or unavailable",
+            skipped_count
+        );
+    }
+
+    info!("Found {} available audio input device(s) via CPAL", devices.len());
 
     Ok(devices)
+}
+
+/// Query PipeWire/PulseAudio for available audio sources (Linux only)
+#[cfg(target_os = "linux")]
+fn list_pipewire_devices() -> Result<Vec<AudioDeviceInfo>> {
+    use std::process::Command;
+
+    // Try pactl first (works with both PulseAudio and PipeWire)
+    let output = Command::new("pactl")
+        .args(["list", "sources", "short"])
+        .output()
+        .context("Failed to run pactl - PulseAudio/PipeWire not available")?;
+
+    if !output.status.success() {
+        anyhow::bail!("pactl command failed");
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut devices = Vec::new();
+
+    // Get default source
+    let default_source = Command::new("pactl")
+        .args(["get-default-source"])
+        .output()
+        .ok()
+        .and_then(|o| {
+            if o.status.success() {
+                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+            } else {
+                None
+            }
+        });
+
+    // Parse pactl output: ID  NAME  MODULE  SAMPLE_SPEC  STATE
+    for line in stdout.lines() {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() >= 2 {
+            let source_name = parts[1].to_string();
+
+            // Skip monitor sources (outputs) - we only want input sources
+            if source_name.ends_with(".monitor") {
+                continue;
+            }
+
+            // Get human-readable description
+            let description = get_source_description(&source_name).unwrap_or_else(|| source_name.clone());
+
+            devices.push(AudioDeviceInfo {
+                name: description,
+                is_default: default_source.as_ref() == Some(&source_name),
+                internal_name: Some(source_name), // Store PipeWire source name
+            });
+        }
+    }
+
+    Ok(devices)
+}
+
+/// Get human-readable description for a PipeWire source
+#[cfg(target_os = "linux")]
+fn get_source_description(source_name: &str) -> Option<String> {
+    use std::process::Command;
+
+    let output = Command::new("pactl")
+        .args(["list", "sources"])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut in_target_source = false;
+
+    for line in stdout.lines() {
+        let trimmed = line.trim();
+
+        // Check if we're entering the target source section
+        if trimmed.starts_with("Name: ") && trimmed.contains(source_name) {
+            in_target_source = true;
+            continue;
+        }
+
+        // If we're in the target source, look for Description
+        if in_target_source {
+            if trimmed.starts_with("Description: ") {
+                return Some(trimmed.strip_prefix("Description: ")?.trim().to_string());
+            }
+
+            // Stop if we hit another source
+            if trimmed.starts_with("Name: ") {
+                break;
+            }
+        }
+    }
+
+    None
+}
+
+/// Temporarily set a PipeWire source as the default input
+/// This allows CPAL to use it via the "default" ALSA device
+#[cfg(target_os = "linux")]
+fn set_pipewire_source_temporarily(source_name: &str) -> Result<()> {
+    use std::process::Command;
+
+    info!("Setting PipeWire default source to: {}", source_name);
+
+    let output = Command::new("pactl")
+        .args(["set-default-source", source_name])
+        .output()
+        .context("Failed to run pactl")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("Failed to set default source: {}", stderr);
+    }
+
+    Ok(())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn set_pipewire_source_temporarily(_source_name: &str) -> Result<()> {
+    // No-op on non-Linux platforms
+    Ok(())
 }
 
 /// Audio device configuration
@@ -51,6 +218,66 @@ struct AudioSetup {
 
 /// Set up an audio input device by name, or the default if None
 fn setup_audio_device(device_name: Option<&str>) -> Result<AudioSetup> {
+    // On Linux with PipeWire, handle device selection specially
+    #[cfg(target_os = "linux")]
+    if let Some(name) = device_name {
+        // Try to resolve device name (handles both display names and internal names)
+        if let Ok(internal_name) = resolve_device_name(name) {
+            info!("Resolved device '{}' to PipeWire source '{}'", name, internal_name);
+            // Set as default PipeWire source, then use ALSA "default" device
+            if let Err(e) = set_pipewire_source_temporarily(&internal_name) {
+                warn!("Failed to set PipeWire source: {}. Falling back to default device.", e);
+            } else {
+                return setup_cpal_device(Some("default"));
+            }
+        }
+
+        // Fallback: try direct CPAL device lookup
+        info!("Using device name '{}' directly with CPAL", name);
+    }
+
+    // Standard CPAL device selection for ALSA device names or other platforms
+    setup_cpal_device(device_name)
+}
+
+/// Resolve a device name (display name or internal name) to a PipeWire source name
+/// Returns the internal PipeWire source name if found
+#[cfg(target_os = "linux")]
+fn resolve_device_name(name: &str) -> Result<String> {
+    // If it already looks like a PipeWire source name, use it directly
+    if name.contains('.') || name.starts_with("alsa_") || name.starts_with("bluez_") {
+        return Ok(name.to_string());
+    }
+
+    // Query PipeWire for all sources and match by display name
+    let devices = list_pipewire_devices()
+        .context("Failed to query PipeWire devices")?;
+
+    // Try exact match on display name
+    for device in &devices {
+        if device.name == name {
+            if let Some(ref internal) = device.internal_name {
+                return Ok(internal.clone());
+            }
+        }
+    }
+
+    // Try partial match (case-insensitive)
+    let name_lower = name.to_lowercase();
+    for device in &devices {
+        if device.name.to_lowercase().contains(&name_lower) {
+            if let Some(ref internal) = device.internal_name {
+                warn!("Using partial match: '{}' -> '{}'", name, device.name);
+                return Ok(internal.clone());
+            }
+        }
+    }
+
+    anyhow::bail!("Device '{}' not found in PipeWire sources", name)
+}
+
+/// Set up CPAL device using standard ALSA/CoreAudio/WASAPI device names
+fn setup_cpal_device(device_name: Option<&str>) -> Result<AudioSetup> {
     let host = cpal::default_host();
 
     let device = match device_name {

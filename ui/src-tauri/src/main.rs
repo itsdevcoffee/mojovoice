@@ -41,6 +41,7 @@ fn main() {
             commands::delete_model,
             commands::switch_model,
             commands::cancel_download,
+            commands::get_storage_info,
             // Audio devices
             commands::list_audio_devices,
         ])
