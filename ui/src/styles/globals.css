@@ -150,16 +150,42 @@
     transform: translateY(-3px);
   }
 
-  /* Inactive model card - slightly dimmed for hierarchy */
+  /* Inactive model card - enhanced hover for better affordance */
   .model-card-inactive {
     opacity: 0.92;
   }
 
   .model-card-inactive:hover {
     opacity: 1;
+    border-color: rgba(20, 184, 166, 0.6);
+    box-shadow:
+      0 8px 20px rgba(0, 0, 0, 0.35),
+      0 0 0 1px rgba(20, 184, 166, 0.15);
+    transform: translateY(-3px);
   }
 
-  /* Available model card - taller for button, slightly different opacity */
+  /* Select ghost button - appears on hover */
+  .select-button {
+    background-color: transparent;
+    color: hsl(var(--primary));
+    border: 1px solid hsl(var(--primary) / 0.5);
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .select-button:hover {
+    background-color: hsl(var(--primary) / 0.15);
+    border-color: hsl(var(--primary));
+  }
+
+  .select-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Available model card - taller for button, enhanced hover */
   .model-card-available {
     display: flex;
     flex-direction: column;
@@ -168,6 +194,10 @@
 
   .model-card-available:hover {
     opacity: 1;
+    border-color: rgba(20, 184, 166, 0.5);
+    box-shadow:
+      0 8px 20px rgba(0, 0, 0, 0.35),
+      0 0 0 1px rgba(20, 184, 166, 0.1);
   }
 
   /* Glass card (legacy support + downloads) */
@@ -466,6 +496,14 @@
     color: #64748b; /* Very muted - TERTIARY */
   }
 
+  /* Prominent size display - higher contrast for decision-making */
+  .text-size-prominent {
+    font-size: 13px;
+    font-weight: 600;
+    color: #e2e8f0; /* High contrast - important metric */
+    letter-spacing: -0.01em;
+  }
+
   .text-progress {
     font-size: 12px;
     font-weight: 500;
@@ -489,6 +527,155 @@
 
   .text-tertiary {
     color: #64748b;
+  }
+
+  /* ============================================================================
+     Language Badges - Color-coded pills
+     ============================================================================ */
+  .language-badge {
+    @apply inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide;
+    padding: 3px 8px;
+    border-radius: 9999px;
+    transition: all 150ms ease;
+  }
+
+  .language-badge-multilingual {
+    background-color: hsl(var(--primary) / 0.15);
+    color: hsl(var(--primary));
+    border: 1px solid hsl(var(--primary) / 0.3);
+  }
+
+  .language-badge-english {
+    background-color: hsl(var(--warning) / 0.15);
+    color: hsl(var(--warning));
+    border: 1px solid hsl(var(--warning) / 0.3);
+  }
+
+  /* ============================================================================
+     Visual Meters - 5-dot scale indicators
+     ============================================================================ */
+  .visual-meter {
+    @apply flex items-center;
+  }
+
+  .visual-meter-dots {
+    @apply flex items-center gap-1;
+  }
+
+  .visual-meter-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    transition: all 150ms ease;
+  }
+
+  .visual-meter-dot-inactive {
+    background-color: hsl(var(--border));
+  }
+
+  .visual-meter-dot-quality {
+    background-color: hsl(var(--success));
+    box-shadow: 0 0 4px hsl(var(--success) / 0.4);
+  }
+
+  .visual-meter-dot-speed {
+    background-color: hsl(var(--primary));
+    box-shadow: 0 0 4px hsl(var(--primary) / 0.4);
+  }
+
+  /* ============================================================================
+     Ghost Download Button - Transparent with border, fills on hover
+     ============================================================================ */
+  .btn-download-ghost {
+    @apply flex items-center justify-center gap-2 w-full font-medium transition-all duration-200;
+    background-color: transparent;
+    color: hsl(var(--muted-foreground));
+    border: 1.5px solid hsl(var(--border));
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+  }
+
+  .btn-download-ghost:hover {
+    background-color: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    border-color: hsl(var(--primary));
+    box-shadow: 0 0 16px hsl(var(--primary) / 0.3);
+  }
+
+  .btn-download-ghost:active {
+    transform: scale(0.98);
+  }
+
+  /* ============================================================================
+     Download Progress Container - Button transforms into progress bar
+     ============================================================================ */
+  .download-progress-wrapper {
+    @apply flex flex-col gap-1;
+  }
+
+  .download-progress-container {
+    @apply relative w-full overflow-hidden;
+    height: 40px; /* Match button height */
+    background-color: hsl(var(--card-hover));
+    border: 1.5px solid hsl(var(--primary) / 0.4);
+    border-radius: 6px;
+  }
+
+  .download-progress-meta {
+    @apply flex items-center justify-between px-1;
+    font-size: 10px;
+    color: hsl(var(--muted-foreground));
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .download-progress-fill {
+    @apply absolute inset-y-0 left-0;
+    background: linear-gradient(90deg, hsl(var(--primary) / 0.3), hsl(var(--primary) / 0.5));
+    transition: width 300ms ease-out;
+  }
+
+  /* Shimmer effect on progress fill */
+  .download-progress-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.15) 50%,
+      transparent 100%
+    );
+    animation: shimmer 1.5s infinite;
+  }
+
+  .download-progress-content {
+    @apply absolute inset-0 flex items-center justify-center;
+    padding: 0 28px 0 8px; /* Leave room for cancel button */
+  }
+
+  .download-progress-text {
+    @apply text-[11px] text-foreground truncate;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+
+  .download-progress-cancel {
+    @apply absolute right-1 top-1/2 -translate-y-1/2;
+    @apply flex items-center justify-center;
+    @apply text-muted-foreground hover:text-destructive transition-colors duration-150;
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+  }
+
+  .download-progress-cancel:hover {
+    background-color: hsl(var(--destructive) / 0.15);
   }
 }
 

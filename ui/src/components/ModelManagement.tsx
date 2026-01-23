@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Download,
   Trash2,
-  Check,
   Search,
   Loader2,
   HardDrive,
@@ -14,10 +13,11 @@ import {
   ChevronRight,
   Settings,
   Target,
-  MoreVertical,
   Zap,
   Award,
   CircleDot,
+  Globe,
+  Flag,
 } from 'lucide-react';
 import { invoke } from '../lib/ipc';
 import { cn } from '../lib/utils';
@@ -50,48 +50,44 @@ interface StorageInfo {
 type SizeFilter = 'all' | '<500MB' | '<1GB' | '1-2GB' | '>2GB';
 
 // Get model quality tier based on model name
-function getModelTier(name: string): { label: string; speed: string; language: string } {
+// Returns numeric levels (1-5) for visual meters
+function getModelTier(name: string): {
+  label: string;
+  speed: string;
+  language: string;
+  qualityLevel: number; // 1-5 scale
+  speedLevel: number;   // 1-5 scale
+} {
   // Large models - best quality
   if (name.includes('large-v3-turbo')) {
-    return { label: 'Best Quality', speed: 'Fast', language: 'Multilingual' };
+    return { label: 'Best Quality', speed: 'Fast', language: 'Multilingual', qualityLevel: 5, speedLevel: 4 };
   }
   if (name.includes('large')) {
-    return { label: 'Best Quality', speed: 'Slower', language: 'Multilingual' };
+    return { label: 'Best Quality', speed: 'Slower', language: 'Multilingual', qualityLevel: 5, speedLevel: 2 };
   }
 
   // Medium - balanced
   if (name.includes('medium')) {
-    return { label: 'Balanced', speed: 'Medium', language: 'Multilingual' };
+    return { label: 'Balanced', speed: 'Medium', language: 'Multilingual', qualityLevel: 4, speedLevel: 3 };
   }
 
   // Distil models - optimized
   if (name.includes('distil')) {
-    return { label: 'Fast', speed: 'Very Fast', language: name.includes('-en') ? 'English' : 'Multilingual' };
+    return { label: 'Fast', speed: 'Very Fast', language: name.includes('-en') ? 'English' : 'Multilingual', qualityLevel: 3, speedLevel: 5 };
   }
 
   // Small models
   if (name.includes('small')) {
-    return { label: 'Good Quality', speed: 'Fast', language: name.includes('-en') ? 'English' : 'Multilingual' };
+    return { label: 'Good Quality', speed: 'Fast', language: name.includes('-en') ? 'English' : 'Multilingual', qualityLevel: 3, speedLevel: 4 };
   }
 
   // Tiny/Base - fastest
   if (name.includes('tiny') || name.includes('base')) {
-    return { label: 'Fast', speed: 'Very Fast', language: name.includes('-en') ? 'English' : 'Multilingual' };
+    return { label: 'Fast', speed: 'Very Fast', language: name.includes('-en') ? 'English' : 'Multilingual', qualityLevel: 2, speedLevel: 5 };
   }
 
   // Default
-  return { label: 'Standard', speed: 'Medium', language: 'Multilingual' };
-}
-
-// Estimate download time based on size (assuming 10 MB/s average connection)
-function getEstimatedDownloadTime(sizeMb: number): string {
-  const secondsAtTenMBs = sizeMb / 10;
-  if (secondsAtTenMBs < 30) return '~30 sec';
-  if (secondsAtTenMBs < 60) return '~1 min';
-  if (secondsAtTenMBs < 180) return '~2-3 min';
-  if (secondsAtTenMBs < 300) return '~3-5 min';
-  if (secondsAtTenMBs < 600) return '~5-10 min';
-  return '~10-15 min';
+  return { label: 'Standard', speed: 'Medium', language: 'Multilingual', qualityLevel: 3, speedLevel: 3 };
 }
 
 // Get color class for speed indicator
@@ -131,6 +127,137 @@ const isTouchDevice = (): boolean => {
   return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 };
 
+// Middle truncation for model names - preserves start and unique suffix
+function middleTruncate(text: string, maxLength: number = 18): { truncated: string; isTruncated: boolean } {
+  if (text.length <= maxLength) {
+    return { truncated: text, isTruncated: false };
+  }
+  const keepStart = Math.ceil((maxLength - 3) / 2);
+  const keepEnd = Math.floor((maxLength - 3) / 2);
+  return {
+    truncated: `${text.slice(0, keepStart)}…${text.slice(-keepEnd)}`,
+    isTruncated: true,
+  };
+}
+
+// Get language icon component (legacy - for installed cards)
+function getLanguageIcon(language: string): React.ReactNode {
+  if (language === 'English') {
+    return (
+      <span title="English only" className="inline-flex items-center">
+        <Flag className="w-3 h-3 text-muted-foreground" />
+      </span>
+    );
+  }
+  return (
+    <span title="Multilingual" className="inline-flex items-center">
+      <Globe className="w-3 h-3 text-primary/70" />
+    </span>
+  );
+}
+
+// Language badge component - color-coded pill
+function LanguageBadge({ language }: { language: string }): React.ReactNode {
+  const isMultilingual = language === 'Multilingual';
+  return (
+    <span
+      className={cn(
+        "language-badge",
+        isMultilingual ? "language-badge-multilingual" : "language-badge-english"
+      )}
+      title={isMultilingual ? "Supports 99+ languages" : "English only"}
+    >
+      {isMultilingual ? (
+        <>
+          <Globe className="w-3 h-3" />
+          <span>Multi</span>
+        </>
+      ) : (
+        <>
+          <Flag className="w-3 h-3" />
+          <span>EN</span>
+        </>
+      )}
+    </span>
+  );
+}
+
+// Visual meter component - 5-dot scale
+function VisualMeter({
+  level,
+  maxLevel = 5,
+  label,
+  colorClass,
+}: {
+  level: number;
+  maxLevel?: number;
+  label: string;
+  colorClass: string;
+}): React.ReactNode {
+  return (
+    <div className="visual-meter" title={label}>
+      <div className="visual-meter-dots">
+        {Array.from({ length: maxLevel }, (_, i) => (
+          <span
+            key={i}
+            className={cn(
+              "visual-meter-dot",
+              i < level ? colorClass : "visual-meter-dot-inactive"
+            )}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Format download progress for display (monospace-friendly)
+function formatDownloadProgress(
+  downloadedBytes: number,
+  totalBytes: number,
+  speedBps: number
+): { size: string; speed: string; eta: string } {
+  // Format size: "245 MB / 1.47 GB"
+  const downloaded = formatBytesCompact(downloadedBytes);
+  const total = formatBytesCompact(totalBytes);
+  const size = `${downloaded} / ${total}`;
+
+  // Format speed: "12 MB/s"
+  const speedMBs = speedBps / (1024 * 1024);
+  const speed = speedMBs >= 1
+    ? `${speedMBs.toFixed(0)} MB/s`
+    : `${(speedBps / 1024).toFixed(0)} KB/s`;
+
+  // Format ETA: "2m" or "1h 5m"
+  const remainingBytes = totalBytes - downloadedBytes;
+  const etaSeconds = speedBps > 0 ? remainingBytes / speedBps : 0;
+  let eta = '';
+  if (etaSeconds > 0) {
+    if (etaSeconds < 60) {
+      eta = `${Math.round(etaSeconds)}s`;
+    } else if (etaSeconds < 3600) {
+      eta = `${Math.floor(etaSeconds / 60)}m`;
+    } else {
+      const hours = Math.floor(etaSeconds / 3600);
+      const mins = Math.floor((etaSeconds % 3600) / 60);
+      eta = mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+    }
+  }
+
+  return { size, speed, eta };
+}
+
+// Compact byte formatting for progress display
+function formatBytesCompact(bytes: number): string {
+  if (bytes >= 1024 * 1024 * 1024) {
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  }
+  if (bytes >= 1024 * 1024) {
+    return `${Math.round(bytes / (1024 * 1024))} MB`;
+  }
+  return `${Math.round(bytes / 1024)} KB`;
+}
+
 export default function ModelManagement() {
   const [availableModels, setAvailableModels] = useState<RegistryModel[]>([]);
   const [downloadedModels, setDownloadedModels] = useState<DownloadedModel[]>([]);
@@ -144,7 +271,6 @@ export default function ModelManagement() {
   const [showAllInstalled, setShowAllInstalled] = useState(false);
   const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
   const [isTouch, setIsTouch] = useState(false);
-  const [showHint, setShowHint] = useState(true);
 
   const { downloads, startDownload, cancelDownload, isDownloading, activeDownloads } = useModelDownload();
 
@@ -156,10 +282,6 @@ export default function ModelManagement() {
     loadModels();
     loadStorageInfo();
     setIsTouch(isTouchDevice());
-
-    // Hide hint after 3 seconds
-    const hintTimer = setTimeout(() => setShowHint(false), 3000);
-    return () => clearTimeout(hintTimer);
   }, []);
 
   const loadModels = async () => {
@@ -443,7 +565,6 @@ export default function ModelManagement() {
                   onDelete={() => setDeleteConfirm(model)}
                   isSwitching={switching === model.filename}
                   isTouch={isTouch}
-                  showHint={showHint && index === 0 && !model.isActive}
                 />
               ))}
             </AnimatePresence>
@@ -682,7 +803,6 @@ function InstalledModelCard({
   onDelete,
   isSwitching,
   isTouch = false,
-  showHint = false,
 }: {
   model: DownloadedModel;
   index: number;
@@ -690,11 +810,11 @@ function InstalledModelCard({
   onDelete: () => void;
   isSwitching: boolean;
   isTouch?: boolean;
-  showHint?: boolean;
 }) {
   const tier = getModelTier(model.name);
   const speedColor = getSpeedColor(tier.speed);
   const qualityIcon = getQualityIcon(tier.label);
+  const { truncated: displayName, isTruncated } = middleTruncate(model.name, 18);
 
   return (
     <motion.div
@@ -702,106 +822,94 @@ function InstalledModelCard({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.9 }}
       transition={{ delay: index * 0.05, duration: 0.3 }}
+      onClick={!model.isActive && !isSwitching ? onActivate : undefined}
       className={cn(
         "model-card model-card-installed group relative",
         model.isActive && "model-card-active",
-        !model.isActive && "model-card-inactive"
+        !model.isActive && "model-card-inactive cursor-pointer"
       )}
     >
-      {/* Action menu indicator (top-right corner) - persistent for discoverability */}
-      {!model.isActive && (
-        <motion.div
-          initial={{ opacity: isTouch ? 0.6 : 0.4 }}
-          animate={showHint ? {
-            opacity: [0.4, 0.8, 0.4],
-            scale: [1, 1.1, 1]
-          } : {}}
-          transition={showHint ? {
-            duration: 1.5,
-            repeat: 2,
-            delay: 1
-          } : {}}
-          className={cn(
-            "absolute top-3 right-3 transition-all duration-200",
-            isTouch ? "opacity-60" : "opacity-40 group-hover:opacity-100"
-          )}
-        >
-          <MoreVertical className="w-4 h-4 text-muted-foreground" />
-        </motion.div>
-      )}
-
-      {/* Model ID - PRIMARY */}
+      {/* Model ID - PRIMARY with middle truncation */}
       <div className="flex items-center gap-2 mb-1.5">
         <span className={cn(
-          "status-dot",
+          "status-dot flex-shrink-0",
           model.isActive ? "status-dot-active animate-pulse-dot" : "status-dot-inactive"
         )} />
-        <span className="text-model-name truncate flex-1">{model.name}</span>
+        <span
+          className="text-model-name flex-1"
+          title={isTruncated ? model.name : undefined}
+        >
+          {displayName}
+        </span>
       </div>
 
-      {/* Model tier info - SECONDARY */}
+      {/* Model tier info - SECONDARY with language icon */}
       <div className="mb-2 space-y-0.5">
-        <p className="text-metadata truncate flex items-center">
+        <p className="text-metadata truncate flex items-center gap-1.5">
           {qualityIcon}
-          {tier.label} • {tier.language}
+          <span>{tier.label}</span>
+          {getLanguageIcon(tier.language)}
         </p>
-        <p className={cn("text-size flex items-center gap-1", speedColor)}>
-          <Zap className="w-3 h-3" />
-          {tier.speed}
-        </p>
+        {/* Speed + Size row - aligned together for visual hierarchy */}
+        <div className="flex items-center justify-between">
+          <p className={cn("text-size flex items-center gap-1", speedColor)}>
+            <Zap className="w-3 h-3" />
+            {tier.speed}
+          </p>
+          <span className="text-size-prominent">{formatSize(model.sizeMb)}</span>
+        </div>
       </div>
-
-      {/* Size - TERTIARY */}
-      <p className="text-size mt-auto mb-1.5">{formatSize(model.sizeMb)}</p>
 
       {/* Accent bar */}
       <div className={cn(
-        "accent-bar mb-1.5",
+        "accent-bar mb-1.5 mt-auto",
         model.isActive ? "accent-bar-success" : "bg-border"
       )} />
 
       {/* Status + Actions */}
-      <div className="flex items-center justify-between">
-        {/* Only show "Active" badge, not "Inactive" */}
+      <div className="flex items-center justify-between min-h-[28px]">
+        {/* Active badge or Select button */}
         {model.isActive ? (
           <span className="text-label px-2 py-1 rounded-md bg-success/20 border border-success/30 text-label-active animate-pulse-badge">
             Active
           </span>
         ) : (
-          <div></div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onActivate();
+            }}
+            disabled={isSwitching}
+            className={cn(
+              "select-button text-label px-3 py-1 rounded-md transition-all duration-200",
+              isTouch ? "opacity-70" : "opacity-0 group-hover:opacity-100"
+            )}
+          >
+            {isSwitching ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              'Select'
+            )}
+          </button>
         )}
 
-        {/* Action buttons */}
-        <div className={cn(
-          "flex items-center gap-1 transition-opacity duration-200",
-          isTouch ? "opacity-60" : "opacity-0 group-hover:opacity-100"
-        )}>
-          {!model.isActive && (
-            <>
-              <button
-                onClick={onActivate}
-                disabled={isSwitching}
-                className="btn-ghost p-1.5 text-xs hover:bg-primary/20 hover:text-primary rounded transition-all duration-150 hover:scale-110"
-                title="Activate this model"
-                aria-label="Activate this model"
-              >
-                {isSwitching ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Check className="w-3.5 h-3.5" />
-                )}
-              </button>
-              <button
-                onClick={onDelete}
-                className="btn-ghost p-1.5 text-xs hover:bg-destructive/20 hover:text-destructive rounded transition-all duration-150 hover:scale-110"
-                title="Delete model"
-                aria-label="Delete model"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            </>
-          )}
-        </div>
+        {/* Delete button - only for inactive cards */}
+        {!model.isActive && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            className={cn(
+              "btn-ghost p-1.5 text-xs hover:bg-destructive/20 hover:text-destructive rounded transition-all duration-150 hover:scale-110",
+              isTouch ? "opacity-60" : "opacity-0 group-hover:opacity-100"
+            )}
+            title="Delete model"
+            aria-label="Delete model"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
     </motion.div>
   );
@@ -827,12 +935,15 @@ function AvailableModelCard({
     : 0;
 
   const tier = getModelTier(model.name);
-  const estimatedTime = getEstimatedDownloadTime(model.sizeMb);
-  const speedColor = getSpeedColor(tier.speed);
-  const qualityIcon = getQualityIcon(tier.label);
+  const { truncated: displayName, isTruncated } = middleTruncate(model.name, 18);
 
   // Don't show "Full" quantization badge - it adds no value
   const showQuantBadge = model.quantization !== 'Full';
+
+  // Get formatted progress data for download state
+  const progressData = progress
+    ? formatDownloadProgress(progress.downloadedBytes, progress.totalBytes, progress.speedBps)
+    : null;
 
   return (
     <motion.div
@@ -841,30 +952,44 @@ function AvailableModelCard({
       transition={{ delay: Math.min(index * 0.03, 0.3), duration: 0.3 }}
       className="model-card model-card-available group"
     >
-      {/* Model ID - PRIMARY */}
+      {/* Model ID - PRIMARY with middle truncation */}
       <div className="mb-2">
-        <span className="text-model-name truncate block">{model.name}</span>
+        <span
+          className="text-model-name block"
+          title={isTruncated ? model.name : undefined}
+        >
+          {displayName}
+        </span>
       </div>
 
-      {/* Model tier info - SECONDARY */}
-      <div className="mb-3 space-y-1">
-        <p className="text-metadata truncate flex items-center">
-          {qualityIcon}
-          {tier.label} • {tier.language}
-        </p>
-        <p className={cn("text-size flex items-center gap-1", speedColor)}>
-          <Zap className="w-3 h-3" />
-          {tier.speed}
-        </p>
+      {/* Language badge - color-coded pill */}
+      <div className="mb-2">
+        <LanguageBadge language={tier.language} />
       </div>
 
-      {/* Size + Download time - TERTIARY */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex flex-col gap-0.5">
-          <span className="text-size font-medium">{formatSize(model.sizeMb)}</span>
-          {/* Always show download time estimate */}
-          <span className="text-[10px] text-muted-tertiary">{estimatedTime}</span>
+      {/* Visual meters for Quality and Speed */}
+      <div className="mb-3 space-y-1.5">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-muted-tertiary uppercase tracking-wide">Quality</span>
+          <VisualMeter
+            level={tier.qualityLevel}
+            label={tier.label}
+            colorClass="visual-meter-dot-quality"
+          />
         </div>
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-muted-tertiary uppercase tracking-wide">Speed</span>
+          <VisualMeter
+            level={tier.speedLevel}
+            label={tier.speed}
+            colorClass="visual-meter-dot-speed"
+          />
+        </div>
+      </div>
+
+      {/* Size + Quantization row */}
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-size-prominent">{formatSize(model.sizeMb)}</span>
         {showQuantBadge && (
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/50 text-muted-foreground uppercase">
             {model.quantization}
@@ -872,38 +997,52 @@ function AvailableModelCard({
         )}
       </div>
 
-      {/* Progress bar when downloading */}
-      {isDownloading && progress && (
-        <div className="mb-3">
-          <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
-            <span>{progress.status === 'verifying' ? 'Verifying' : 'Downloading'}</span>
-            <span className="font-medium text-primary">{Math.round(percent)}%</span>
-          </div>
-          <div className="progress-bar h-1.5">
+      {/* Action button / Progress bar transformation */}
+      {isDownloading && progress ? (
+        // Download in progress - button transforms into progress container
+        <div className="download-progress-wrapper">
+          <div className="download-progress-container">
+            {/* Progress bar fill */}
             <div
-              className="progress-bar-fill"
+              className="download-progress-fill"
               style={{ width: `${percent}%` }}
             />
+            {/* Progress data overlay - monospace for stability */}
+            <div className="download-progress-content">
+              {progress.status === 'verifying' ? (
+                <span className="download-progress-text">Verifying...</span>
+              ) : progressData ? (
+                <span className="download-progress-text">{progressData.size}</span>
+              ) : (
+                <span className="download-progress-text">Starting...</span>
+              )}
+            </div>
+            {/* Cancel button (small X in corner) */}
+            <button
+              onClick={onCancel}
+              className="download-progress-cancel"
+              title="Cancel download"
+              aria-label="Cancel download"
+            >
+              <X className="w-3 h-3" />
+            </button>
           </div>
+          {/* Speed + ETA as secondary line below */}
+          {progressData && progress.status !== 'verifying' && (
+            <div className="download-progress-meta">
+              <span>{progressData.speed}</span>
+              {progressData.eta && <span>est. {progressData.eta}</span>}
+            </div>
+          )}
         </div>
-      )}
-
-      {/* Action button - OUTLINED style with enhanced hover */}
-      {isDownloading ? (
-        <button
-          onClick={onCancel}
-          className="btn-danger w-full flex items-center justify-center gap-2 py-2 text-sm transition-all duration-150"
-        >
-          <X className="w-4 h-4" />
-          Cancel
-        </button>
       ) : (
+        // Idle state - Ghost/Outline download button
         <button
           onClick={onDownload}
-          className="btn-primary flex items-center justify-center gap-2 transition-all duration-150 hover:scale-[1.02]"
+          className="btn-download-ghost group/btn"
         >
-          <Download className="w-4 h-4" />
-          Download
+          <Download className="w-4 h-4 transition-transform group-hover/btn:scale-110" />
+          <span>Download</span>
         </button>
       )}
     </motion.div>
