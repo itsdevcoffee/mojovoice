@@ -1,6 +1,20 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Download, Trash2, Check, Search, Loader2, HardDrive, Package, AlertCircle, X } from 'lucide-react';
+import {
+  Download,
+  Trash2,
+  Check,
+  Search,
+  Loader2,
+  HardDrive,
+  Package,
+  AlertCircle,
+  X,
+  Pause,
+  ChevronRight,
+  Settings,
+  Target,
+} from 'lucide-react';
 import { invoke } from '../lib/ipc';
 import { cn } from '../lib/utils';
 import { useModelDownload, type DownloadProgress } from '../hooks/useModelDownload';
@@ -22,29 +36,81 @@ interface DownloadedModel {
   isActive: boolean;
 }
 
-type Tab = 'library' | 'myModels' | 'downloads';
+interface StorageInfo {
+  used: number;  // bytes
+  free: number;  // bytes
+  total: number; // bytes
+}
+
+// Filter types
+type SizeFilter = 'all' | '<500MB' | '<1GB' | '1-2GB' | '>2GB';
+
+// Get model quality tier based on model name
+function getModelTier(name: string): { label: string; speed: string; language: string } {
+  // Large models - best quality
+  if (name.includes('large-v3-turbo')) {
+    return { label: 'Best Quality', speed: 'Fast', language: 'Multilingual' };
+  }
+  if (name.includes('large')) {
+    return { label: 'Best Quality', speed: 'Slower', language: 'Multilingual' };
+  }
+
+  // Medium - balanced
+  if (name.includes('medium')) {
+    return { label: 'Balanced', speed: 'Medium', language: 'Multilingual' };
+  }
+
+  // Distil models - optimized
+  if (name.includes('distil')) {
+    return { label: 'Fast', speed: 'Very Fast', language: name.includes('-en') ? 'English' : 'Multilingual' };
+  }
+
+  // Small models
+  if (name.includes('small')) {
+    return { label: 'Good Quality', speed: 'Fast', language: name.includes('-en') ? 'English' : 'Multilingual' };
+  }
+
+  // Tiny/Base - fastest
+  if (name.includes('tiny') || name.includes('base')) {
+    return { label: 'Fast', speed: 'Very Fast', language: name.includes('-en') ? 'English' : 'Multilingual' };
+  }
+
+  // Default
+  return { label: 'Standard', speed: 'Medium', language: 'Multilingual' };
+}
+
+// Estimate download time based on size (assuming 10 MB/s average connection)
+function getEstimatedDownloadTime(sizeMb: number): string {
+  const secondsAtTenMBs = sizeMb / 10;
+  if (secondsAtTenMBs < 60) return '~1 min';
+  if (secondsAtTenMBs < 180) return '~2-3 min';
+  if (secondsAtTenMBs < 300) return '~3-5 min';
+  if (secondsAtTenMBs < 600) return '~5-10 min';
+  return '~10-15 min';
+}
 
 export default function ModelManagement() {
-  const [activeTab, setActiveTab] = useState<Tab>('library');
   const [availableModels, setAvailableModels] = useState<RegistryModel[]>([]);
   const [downloadedModels, setDownloadedModels] = useState<DownloadedModel[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [familyFilter, setFamilyFilter] = useState<string>('');
-  const [quantFilter, setQuantFilter] = useState<string>('');
+  const [sizeFilter, setSizeFilter] = useState<SizeFilter>('all');
   const [deleteConfirm, setDeleteConfirm] = useState<DownloadedModel | null>(null);
   const [switching, setSwitching] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<{ modelName: string; error: string } | null>(null);
+  const [showAllInstalled, setShowAllInstalled] = useState(false);
+  const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
 
   const { downloads, startDownload, cancelDownload, isDownloading, activeDownloads } = useModelDownload();
 
-  // Track which downloads have already triggered a refresh (prevent race condition)
+  // Track which downloads have already triggered a refresh
   const refreshedDownloads = useRef<Set<string>>(new Set());
 
   // Load models on mount
   useEffect(() => {
     loadModels();
+    loadStorageInfo();
   }, []);
 
   const loadModels = async () => {
@@ -63,13 +129,22 @@ export default function ModelManagement() {
     }
   };
 
-  // Refresh downloaded models after download completes (with deduplication)
+  const loadStorageInfo = async () => {
+    try {
+      const info = await invoke<StorageInfo>('get_storage_info');
+      setStorageInfo(info);
+    } catch (error) {
+      // Storage info is optional, fail silently
+      console.debug('Storage info not available:', error);
+    }
+  };
+
+  // Refresh downloaded models after download completes
   useEffect(() => {
     const completedDownloads = Array.from(downloads.entries())
       .filter(([_, d]) => d.status === 'complete')
       .map(([name]) => name);
 
-    // Only refresh for NEW completions
     const newCompletions = completedDownloads.filter(
       name => !refreshedDownloads.current.has(name)
     );
@@ -79,14 +154,13 @@ export default function ModelManagement() {
       invoke<DownloadedModel[]>('list_downloaded_models')
         .then(setDownloadedModels)
         .catch(console.error);
+      loadStorageInfo();
 
-      // Clear tracking after auto-dismiss period (3s + buffer) to allow re-downloads
       setTimeout(() => {
         newCompletions.forEach(name => refreshedDownloads.current.delete(name));
       }, 5000);
     }
 
-    // Check for errors and display them
     const erroredDownload = Array.from(downloads.values()).find(d => d.status === 'error');
     if (erroredDownload && erroredDownload.error) {
       setDownloadError({ modelName: erroredDownload.modelName, error: erroredDownload.error });
@@ -94,10 +168,7 @@ export default function ModelManagement() {
   }, [downloads]);
 
   const handleDownload = async (modelName: string) => {
-    // Prevent duplicate downloads
-    if (isDownloading(modelName)) {
-      return;
-    }
+    if (isDownloading(modelName)) return;
 
     try {
       setDownloadError(null);
@@ -126,6 +197,7 @@ export default function ModelManagement() {
       await invoke('delete_model', { filename: model.filename });
       setDeleteConfirm(null);
       await loadModels();
+      loadStorageInfo();
     } catch (error) {
       console.error('Failed to delete model:', error);
     } finally {
@@ -133,73 +205,69 @@ export default function ModelManagement() {
     }
   };
 
-  // Get unique families and quantizations for filters
-  const families = [...new Set(availableModels.map(m => m.family))];
-  const quantizations = [...new Set(availableModels.map(m => m.quantization))];
+  // Filter available models (exclude already downloaded)
+  const filteredAvailableModels = useMemo(() => {
+    const downloadedNames = new Set(downloadedModels.map(m => m.name));
 
-  // Filter available models
-  const filteredModels = availableModels.filter(model => {
-    const matchesSearch = model.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFamily = !familyFilter || model.family === familyFilter;
-    const matchesQuant = !quantFilter || model.quantization === quantFilter;
-    return matchesSearch && matchesFamily && matchesQuant;
-  });
+    return availableModels.filter(model => {
+      // Exclude already downloaded
+      if (downloadedNames.has(model.name)) return false;
 
-  // Check if a model is already downloaded
-  const isDownloaded = (modelName: string) => {
-    return downloadedModels.some(m => m.name === modelName);
-  };
+      // Search filter
+      const matchesSearch =
+        model.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        model.family.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        model.quantization.toLowerCase().includes(searchQuery.toLowerCase());
 
-  const tabs: { id: Tab; label: string; count?: number }[] = [
-    { id: 'library', label: 'Model Library', count: availableModels.length },
-    { id: 'myModels', label: 'My Models', count: downloadedModels.length },
-    { id: 'downloads', label: 'Downloads', count: activeDownloads.length || undefined },
-  ];
+      // Size filter
+      let matchesSize = true;
+      if (sizeFilter === '<500MB') matchesSize = model.sizeMb < 500;
+      else if (sizeFilter === '<1GB') matchesSize = model.sizeMb >= 500 && model.sizeMb < 1024;
+      else if (sizeFilter === '1-2GB') matchesSize = model.sizeMb >= 1024 && model.sizeMb < 2048;
+      else if (sizeFilter === '>2GB') matchesSize = model.sizeMb >= 2048;
+
+      return matchesSearch && matchesSize;
+    });
+  }, [availableModels, downloadedModels, searchQuery, sizeFilter]);
+
+  // Filter installed models by search
+  const filteredInstalledModels = useMemo(() => {
+    if (!searchQuery) return downloadedModels;
+
+    return downloadedModels.filter(model =>
+      model.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [downloadedModels, searchQuery]);
+
+  // Installed models to display
+  const visibleInstalled = showAllInstalled ? filteredInstalledModels : filteredInstalledModels.slice(0, 6);
+  const hasMoreInstalled = filteredInstalledModels.length > 6;
+  const hiddenCount = filteredInstalledModels.length - 6;
+
+  // Storage warning levels
+  const storagePercent = storageInfo ? (storageInfo.used / storageInfo.total) * 100 : 0;
+  const storageWarning = storagePercent >= 90 ? 'critical' : storagePercent >= 80 ? 'warning' : 'normal';
+
+  // Show downloads section only when there are active downloads
+  const showDownloadsSection = activeDownloads.length > 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 max-w-container mx-auto">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
+        className="flex items-center justify-between"
       >
-        <h1 className="text-3xl font-bold text-white mb-2">Model Management</h1>
-        <p className="text-gray-400">Browse, download, and manage Whisper models</p>
-      </motion.div>
-
-      {/* Tabs */}
-      <div className="glass-panel p-2" role="tablist" aria-label="Model management tabs">
-        <div className="flex gap-2">
-          {tabs.map((tab) => (
-            <motion.button
-              key={tab.id}
-              role="tab"
-              aria-selected={activeTab === tab.id}
-              aria-controls={`${tab.id}-panel`}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                'flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200',
-                'backdrop-blur-sm border',
-                activeTab === tab.id
-                  ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-400'
-                  : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-white'
-              )}
-            >
-              <span className="text-sm font-medium">{tab.label}</span>
-              {tab.count !== undefined && (
-                <span className={cn(
-                  'px-2 py-0.5 rounded-full text-xs',
-                  activeTab === tab.id ? 'bg-cyan-500/30' : 'bg-white/10'
-                )}>
-                  {tab.count}
-                </span>
-              )}
-            </motion.button>
-          ))}
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Models</h1>
         </div>
-      </div>
+        <div className="flex items-center gap-3">
+          <button className="btn-ghost p-2" aria-label="Settings">
+            <Settings className="w-5 h-5" />
+          </button>
+        </div>
+      </motion.div>
 
       {/* Download Error Notification */}
       <AnimatePresence>
@@ -208,19 +276,19 @@ export default function ModelManagement() {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="glass-card p-4 border-red-500/30 bg-red-500/10"
+            className="glass-card border-destructive/30 bg-destructive/10"
           >
             <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+              <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="text-red-400 font-medium">Download Failed</p>
-                <p className="text-gray-400 text-sm mt-1">
+                <p className="text-destructive font-medium">Download Failed</p>
+                <p className="text-muted-foreground text-sm mt-1">
                   {downloadError.modelName}: {downloadError.error}
                 </p>
               </div>
               <button
                 onClick={() => setDownloadError(null)}
-                className="text-gray-400 hover:text-white"
+                className="text-muted-foreground hover:text-foreground transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -229,228 +297,236 @@ export default function ModelManagement() {
         )}
       </AnimatePresence>
 
-      {/* Tab Content */}
-      <AnimatePresence mode="wait">
-        {activeTab === 'library' && (
-          <motion.div
-            key="library"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="space-y-4"
+      {/* Downloads Section - Only visible when active */}
+      <AnimatePresence>
+        {showDownloadsSection && (
+          <motion.section
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3 }}
+            className="overflow-hidden"
           >
-            {/* Search and Filters */}
-            <div className="glass-card p-4">
-              <div className="flex flex-wrap gap-4">
-                {/* Search */}
-                <div className="relative flex-1 min-w-[200px]">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
-                  <input
-                    type="text"
-                    placeholder="Search models..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="glass-input w-full pl-10"
-                    aria-label="Search models"
-                  />
+            <div className="glass-panel">
+              <div className="section-header">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 text-primary animate-spin" />
+                  <span className="section-title">
+                    Downloading ({activeDownloads.length})
+                  </span>
                 </div>
+                <div className="flex items-center gap-2">
+                  <button className="btn-ghost text-xs">
+                    Pause All
+                  </button>
+                  <button className="btn-ghost text-xs text-destructive">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
 
-                {/* Family Filter */}
-                <select
-                  value={familyFilter}
-                  onChange={(e) => setFamilyFilter(e.target.value)}
-                  className="glass-input min-w-[150px]"
-                  aria-label="Filter by model family"
-                >
-                  <option value="">All Families</option>
-                  {families.map(f => (
-                    <option key={f} value={f}>{f}</option>
-                  ))}
-                </select>
-
-                {/* Quantization Filter */}
-                <select
-                  value={quantFilter}
-                  onChange={(e) => setQuantFilter(e.target.value)}
-                  className="glass-input min-w-[150px]"
-                  aria-label="Filter by quantization"
-                >
-                  <option value="">All Quantizations</option>
-                  {quantizations.map(q => (
-                    <option key={q} value={q}>{q}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Model Grid */}
-            {loading ? (
-              <div className="glass-panel p-12 text-center">
-                <Loader2 className="w-8 h-8 text-cyan-400 animate-spin mx-auto mb-2" />
-                <p className="text-gray-400">Loading models...</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredModels.map((model) => (
-                  <ModelCard
-                    key={model.name}
-                    model={model}
-                    isDownloaded={isDownloaded(model.name)}
-                    isDownloading={isDownloading(model.name)}
-                    progress={downloads.get(model.name)}
-                    onDownload={() => handleDownload(model.name)}
-                    onCancel={() => cancelDownload(model.name)}
-                  />
-                ))}
-              </div>
-            )}
-
-            {!loading && filteredModels.length === 0 && (
-              <div className="glass-panel p-12 text-center">
-                <Package className="w-8 h-8 text-gray-500 mx-auto mb-2" />
-                <p className="text-gray-400">No models match your filters</p>
-              </div>
-            )}
-          </motion.div>
-        )}
-
-        {activeTab === 'myModels' && (
-          <motion.div
-            key="myModels"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-          >
-            {loading ? (
-              <div className="glass-panel p-12 text-center">
-                <Loader2 className="w-8 h-8 text-cyan-400 animate-spin mx-auto mb-2" />
-                <p className="text-gray-400">Loading models...</p>
-              </div>
-            ) : downloadedModels.length === 0 ? (
-              <div className="glass-panel p-12 text-center">
-                <HardDrive className="w-8 h-8 text-gray-500 mx-auto mb-2" />
-                <p className="text-gray-400 mb-4">No models downloaded yet</p>
-                <button
-                  onClick={() => setActiveTab('library')}
-                  className="text-cyan-400 hover:text-cyan-300 text-sm"
-                >
-                  Browse Model Library
-                </button>
-              </div>
-            ) : (
-              <div className="glass-panel overflow-hidden">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-white/10">
-                      <th className="text-left p-4 text-gray-400 font-medium">Model</th>
-                      <th className="text-left p-4 text-gray-400 font-medium">Size</th>
-                      <th className="text-left p-4 text-gray-400 font-medium">Status</th>
-                      <th className="text-right p-4 text-gray-400 font-medium">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {downloadedModels.map((model) => (
-                      <tr key={model.filename} className="border-b border-white/5 hover:bg-white/5">
-                        <td className="p-4">
-                          <div className="flex items-center gap-3">
-                            {model.isActive && (
-                              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                            )}
-                            <div>
-                              <p className="text-white font-medium">{model.name}</p>
-                              <p className="text-gray-500 text-sm truncate max-w-[300px]" title={model.path}>
-                                {model.filename}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="p-4 text-gray-300">
-                          {formatSize(model.sizeMb)}
-                        </td>
-                        <td className="p-4">
-                          {model.isActive ? (
-                            <span className="inline-flex items-center gap-1 text-green-400 text-sm">
-                              <Check className="w-4 h-4" />
-                              Active
-                            </span>
-                          ) : (
-                            <span className="text-gray-500 text-sm">Inactive</span>
-                          )}
-                        </td>
-                        <td className="p-4">
-                          <div className="flex justify-end gap-2">
-                            {!model.isActive && (
-                              <motion.button
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                                onClick={() => handleSwitch(model)}
-                                disabled={switching !== null}
-                                className={cn(
-                                  'px-3 py-1.5 rounded-lg text-sm font-medium',
-                                  'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30',
-                                  'hover:bg-cyan-500/30 transition-colors',
-                                  'disabled:opacity-50 disabled:cursor-not-allowed'
-                                )}
-                              >
-                                {switching === model.filename ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                  'Use'
-                                )}
-                              </motion.button>
-                            )}
-                            <motion.button
-                              whileHover={{ scale: 1.05 }}
-                              whileTap={{ scale: 0.95 }}
-                              onClick={() => setDeleteConfirm(model)}
-                              disabled={model.isActive || deleting !== null}
-                              className={cn(
-                                'px-3 py-1.5 rounded-lg text-sm font-medium',
-                                'bg-red-500/20 text-red-400 border border-red-500/30',
-                                'hover:bg-red-500/30 transition-colors',
-                                'disabled:opacity-50 disabled:cursor-not-allowed'
-                              )}
-                              title={model.isActive ? 'Cannot delete active model' : 'Delete model'}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </motion.button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </motion.div>
-        )}
-
-        {activeTab === 'downloads' && (
-          <motion.div
-            key="downloads"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-          >
-            {activeDownloads.length === 0 ? (
-              <div className="glass-panel p-12 text-center">
-                <Download className="w-8 h-8 text-gray-500 mx-auto mb-2" />
-                <p className="text-gray-400">No active downloads</p>
-              </div>
-            ) : (
               <div className="space-y-4">
                 {activeDownloads.map((download) => (
-                  <DownloadItem
+                  <DownloadProgressBar
                     key={download.modelName}
                     progress={download}
                     onCancel={() => cancelDownload(download.modelName)}
                   />
                 ))}
               </div>
-            )}
-          </motion.div>
+            </div>
+          </motion.section>
         )}
       </AnimatePresence>
+
+      {/* Search */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        className="relative max-w-md"
+      >
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <input
+          type="text"
+          placeholder="Search models..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="glass-input w-full pl-10"
+          aria-label="Search models"
+        />
+      </motion.div>
+
+      {/* Installed Section */}
+      {loading ? (
+        <div className="glass-panel text-center py-12">
+          <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto mb-2" />
+          <p className="text-muted-foreground">Loading models...</p>
+        </div>
+      ) : downloadedModels.length > 0 ? (
+        <section>
+          <div className="section-header">
+            <span className="section-title">
+              Installed ({downloadedModels.length})
+            </span>
+            {hasMoreInstalled && (
+              <button
+                onClick={() => setShowAllInstalled(!showAllInstalled)}
+                className="btn-ghost text-xs flex items-center gap-1"
+              >
+                {showAllInstalled ? 'Show Less' : `+${hiddenCount} more`}
+                <ChevronRight className={cn(
+                  "w-3 h-3 transition-transform duration-200",
+                  showAllInstalled && "rotate-90"
+                )} />
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
+            <AnimatePresence mode="popLayout">
+              {visibleInstalled.map((model, index) => (
+                <InstalledModelCard
+                  key={model.filename}
+                  model={model}
+                  index={index}
+                  onActivate={() => handleSwitch(model)}
+                  onDelete={() => setDeleteConfirm(model)}
+                  isSwitching={switching === model.filename}
+                />
+              ))}
+            </AnimatePresence>
+          </div>
+        </section>
+      ) : (
+        <section className="glass-panel text-center py-12">
+          <Target className="w-8 h-8 text-muted-tertiary mx-auto mb-2" />
+          <p className="text-muted-foreground mb-1">No models installed yet</p>
+          <p className="text-muted-tertiary text-sm">Browse available models below</p>
+        </section>
+      )}
+
+      {/* Available Models Section */}
+      <section>
+        <div className="section-header">
+          <span className="section-title">
+            Available Models ({filteredAvailableModels.length})
+          </span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-muted-tertiary text-xs uppercase tracking-wide mr-1">Size:</span>
+            {(['all', '<500MB', '<1GB', '1-2GB', '>2GB'] as SizeFilter[]).map(size => (
+              <FilterPill
+                key={size}
+                active={sizeFilter === size}
+                onClick={() => setSizeFilter(size)}
+              >
+                {size === 'all' ? 'All' : size}
+              </FilterPill>
+            ))}
+          </div>
+        </div>
+
+        {filteredAvailableModels.length === 0 ? (
+          <div className="glass-panel text-center py-12">
+            <Package className="w-8 h-8 text-muted-tertiary mx-auto mb-2" />
+            <p className="text-muted-foreground mb-2">No models match your filters</p>
+            <button
+              onClick={() => {
+                setSearchQuery('');
+                setSizeFilter('all');
+              }}
+              className="text-primary hover:text-primary-hover text-sm transition-colors"
+            >
+              Clear filters
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
+            {filteredAvailableModels.map((model, index) => (
+              <AvailableModelCard
+                key={model.name}
+                model={model}
+                index={index}
+                isDownloading={isDownloading(model.name)}
+                progress={downloads.get(model.name)}
+                onDownload={() => handleDownload(model.name)}
+                onCancel={() => cancelDownload(model.name)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Storage Indicator */}
+      {storageInfo && (
+        <motion.section
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className={cn(
+            "glass-panel",
+            storageWarning === 'critical' && "border-destructive/50 bg-destructive/5",
+            storageWarning === 'warning' && "border-warning/50 bg-warning/5"
+          )}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <HardDrive className={cn(
+                "w-5 h-5",
+                storageWarning === 'critical' ? "text-destructive" :
+                storageWarning === 'warning' ? "text-warning" :
+                "text-muted-foreground"
+              )} />
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-base font-medium text-foreground">
+                    {formatBytes(storageInfo.used)} / {formatBytes(storageInfo.total)}
+                  </span>
+                  <span className={cn(
+                    "text-xs font-medium px-2 py-0.5 rounded-full",
+                    storageWarning === 'critical' && "bg-destructive/20 text-destructive",
+                    storageWarning === 'warning' && "bg-warning/20 text-warning",
+                    storageWarning === 'normal' && "bg-primary/20 text-primary"
+                  )}>
+                    {Math.round(storagePercent)}%
+                  </span>
+                </div>
+                <span className="text-sm text-muted-foreground">
+                  {formatBytes(storageInfo.free)} free
+                </span>
+              </div>
+            </div>
+            {storageWarning !== 'normal' && (
+              <div className="flex items-center gap-2">
+                <AlertCircle className={cn(
+                  "w-4 h-4",
+                  storageWarning === 'critical' ? "text-destructive" : "text-warning"
+                )} />
+                <span className={cn(
+                  "text-xs font-medium",
+                  storageWarning === 'critical' ? "text-destructive" : "text-warning"
+                )}>
+                  {storageWarning === 'critical' ? 'Storage Critical' : 'Low Storage'}
+                </span>
+              </div>
+            )}
+          </div>
+          <div className={cn(
+            "storage-bar",
+            storageWarning === 'critical' && "storage-bar-critical",
+            storageWarning === 'warning' && "storage-bar-warning"
+          )}>
+            <div
+              className={cn(
+                "storage-bar-fill",
+                storageWarning === 'critical' && "bg-destructive",
+                storageWarning === 'warning' && "bg-warning"
+              )}
+              style={{ width: `${Math.min(storagePercent, 100)}%` }}
+            />
+          </div>
+        </motion.section>
+      )}
 
       {/* Delete Confirmation Dialog */}
       <AnimatePresence>
@@ -464,41 +540,37 @@ export default function ModelManagement() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="delete-dialog-title"
-            aria-describedby="delete-dialog-description"
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="glass-panel p-6 max-w-md mx-4"
+              className="glass-panel max-w-md mx-4"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-start gap-4">
-                <div className="p-3 rounded-full bg-red-500/20">
-                  <AlertCircle className="w-6 h-6 text-red-400" aria-hidden="true" />
+                <div className="p-3 rounded-full bg-destructive/20">
+                  <AlertCircle className="w-6 h-6 text-destructive" />
                 </div>
                 <div className="flex-1">
-                  <h3 id="delete-dialog-title" className="text-lg font-semibold text-white mb-2">Delete Model?</h3>
-                  <p id="delete-dialog-description" className="text-gray-400 text-sm mb-4">
-                    Are you sure you want to delete <span className="text-white">{deleteConfirm.name}</span>?
+                  <h3 id="delete-dialog-title" className="text-lg font-semibold text-foreground mb-2">
+                    Delete Model?
+                  </h3>
+                  <p className="text-muted-foreground text-sm mb-4">
+                    Are you sure you want to delete <span className="text-foreground font-medium">{deleteConfirm.name}</span>?
                     This will remove {formatSize(deleteConfirm.sizeMb)} from disk.
                   </p>
                   <div className="flex gap-3">
                     <button
                       onClick={() => setDeleteConfirm(null)}
-                      className="flex-1 px-4 py-2 rounded-lg bg-white/10 text-gray-300 hover:bg-white/20 transition-colors"
+                      className="flex-1 btn-ghost py-2 border border-border"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={() => handleDelete(deleteConfirm)}
                       disabled={deleting !== null}
-                      className={cn(
-                        'flex-1 px-4 py-2 rounded-lg',
-                        'bg-red-500/20 text-red-400 border border-red-500/30',
-                        'hover:bg-red-500/30 transition-colors',
-                        'disabled:opacity-50'
-                      )}
+                      className="flex-1 btn-danger py-2 disabled:opacity-50"
                     >
                       {deleting ? (
                         <Loader2 className="w-4 h-4 animate-spin mx-auto" />
@@ -517,141 +589,235 @@ export default function ModelManagement() {
   );
 }
 
-// Button style helper - avoids nested ternaries
-function getButtonStyle(isDownloaded: boolean, isDownloading: boolean): string {
-  if (isDownloaded) {
-    return 'bg-green-500/20 text-green-400 border border-green-500/30 cursor-default';
-  }
-  if (isDownloading) {
-    return 'bg-cyan-500/10 text-cyan-400/50 border border-cyan-500/20 cursor-wait';
-  }
-  return 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/30';
-}
+// ============================================================================
+// Sub-Components
+// ============================================================================
 
-// Button content component - clearer than nested ternaries
-function ButtonContent({ isDownloaded, isDownloading }: { isDownloaded: boolean; isDownloading: boolean }) {
-  if (isDownloaded) {
-    return (
-      <>
-        <Check className="w-4 h-4" />
-        Downloaded
-      </>
-    );
-  }
-  if (isDownloading) {
-    return (
-      <>
-        <Loader2 className="w-4 h-4 animate-spin" />
-        Downloading...
-      </>
-    );
-  }
+function FilterPill({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
   return (
-    <>
-      <Download className="w-4 h-4" />
-      Download
-    </>
+    <button
+      onClick={onClick}
+      className={cn(
+        "filter-pill",
+        active && "filter-pill-active"
+      )}
+    >
+      {children}
+    </button>
   );
 }
 
-// Model Card Component
-function ModelCard({
+function InstalledModelCard({
   model,
-  isDownloaded,
+  index,
+  onActivate,
+  onDelete,
+  isSwitching,
+}: {
+  model: DownloadedModel;
+  index: number;
+  onActivate: () => void;
+  onDelete: () => void;
+  isSwitching: boolean;
+}) {
+  const tier = getModelTier(model.name);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.9 }}
+      transition={{ delay: index * 0.05, duration: 0.3 }}
+      className={cn(
+        "model-card model-card-installed group relative",
+        model.isActive && "model-card-active"
+      )}
+    >
+      {/* Action hint indicator (top-right corner) */}
+      {!model.isActive && (
+        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+        </div>
+      )}
+
+      {/* Model ID - PRIMARY */}
+      <div className="flex items-center gap-2 mb-2">
+        <span className={cn(
+          "status-dot",
+          model.isActive ? "status-dot-active animate-pulse-dot" : "status-dot-inactive"
+        )} />
+        <span className="text-model-name truncate flex-1">{model.name}</span>
+      </div>
+
+      {/* Model tier info - SECONDARY */}
+      <div className="mb-3">
+        <p className="text-metadata truncate">{tier.label} • {tier.language}</p>
+      </div>
+
+      {/* Size - TERTIARY */}
+      <p className="text-size mt-auto mb-2">{formatSize(model.sizeMb)}</p>
+
+      {/* Accent bar */}
+      <div className={cn(
+        "accent-bar mb-2",
+        model.isActive ? "accent-bar-success" : "bg-border"
+      )} />
+
+      {/* Status + Actions */}
+      <div className="flex items-center justify-between">
+        <span className={cn(
+          "text-label px-2 py-1 rounded-md transition-all duration-200",
+          model.isActive
+            ? "text-label-active bg-success/20 border border-success/30"
+            : "text-label-inactive bg-border/20 border border-transparent"
+        )}>
+          {model.isActive ? 'Active' : 'Inactive'}
+        </span>
+
+        <div className={cn(
+          "flex items-center gap-1 transition-opacity duration-200",
+          "opacity-30 group-hover:opacity-100"
+        )}>
+          {!model.isActive && (
+            <>
+              <button
+                onClick={onActivate}
+                disabled={isSwitching}
+                className="btn-ghost p-1.5 text-xs hover:bg-primary/20 hover:text-primary rounded"
+                title="Activate this model"
+              >
+                {isSwitching ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Check className="w-3.5 h-3.5" />
+                )}
+              </button>
+              <button
+                onClick={onDelete}
+                className="btn-ghost p-1.5 text-xs hover:bg-destructive/20 hover:text-destructive rounded"
+                title="Delete model"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function AvailableModelCard({
+  model,
+  index,
   isDownloading,
   progress,
   onDownload,
   onCancel,
 }: {
   model: RegistryModel;
-  isDownloaded: boolean;
+  index: number;
   isDownloading: boolean;
   progress?: DownloadProgress;
   onDownload: () => void;
   onCancel: () => void;
 }) {
+  const percent = progress && progress.totalBytes > 0
+    ? (progress.downloadedBytes / progress.totalBytes) * 100
+    : 0;
+
+  const tier = getModelTier(model.name);
+  const estimatedTime = getEstimatedDownloadTime(model.sizeMb);
+
+  // Don't show "Full" quantization badge - it adds no value
+  const showQuantBadge = model.quantization !== 'Full';
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="glass-card p-4 flex flex-col"
+      transition={{ delay: Math.min(index * 0.03, 0.3), duration: 0.3 }}
+      className="model-card model-card-available"
     >
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <h3 className="text-white font-medium">{model.name}</h3>
-          <p className="text-gray-500 text-sm">{model.family}</p>
-        </div>
-        <span className="px-2 py-1 rounded text-xs bg-white/10 text-gray-300">
-          {model.quantization}
-        </span>
+      {/* Model ID - PRIMARY */}
+      <div className="mb-2">
+        <span className="text-model-name truncate block">{model.name}</span>
       </div>
 
-      <div className="flex items-center gap-2 text-gray-400 text-sm mb-4">
-        <HardDrive className="w-4 h-4" />
-        <span>{formatSize(model.sizeMb)}</span>
+      {/* Model tier info - SECONDARY */}
+      <div className="mb-3">
+        <p className="text-metadata truncate">{tier.label} • {tier.language}</p>
+        <p className="text-size mt-1">Speed: {tier.speed}</p>
+      </div>
+
+      {/* Size + Quant badge - TERTIARY */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-col">
+          <span className="text-size">{formatSize(model.sizeMb)}</span>
+          {!isDownloading && (
+            <span className="text-[10px] text-muted-tertiary">{estimatedTime}</span>
+          )}
+        </div>
+        {showQuantBadge && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/50 text-muted-foreground">
+            {model.quantization}
+          </span>
+        )}
       </div>
 
       {/* Progress bar when downloading */}
       {isDownloading && progress && (
         <div className="mb-3">
-          <div className="flex justify-between text-xs text-gray-400 mb-1">
-            <span>{progress.status === 'verifying' ? 'Verifying...' : 'Downloading...'}</span>
-            <span>
-              {progress.totalBytes > 0
-                ? `${Math.round((progress.downloadedBytes / progress.totalBytes) * 100)}%`
-                : '0%'}
-            </span>
+          <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+            <span>{progress.status === 'verifying' ? 'Verifying' : 'Downloading'}</span>
+            <span>{Math.round(percent)}%</span>
           </div>
-          <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-            <motion.div
-              className="h-full bg-cyan-400"
-              initial={{ width: 0 }}
-              animate={{
-                width: progress.totalBytes > 0
-                  ? `${(progress.downloadedBytes / progress.totalBytes) * 100}%`
-                  : '0%'
-              }}
+          <div className="progress-bar h-1.5">
+            <div
+              className="progress-bar-fill"
+              style={{ width: `${percent}%` }}
             />
           </div>
         </div>
       )}
 
-      {/* Show cancel button when downloading, otherwise show download/downloaded button */}
+      {/* Action button - OUTLINED style */}
       {isDownloading ? (
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
+        <button
           onClick={onCancel}
-          className={cn(
-            'mt-auto w-full py-2 rounded-lg text-sm font-medium',
-            'flex items-center justify-center gap-2 transition-colors',
-            'bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30'
-          )}
+          className="btn-danger w-full flex items-center justify-center gap-2 py-2 text-sm"
         >
           <X className="w-4 h-4" />
           Cancel
-        </motion.button>
+        </button>
       ) : (
-        <motion.button
-          whileHover={{ scale: isDownloaded ? 1 : 1.02 }}
-          whileTap={{ scale: isDownloaded ? 1 : 0.98 }}
+        <button
           onClick={onDownload}
-          disabled={isDownloaded}
-          className={cn(
-            'mt-auto w-full py-2 rounded-lg text-sm font-medium',
-            'flex items-center justify-center gap-2 transition-colors',
-            getButtonStyle(isDownloaded, false)
-          )}
+          className="btn-primary flex items-center justify-center gap-2"
         >
-          <ButtonContent isDownloaded={isDownloaded} isDownloading={false} />
-        </motion.button>
+          <Download className="w-4 h-4" />
+          Download
+        </button>
       )}
     </motion.div>
   );
 }
 
-// Download Progress Item
-function DownloadItem({ progress, onCancel }: { progress: DownloadProgress; onCancel: () => void }) {
+function DownloadProgressBar({
+  progress,
+  onCancel,
+}: {
+  progress: DownloadProgress;
+  onCancel: () => void;
+}) {
   const percent = progress.totalBytes > 0
     ? (progress.downloadedBytes / progress.totalBytes) * 100
     : 0;
@@ -660,61 +826,70 @@ function DownloadItem({ progress, onCancel }: { progress: DownloadProgress; onCa
   const etaSeconds = progress.speedBps > 0 ? remainingBytes / progress.speedBps : 0;
 
   return (
-    <div className="glass-card p-4">
-      <div className="flex items-center justify-between mb-3">
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-white font-medium">{progress.modelName}</h3>
-          <p className="text-gray-500 text-sm">
-            {progress.status === 'verifying' ? 'Verifying checksum...' : 'Downloading...'}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-cyan-400 font-mono text-sm">
-            {Math.round(percent)}%
+          <span className="text-model-name">{progress.modelName}</span>
+          <span className="text-progress text-muted-foreground ml-2">
+            {progress.status === 'verifying' ? 'Verifying...' : ''}
           </span>
-          <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={onCancel}
-            className="p-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
-            title="Cancel download"
-          >
-            <X className="w-4 h-4" />
-          </motion.button>
         </div>
+        <span className="text-model-name text-primary">
+          {Math.round(percent)}%
+        </span>
       </div>
 
-      {/* Progress Bar */}
-      <div className="h-2 bg-white/10 rounded-full overflow-hidden mb-3">
+      <div className="progress-bar">
         <motion.div
-          className={cn(
-            'h-full',
-            progress.status === 'verifying' ? 'bg-yellow-400' : 'bg-cyan-400'
-          )}
+          className="progress-bar-fill"
           initial={{ width: 0 }}
           animate={{ width: `${percent}%` }}
           transition={{ duration: 0.3 }}
         />
       </div>
 
-      {/* Stats */}
-      <div className="flex justify-between text-xs text-gray-400">
-        <span>
+      <div className="flex items-center justify-between">
+        <span className="text-progress text-muted-foreground">
           {formatBytes(progress.downloadedBytes)} / {formatBytes(progress.totalBytes)}
-        </span>
-        <span>
+          <span className="mx-2">•</span>
           {speedMBs.toFixed(1)} MB/s
-          {etaSeconds > 0 && ` - ${formatEta(etaSeconds)}`}
+          {etaSeconds > 0 && (
+            <>
+              <span className="mx-2">•</span>
+              {formatEta(etaSeconds)}
+            </>
+          )}
         </span>
+
+        <div className="flex items-center gap-2">
+          <button
+            className="btn-ghost text-xs flex items-center gap-1"
+            title="Pause download"
+          >
+            <Pause className="w-3 h-3" />
+            Pause
+          </button>
+          <button
+            onClick={onCancel}
+            className="btn-ghost text-xs text-destructive flex items-center gap-1"
+            title="Cancel download"
+          >
+            <X className="w-3 h-3" />
+            Cancel
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-// Utility functions
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
 function formatSize(sizeMb: number): string {
   if (sizeMb >= 1024) {
-    return `${(sizeMb / 1024).toFixed(1)} GB`;
+    return `${(sizeMb / 1024).toFixed(2)} GB`;
   }
   return `${sizeMb} MB`;
 }
@@ -735,5 +910,10 @@ function formatEta(seconds: number): string {
   }
   const minutes = Math.floor(seconds / 60);
   const secs = Math.round(seconds % 60);
-  return `${minutes}:${secs.toString().padStart(2, '0')}`;
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours}h ${mins}m`;
+  }
+  return `${minutes}m ${secs.toString().padStart(2, '0')}s`;
 }

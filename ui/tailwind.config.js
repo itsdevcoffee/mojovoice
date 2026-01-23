@@ -16,6 +16,7 @@ export default {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          hover: "hsl(var(--primary-hover))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -28,6 +29,7 @@ export default {
         muted: {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",
+          tertiary: "hsl(var(--muted-tertiary))",
         },
         accent: {
           DEFAULT: "hsl(var(--accent))",
@@ -40,7 +42,10 @@ export default {
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
+          hover: "hsl(var(--card-hover))",
         },
+        success: "hsl(var(--success))",
+        warning: "hsl(var(--warning))",
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -57,6 +62,21 @@ export default {
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
         'grid-pattern': 'linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px)',
+        'progress-gradient': 'linear-gradient(90deg, hsl(var(--primary)), hsl(188 100% 43%))',
+      },
+      spacing: {
+        'card': 'var(--card-padding)',
+        'card-gap': 'var(--card-gap)',
+      },
+      minWidth: {
+        'card': '160px',
+      },
+      maxWidth: {
+        'card': '200px',
+        'container': '1400px',
+      },
+      height: {
+        'progress': 'var(--progress-height)',
       },
       keyframes: {
         "accordion-down": {
@@ -72,8 +92,16 @@ export default {
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
         "pulse-glow": {
-          "0%, 100%": { boxShadow: "0 0 20px rgba(0, 212, 255, 0.5)" },
-          "50%": { boxShadow: "0 0 40px rgba(0, 212, 255, 0.8)" },
+          "0%, 100%": { boxShadow: "0 0 20px rgba(20, 184, 166, 0.5)" },
+          "50%": { boxShadow: "0 0 40px rgba(20, 184, 166, 0.8)" },
+        },
+        "shimmer": {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(100%)" },
+        },
+        "card-enter": {
+          "0%": { opacity: "0", transform: "translateY(20px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
         },
       },
       animation: {
@@ -81,6 +109,14 @@ export default {
         "accordion-up": "accordion-up 0.2s ease-out",
         "fade-in": "fade-in 0.5s ease-out",
         "pulse-glow": "pulse-glow 2s ease-in-out infinite",
+        "shimmer": "shimmer 1.5s infinite",
+        "card-enter": "card-enter 0.4s ease-out forwards",
+      },
+      transitionDuration: {
+        '150': '150ms',
+        '200': '200ms',
+        '300': '300ms',
+        '400': '400ms',
       },
     },
   },
