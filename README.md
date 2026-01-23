@@ -7,7 +7,7 @@
 [![Version](https://img.shields.io/github/v/release/itsdevcoffee/mojovoice?label=version)](https://github.com/itsdevcoffee/mojovoice/releases/latest)
 [![License](https://img.shields.io/github/license/itsdevcoffee/mojovoice)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macos-blue)]()
-[![Rust](https://img.shields.io/badge/rust-1.85+-orange)]()
+[![Rust](https://img.shields.io/badge/rust-1.85-orange)]()
 
 Fast • Local • Private • GPU-Accelerated
 
