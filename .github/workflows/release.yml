@@ -26,8 +26,12 @@ jobs:
           draft: false
           prerelease: false
 
+  # ==========================================================================
+  # CLI Builds
+  # ==========================================================================
+
   build-linux-cpu:
-    name: Build Linux (CPU)
+    name: Build Linux CLI (CPU)
     needs: create-release
     runs-on: ubuntu-latest
     steps:
@@ -49,7 +53,7 @@ jobs:
           mkdir -p mojovoice-linux-x64
           cp target/release/mojovoice mojovoice-linux-x64/
           cp README.md mojovoice-linux-x64/
-          cp LICENSE mojovoice-linux-x64/ || echo "No LICENSE file"
+          cp LICENSE mojovoice-linux-x64/
           tar -czf mojovoice-linux-x64.tar.gz mojovoice-linux-x64/
 
       - name: Upload Release Asset
@@ -63,7 +67,7 @@ jobs:
           asset_content_type: application/gzip
 
   build-macos-arm:
-    name: Build macOS (Apple Silicon)
+    name: Build macOS CLI (Apple Silicon)
     needs: create-release
     runs-on: macos-14
     steps:
@@ -80,7 +84,7 @@ jobs:
           mkdir -p mojovoice-macos-arm64
           cp target/release/mojovoice mojovoice-macos-arm64/
           cp README.md mojovoice-macos-arm64/
-          cp LICENSE mojovoice-macos-arm64/ || echo "No LICENSE file"
+          cp LICENSE mojovoice-macos-arm64/
           tar -czf mojovoice-macos-arm64.tar.gz mojovoice-macos-arm64/
 
       - name: Upload Release Asset
@@ -94,9 +98,9 @@ jobs:
           asset_content_type: application/gzip
 
   build-macos-intel:
-    name: Build macOS (Intel)
+    name: Build macOS CLI (Intel)
     needs: create-release
-    runs-on: macos-15-large
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v4
 
@@ -111,7 +115,7 @@ jobs:
           mkdir -p mojovoice-macos-intel
           cp target/release/mojovoice mojovoice-macos-intel/
           cp README.md mojovoice-macos-intel/
-          cp LICENSE mojovoice-macos-intel/ || echo "No LICENSE file"
+          cp LICENSE mojovoice-macos-intel/
           tar -czf mojovoice-macos-intel.tar.gz mojovoice-macos-intel/
 
       - name: Upload Release Asset
@@ -123,3 +127,162 @@ jobs:
           asset_path: ./mojovoice-macos-intel.tar.gz
           asset_name: mojovoice-macos-intel.tar.gz
           asset_content_type: application/gzip
+
+  # ==========================================================================
+  # Tauri Desktop App Builds
+  # ==========================================================================
+
+  build-tauri-linux:
+    name: Build Desktop App (Linux)
+    needs: create-release
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libclang-dev \
+            libasound2-dev \
+            pkg-config \
+            libxkbcommon-dev
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          cache: 'npm'
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './ui/src-tauri -> target'
+
+      - name: Install frontend dependencies
+        working-directory: ui
+        run: npm ci
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: ui
+          tauriScript: npm run tauri
+
+      - name: Upload AppImage
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./ui/src-tauri/target/release/bundle/appimage/mojovoice_${{ github.ref_name }}_amd64.AppImage
+          asset_name: MojoVoice-linux-x64.AppImage
+          asset_content_type: application/octet-stream
+
+      - name: Upload deb package
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./ui/src-tauri/target/release/bundle/deb/mojovoice_${{ github.ref_name }}_amd64.deb
+          asset_name: MojoVoice-linux-x64.deb
+          asset_content_type: application/vnd.debian.binary-package
+
+  build-tauri-macos-arm:
+    name: Build Desktop App (macOS ARM)
+    needs: create-release
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          cache: 'npm'
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './ui/src-tauri -> target'
+
+      - name: Install frontend dependencies
+        working-directory: ui
+        run: npm ci
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: ui
+          tauriScript: npm run tauri
+
+      - name: Upload dmg
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./ui/src-tauri/target/release/bundle/dmg/mojovoice_${{ github.ref_name }}_aarch64.dmg
+          asset_name: MojoVoice-macos-arm64.dmg
+          asset_content_type: application/octet-stream
+
+  build-tauri-macos-intel:
+    name: Build Desktop App (macOS Intel)
+    needs: create-release
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          cache: 'npm'
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './ui/src-tauri -> target'
+
+      - name: Install frontend dependencies
+        working-directory: ui
+        run: npm ci
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: ui
+          tauriScript: npm run tauri
+
+      - name: Upload dmg
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./ui/src-tauri/target/release/bundle/dmg/mojovoice_${{ github.ref_name }}_x64.dmg
+          asset_name: MojoVoice-macos-intel.dmg
+          asset_content_type: application/octet-stream

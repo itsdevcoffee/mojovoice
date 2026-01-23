@@ -101,10 +101,20 @@ gh release view vX.Y.Z --json assets --jq '.assets[].name'
 ```
 
 Expected assets:
-- `mojovoice-linux-x64.tar.gz` (CPU, from CI)
-- `mojovoice-linux-x64-cuda.tar.gz` (CUDA, manual upload)
-- `mojovoice-macos-arm64.tar.gz` (from CI)
-- `mojovoice-macos-intel.tar.gz` (from CI)
+
+**CLI (from CI):**
+- `mojovoice-linux-x64.tar.gz` (CPU)
+- `mojovoice-macos-arm64.tar.gz`
+- `mojovoice-macos-intel.tar.gz`
+
+**CLI (manual upload):**
+- `mojovoice-linux-x64-cuda.tar.gz` (CUDA) — See step 3 above
+
+**Desktop App (from CI):**
+- `MojoVoice-linux-x64.AppImage`
+- `MojoVoice-linux-x64.deb`
+- `MojoVoice-macos-arm64.dmg`
+- `MojoVoice-macos-intel.dmg`
 
 ## Project-Specific Notes
 

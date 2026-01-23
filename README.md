@@ -104,18 +104,24 @@ mojovoice stop     # Transcribe and type at cursor
 
 ## 🖥️ Desktop App
 
-Mojo Voice includes a full desktop application built with Tauri:
+Mojo Voice includes a full desktop application built with Tauri. **Download and run — no CLI needed.**
+
+### Download Desktop App
+
+| Platform | Download |
+|----------|----------|
+| Linux | [MojoVoice-linux-x64.AppImage](https://github.com/itsdevcoffee/mojovoice/releases/latest/download/MojoVoice-linux-x64.AppImage) |
+| Linux (Debian/Ubuntu) | [MojoVoice-linux-x64.deb](https://github.com/itsdevcoffee/mojovoice/releases/latest/download/MojoVoice-linux-x64.deb) |
+| macOS (Apple Silicon) | [MojoVoice-macos-arm64.dmg](https://github.com/itsdevcoffee/mojovoice/releases/latest/download/MojoVoice-macos-arm64.dmg) |
+| macOS (Intel) | [MojoVoice-macos-intel.dmg](https://github.com/itsdevcoffee/mojovoice/releases/latest/download/MojoVoice-macos-intel.dmg) |
+
+### Features
 
 - **Dashboard** — Record button, daemon controls, live status
 - **Model Manager** — Download, switch, and delete models with visual quality/speed indicators
 - **Settings** — Audio device selection, language, recording timeout, UI scaling
 - **History** — Browse and search past transcriptions
 - **DevTools** — Export diagnostics, view logs
-
-Launch the UI:
-```bash
-mojovoice-ui    # If installed separately
-```
 
 ---
 
