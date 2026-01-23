@@ -34,6 +34,35 @@ Files go in `docs/` except for obvious exceptions: README.md, CLAUDE.md, LICENSE
 - Update existing docs before creating new ones
 - Use `tmp/` when uncertain, flag for review
 
+## Feature Tracking Workflow
+
+All future feature proposals and ideas under consideration must be tracked in `docs/project/todos/roadmap.md` using the appropriate section:
+
+**Roadmap Sections:**
+
+1. **Agreed Upon Future Features** - Features confirmed for implementation when time/resources permit
+   - Requires: Clear scope, understood effort, aligned with project goals
+   - Action: Ready to implement
+
+2. **Future Features Under Consideration** - Features requiring research, evaluation, or design decisions
+   - Requires: Analysis of pros/cons, alternative approaches, open questions, references
+   - Action: Further thought and discussion needed before commitment
+   - Format: Include overview, technical analysis, decision points, and references
+
+3. **Need to Review** - Previously planned items requiring status reassessment
+   - Use when: Roadmap items become outdated or priorities shift
+   - Action: Re-evaluate priority and move to appropriate section
+
+**Adding New Feature Proposals:**
+
+When researching or discussing potential features:
+1. Document technical analysis (capabilities, limitations, integration barriers)
+2. Add to "Future Features Under Consideration" section with decision points
+3. Include references to source material (GitHub repos, HuggingFace models, etc.)
+4. Flag open questions that need resolution
+
+**Example:** VibeVoice-ASR speaker diarization analysis (see roadmap.md)
+
 ## Project-Specific Notes
 
 **Mojo-Audio FFI Integration:**

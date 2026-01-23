@@ -1,40 +1,12 @@
 # mojovoice Project Roadmap
 
-**Status:** Active Development | **Last Updated:** 2025-12-20
+**Status:** Active Development | **Last Updated:** 2026-01-23
 
-Post model-revamp prioritized task list for public release preparation.
+Project roadmap and feature planning.
 
-## High Priority (Public Release Prep)
+## Agreed Upon Future Features
 
-### 1. Fix Speculative Decoding API
-**Status:** Blocked - API Research Needed
-**Priority:** Critical
-**Effort:** Medium (4-8 hours)
-
-- [ ] Research correct whisper-rs API for draft model integration
-- [ ] Replace commented `set_encoder_begin_callback` with working implementation
-- [ ] Test performance improvements (target: 30-50% speedup)
-- [ ] Document actual vs theoretical performance gains
-- [ ] Update model-revamp-tasklist.md with final benchmarks
-
-**Why:** Core performance feature that unlocks the full speed potential.
-
-### 2. Documentation Overhaul
-**Status:** Not Started
-**Priority:** Critical
-**Effort:** Large (8-12 hours)
-
-- [ ] Update main README.md with new features (Turbo models, technical vocab)
-- [ ] Create QUICKSTART.md for new users
-- [ ] Document integrations/ pattern for contributors
-- [ ] Add screenshots/GIFs of Waybar integration in action
-- [ ] Create ARCHITECTURE.md explaining daemon/client model
-- [ ] Document GPU vs CPU fallback behavior
-
-**Why:** Essential for onboarding new users and contributors.
-
-### 3. Polybar Integration
-**Status:** Not Started
+### Polybar Integration
 **Priority:** High
 **Effort:** Small (2-4 hours)
 
@@ -46,13 +18,112 @@ Post model-revamp prioritized task list for public release preparation.
 - [ ] Test on i3/bspwm environment
 - [ ] Update integrations/README.md with Polybar entry
 
-**Why:** Expands reach to X11/i3 users (large community).
+**Rationale:** Expands reach to X11/i3 users (large community). Natural extension of existing Waybar integration pattern.
 
-## Medium Priority (Polish)
+---
 
-### 4. Performance Benchmarking
-**Status:** Not Started
-**Priority:** Medium
+## Future Features Under Consideration
+
+Features requiring further research, evaluation, or design decisions before commitment.
+
+### Speaker Diarization Integration
+**Status:** Under Review
+**Research Date:** 2026-01-23
+
+**Overview:**
+Microsoft's VibeVoice-ASR offers unified ASR + speaker diarization + timestamps, but has significant integration barriers:
+
+**VibeVoice-ASR Analysis:**
+- ✅ Unified pipeline (ASR + diarization + timestamps in one pass)
+- ✅ Long-form support (up to 60 minutes continuous)
+- ✅ Hotword support for domain-specific vocabulary
+- ❌ 9B parameters (vs Whisper Large-v3 Turbo ~1.5B) - significantly higher resource requirements
+- ❌ Python-only implementation (no Rust bindings)
+- ❌ Incompatible architecture (Qwen2.5-based vs Whisper encoder-decoder)
+- ❌ Uses 7.5 Hz speech tokenizers (incompatible with mojo-audio mel spectrogram pipeline)
+- ❌ Limited language support (English/Chinese only vs Whisper's 99 languages)
+
+**Alternative Approaches:**
+- pyannote-audio (Rust-friendly via ONNX export)
+- WhisperX (adds diarization to Whisper, similar integration pattern)
+- Keep Whisper for ASR, add separate lightweight diarization module
+
+**Decision Needed:**
+- Is speaker diarization a core use case for dev-voice?
+- What performance/resource trade-offs are acceptable?
+- Should this wait for better Rust-native solutions?
+
+**Reference:** https://huggingface.co/microsoft/VibeVoice-ASR
+
+---
+
+### Text-to-Speech Integration (Qwen3 TTS)
+**Status:** Under Review
+**Research Date:** 2026-01-23
+
+**Overview:**
+Qwen's newly released Qwen3-TTS models offer text-to-speech capabilities that could enable voice feedback and accessibility features in mojovoice.
+
+**Qwen3-TTS Model Family:**
+- ✅ Multiple model sizes (0.6B, 1.7B parameters)
+- ✅ Custom voice support (CustomVoice variants)
+- ✅ Voice design capabilities (VoiceDesign variants)
+- ✅ 12Hz sampling rate
+- ✅ Natural-sounding speech synthesis
+- ⚠️ Very new release (hours old - maturity unknown)
+- ⚠️ Python-first implementation (Rust integration TBD)
+- ⚠️ Resource requirements unclear for real-time use
+
+**Potential Use Cases:**
+- Audio feedback (read back transcriptions for verification)
+- Accessibility features (voice confirmation of commands)
+- Testing infrastructure (generate synthetic audio for STT pipeline testing)
+- Future voice assistant features (bidirectional voice interaction)
+
+**Decision Needed:**
+- Is TTS a core feature for dev-voice or scope creep?
+- What's the priority vs existing STT improvements?
+- Should we wait for more mature Rust bindings?
+- Which variant/size is optimal for developer workflow use?
+
+**Reference:** https://huggingface.co/collections/Qwen/qwen3-tts
+
+---
+
+## Need to Review
+
+Items from previous roadmap (2025-12-20) that require status review and re-prioritization.
+
+### 1. Fix Speculative Decoding API
+**Previous Status:** Blocked - API Research Needed
+**Previous Priority:** Critical
+**Effort:** Medium (4-8 hours)
+
+- [ ] Research correct whisper-rs API for draft model integration
+- [ ] Replace commented `set_encoder_begin_callback` with working implementation
+- [ ] Test performance improvements (target: 30-50% speedup)
+- [ ] Document actual vs theoretical performance gains
+- [ ] Update model-revamp-tasklist.md with final benchmarks
+
+**Previous Rationale:** Core performance feature that unlocks the full speed potential.
+
+### 2. Documentation Overhaul
+**Previous Status:** Not Started
+**Previous Priority:** Critical
+**Effort:** Large (8-12 hours)
+
+- [ ] Update main README.md with new features (Turbo models, technical vocab)
+- [ ] Create QUICKSTART.md for new users
+- [ ] Document integrations/ pattern for contributors
+- [ ] Add screenshots/GIFs of Waybar integration in action
+- [ ] Create ARCHITECTURE.md explaining daemon/client model
+- [ ] Document GPU vs CPU fallback behavior
+
+**Previous Rationale:** Essential for onboarding new users and contributors.
+
+### 3. Performance Benchmarking
+**Previous Status:** Not Started
+**Previous Priority:** Medium
 **Effort:** Medium (4-6 hours)
 
 - [ ] Create benchmarking test suite (cargo bench)
@@ -62,11 +133,11 @@ Post model-revamp prioritized task list for public release preparation.
 - [ ] Document results in docs/research/benchmarks.md
 - [ ] Add performance regression tests to CI
 
-**Why:** Validate the "bleeding edge" claims with data.
+**Previous Rationale:** Validate the "bleeding edge" claims with data.
 
-### 5. Better First-Run Experience
-**Status:** Not Started
-**Priority:** Medium
+### 4. Better First-Run Experience
+**Previous Status:** Not Started
+**Previous Priority:** Medium
 **Effort:** Medium (6-8 hours)
 
 - [ ] Auto-download large-v3-turbo + tiny.en on first run
@@ -76,11 +147,11 @@ Post model-revamp prioritized task list for public release preparation.
 - [ ] Show welcome message with keybind instructions
 - [ ] Create getting-started tutorial
 
-**Why:** Reduce friction for new users.
+**Previous Rationale:** Reduce friction for new users.
 
-### 6. CI/CD for New Models
-**Status:** Not Started
-**Priority:** Medium
+### 5. CI/CD for New Models
+**Previous Status:** Not Started
+**Previous Priority:** Medium
 **Effort:** Medium (4-6 hours)
 
 - [ ] Update .github/workflows/ci.yml for new model registry
@@ -90,13 +161,11 @@ Post model-revamp prioritized task list for public release preparation.
 - [ ] Generate checksums for all binaries
 - [ ] AUR package automation
 
-**Why:** Streamlines releases and builds trust.
+**Previous Rationale:** Streamlines releases and builds trust.
 
-## Nice-to-Have (Future Enhancements)
-
-### 7. Advanced Features
-**Status:** Ideas Stage
-**Priority:** Low
+### 6. Advanced Features
+**Previous Status:** Ideas Stage
+**Previous Priority:** Low
 **Effort:** Large (12+ hours each)
 
 - [ ] Project-aware vocabulary (detect .rs/.py/.ts, bias accordingly)
@@ -106,11 +175,11 @@ Post model-revamp prioritized task list for public release preparation.
 - [ ] Voice commands (e.g., "undo last", "clear line")
 - [ ] Integration with IDE plugins (VSCode, Neovim)
 
-**Why:** Differentiate from other voice tools.
+**Previous Rationale:** Differentiate from other voice tools.
 
-### 8. Community Infrastructure
-**Status:** Partially Done
-**Priority:** Medium (for open source)
+### 7. Community Infrastructure
+**Previous Status:** Partially Done
+**Previous Priority:** Medium (for open source)
 **Effort:** Small (2-3 hours)
 
 - [x] LICENSE file (MIT)
@@ -120,11 +189,11 @@ Post model-revamp prioritized task list for public release preparation.
 - [ ] PR template with checklist
 - [ ] Discord/Matrix community channel
 
-**Why:** Prepare for community contributions.
+**Previous Rationale:** Prepare for community contributions.
 
-### 9. Cross-Platform Testing
-**Status:** Not Started
-**Priority:** Low
+### 8. Cross-Platform Testing
+**Previous Status:** Not Started
+**Previous Priority:** Low
 **Effort:** Large (platform-dependent)
 
 - [ ] Test macOS Metal backend with new models
@@ -133,10 +202,6 @@ Post model-revamp prioritized task list for public release preparation.
 - [ ] Validate all GPU backends (CUDA, ROCm, Vulkan)
 - [ ] Document platform-specific quirks
 
-**Why:** Ensure reliability across environments.
-
-## Suggested Next Action
-
-**Start with #1 (Fix Speculative Decoding)** - This unlocks the core performance promise and validates the entire revamp effort. Once that's proven, move to #3 (Polybar) for quick community wins.
+**Previous Rationale:** Ensure reliability across environments.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
