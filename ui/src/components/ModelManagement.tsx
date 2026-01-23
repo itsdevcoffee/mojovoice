@@ -768,7 +768,7 @@ function InstalledModelCard({
             Active
           </span>
         ) : (
-          <div /> {/* Spacer */}
+          <div></div>
         )}
 
         {/* Action buttons */}
