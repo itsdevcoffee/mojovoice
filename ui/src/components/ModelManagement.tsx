@@ -731,7 +731,7 @@ function InstalledModelCard({
       )}
 
       {/* Model ID - PRIMARY */}
-      <div className="flex items-center gap-2 mb-2">
+      <div className="flex items-center gap-2 mb-1.5">
         <span className={cn(
           "status-dot",
           model.isActive ? "status-dot-active animate-pulse-dot" : "status-dot-inactive"
@@ -740,7 +740,7 @@ function InstalledModelCard({
       </div>
 
       {/* Model tier info - SECONDARY */}
-      <div className="mb-3 space-y-1">
+      <div className="mb-2 space-y-0.5">
         <p className="text-metadata truncate flex items-center">
           {qualityIcon}
           {tier.label} • {tier.language}
@@ -752,11 +752,11 @@ function InstalledModelCard({
       </div>
 
       {/* Size - TERTIARY */}
-      <p className="text-size mt-auto mb-2">{formatSize(model.sizeMb)}</p>
+      <p className="text-size mt-auto mb-1.5">{formatSize(model.sizeMb)}</p>
 
       {/* Accent bar */}
       <div className={cn(
-        "accent-bar mb-2",
+        "accent-bar mb-1.5",
         model.isActive ? "accent-bar-success" : "bg-border"
       )} />
 

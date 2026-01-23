@@ -70,7 +70,7 @@
 
     /* Card dimensions per spec */
     --card-width: 180px;
-    --card-height-installed: 140px;
+    --card-height-installed: 168px;
     --card-padding: 24px;
     --card-gap: 20px;
     --progress-height: 8px;
