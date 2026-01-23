@@ -100,7 +100,7 @@ jobs:
   build-macos-intel:
     name: Build macOS CLI (Intel)
     needs: create-release
-    runs-on: macos-13
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
@@ -179,13 +179,17 @@ jobs:
           projectPath: ui
           tauriScript: npm run tauri
 
+      - name: Get version without v prefix
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
       - name: Upload AppImage
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./ui/src-tauri/target/release/bundle/appimage/mojovoice_${{ github.ref_name }}_amd64.AppImage
+          asset_path: ./ui/src-tauri/target/release/bundle/appimage/mojovoice_${{ steps.version.outputs.VERSION }}_amd64.AppImage
           asset_name: MojoVoice-linux-x64.AppImage
           asset_content_type: application/octet-stream
 
@@ -195,7 +199,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./ui/src-tauri/target/release/bundle/deb/mojovoice_${{ github.ref_name }}_amd64.deb
+          asset_path: ./ui/src-tauri/target/release/bundle/deb/mojovoice_${{ steps.version.outputs.VERSION }}_amd64.deb
           asset_name: MojoVoice-linux-x64.deb
           asset_content_type: application/vnd.debian.binary-package
 
@@ -233,20 +237,24 @@ jobs:
           projectPath: ui
           tauriScript: npm run tauri
 
+      - name: Get version without v prefix
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
       - name: Upload dmg
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./ui/src-tauri/target/release/bundle/dmg/mojovoice_${{ github.ref_name }}_aarch64.dmg
+          asset_path: ./ui/src-tauri/target/release/bundle/dmg/mojovoice_${{ steps.version.outputs.VERSION }}_aarch64.dmg
           asset_name: MojoVoice-macos-arm64.dmg
           asset_content_type: application/octet-stream
 
   build-tauri-macos-intel:
     name: Build Desktop App (macOS Intel)
     needs: create-release
-    runs-on: macos-13
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
@@ -277,12 +285,16 @@ jobs:
           projectPath: ui
           tauriScript: npm run tauri
 
+      - name: Get version without v prefix
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
       - name: Upload dmg
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./ui/src-tauri/target/release/bundle/dmg/mojovoice_${{ github.ref_name }}_x64.dmg
+          asset_path: ./ui/src-tauri/target/release/bundle/dmg/mojovoice_${{ steps.version.outputs.VERSION }}_x64.dmg
           asset_name: MojoVoice-macos-intel.dmg
           asset_content_type: application/octet-stream
