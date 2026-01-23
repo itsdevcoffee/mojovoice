@@ -4,63 +4,24 @@
 
 **Voice-to-text for developers who think faster than they type.**
 
+[![Version](https://img.shields.io/github/v/release/itsdevcoffee/mojovoice?label=version)](https://github.com/itsdevcoffee/mojovoice/releases/latest)
+[![License](https://img.shields.io/github/license/itsdevcoffee/mojovoice)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macos-blue)]()
+[![Rust](https://img.shields.io/badge/rust-1.85+-orange)]()
+
 Fast • Local • Private • GPU-Accelerated
 
-[Quick Start](#-quick-start) • [Features](#-features) • [Roadmap](#-roadmap) • [Documentation](#-documentation)
+[Quick Start](#-quick-start) • [Features](#-features) • [Models](#-models) • [Documentation](#-documentation)
 
 </div>
 
 ---
 
-## 🎯 What is Mojo Voice?
+## What is Mojo Voice?
 
-**Mojo Voice** is a lightning-fast, privacy-first voice dictation tool built for developers. Press a hotkey, speak naturally, and your words appear instantly at your cursor—no cloud, no latency, no compromises.
+Mojo Voice is a **privacy-first voice dictation tool** that runs 100% locally on your machine. Press a hotkey, speak naturally, and your words appear at your cursor — no cloud, no latency, no subscriptions.
 
-### The Problem
-
-Typing code comments, documentation, commit messages, and chat responses is slow. Cloud-based voice tools are either:
-- **Too slow** (network latency kills flow state)
-- **Too intrusive** (your code goes to someone else's servers)
-- **Too generic** (can't handle technical vocabulary like "async fn", "kubectl", or "GraphQL")
-
-### The Solution
-
-Mojo Voice runs **100% locally** on your machine with **GPU acceleration**, delivering transcription in under 500ms. It understands technical terminology out of the box and works offline. Built in Rust, powered by OpenAI Whisper.
-
----
-
-## ✨ Features
-
-### 🚀 **Blazing Fast**
-- **GPU-accelerated** transcription with CUDA (NVIDIA), Metal (Apple Silicon), or ROCm (AMD)
-- **5-10x faster** than CPU-only solutions
-- **Sub-second latency** for typical voice commands
-
-### 🔒 **Privacy-First**
-- **100% local processing** — your voice never leaves your machine
-- **No cloud dependencies** — works completely offline
-- **No telemetry** — we don't track anything
-
-### 🧠 **Developer-Aware**
-- Understands technical vocabulary: `async/await`, `kubernetes`, `GraphQL`, `flatpak`, `systemd`
-- Customizable prompts to bias toward your tech stack
-- Language detection (English, Spanish, French, and more)
-
-### ⚡ **Cross-Platform**
-- **Linux:** Wayland (Hyprland, Sway, KDE) and X11
-- **macOS:** Intel and Apple Silicon (with Metal acceleration)
-- **Windows:** Coming soon
-
-### 🎨 **Desktop Integration**
-- **Waybar module** with real-time status (idle/recording/processing)
-- Polybar support coming soon
-- Systemd service for always-on daemon mode
-
-### 🛠️ **Built for Power Users**
-- **Daemon mode** for instant response
-- **Toggle mode** (press once to start, again to stop)
-- **Clipboard mode** for manual pasting
-- **Keyboard shortcuts** via Hyprland/Sway bindings
+Built in Rust. Powered by OpenAI Whisper. Ships with a native desktop app.
 
 ---
 
@@ -68,82 +29,306 @@ Mojo Voice runs **100% locally** on your machine with **GPU acceleration**, deli
 
 ### 1. Download
 
-Grab the latest binary for your platform:
-
+**Linux (NVIDIA GPU)** — Recommended for fastest performance:
 ```bash
-# Linux (NVIDIA GPU)
-wget https://github.com/itsdevcoffee/mojovoice/releases/download/v0.2.0/mojovoice-linux-x64-cuda
-chmod +x mojovoice-linux-x64-cuda
-mv mojovoice-linux-x64-cuda ~/.local/bin/mojovoice
-
-# macOS (Apple Silicon with Metal)
-wget https://github.com/itsdevcoffee/mojovoice/releases/download/v0.2.0/mojovoice-macos-arm64-metal
-chmod +x mojovoice-macos-arm64-metal
-mv mojovoice-macos-arm64-metal ~/.local/bin/mojovoice
+curl -LO https://github.com/itsdevcoffee/mojovoice/releases/latest/download/mojovoice-linux-x64-cuda.tar.gz
+tar -xzf mojovoice-linux-x64-cuda.tar.gz
+sudo mv mojovoice /usr/local/bin/
 ```
+
+<details>
+<summary><strong>Other platforms</strong></summary>
+
+**Linux (CPU only):**
+```bash
+curl -LO https://github.com/itsdevcoffee/mojovoice/releases/latest/download/mojovoice-linux-x64.tar.gz
+tar -xzf mojovoice-linux-x64.tar.gz
+sudo mv mojovoice /usr/local/bin/
+```
+
+**macOS (Apple Silicon):**
+```bash
+curl -LO https://github.com/itsdevcoffee/mojovoice/releases/latest/download/mojovoice-macos-arm64.tar.gz
+tar -xzf mojovoice-macos-arm64.tar.gz
+sudo mv mojovoice /usr/local/bin/
+```
+
+**macOS (Intel):**
+```bash
+curl -LO https://github.com/itsdevcoffee/mojovoice/releases/latest/download/mojovoice-macos-intel.tar.gz
+tar -xzf mojovoice-macos-intel.tar.gz
+sudo mv mojovoice /usr/local/bin/
+```
+
+</details>
 
 ### 2. Download a Model
 
 ```bash
-mojovoice download base.en  # 148MB, balanced speed/accuracy
+mojovoice download large-v3-turbo    # 1.6 GB - Best quality + fast
+# OR
+mojovoice download base.en           # 148 MB - Quick start, English only
 ```
 
 ### 3. Start the Daemon
 
 ```bash
-mojovoice daemon
+mojovoice daemon up
 ```
 
-### 4. Use It
+### 4. Transcribe
 
 ```bash
-# In another terminal (or bind to a hotkey)
 mojovoice start    # Begin recording
-# Speak: "This is a test of voice dictation"
-mojovoice stop     # Transcribe and inject text
+# Speak: "Hello world, this is a test"
+mojovoice stop     # Transcribe and type at cursor
 ```
 
-**Text appears at your cursor!**
+**That's it.** Text appears wherever your cursor is.
+
+---
+
+## ✨ Features
+
+| Feature | Description |
+|---------|-------------|
+| **GPU Accelerated** | CUDA (NVIDIA), Metal (Apple Silicon), ROCm (AMD) — 5-10x faster than CPU |
+| **100% Local** | Your voice never leaves your machine. Works offline. |
+| **Desktop App** | Native Tauri UI with dashboard, model manager, and settings |
+| **31 Whisper Models** | From tiny (78 MB) to large-v3 (3.1 GB), including quantized variants |
+| **Transcription History** | Searchable history with copy/export functionality |
+| **Waybar Integration** | Real-time status indicator for Hyprland/Sway users |
+| **Sub-500ms Latency** | Daemon mode keeps the model loaded for instant response |
+
+---
+
+## 🖥️ Desktop App
+
+Mojo Voice includes a full desktop application built with Tauri:
+
+- **Dashboard** — Record button, daemon controls, live status
+- **Model Manager** — Download, switch, and delete models with visual quality/speed indicators
+- **Settings** — Audio device selection, language, recording timeout, UI scaling
+- **History** — Browse and search past transcriptions
+- **DevTools** — Export diagnostics, view logs
+
+Launch the UI:
+```bash
+mojovoice-ui    # If installed separately
+```
+
+---
+
+## 🎯 Models
+
+### Recommended Picks
+
+| Model | Size | Speed | Quality | Best For |
+|-------|------|-------|---------|----------|
+| `large-v3-turbo` | 1.6 GB | ⚡⚡⚡⚡ | ⭐⭐⭐⭐⭐ | **Best overall** — Fast + accurate |
+| `distil-large-v3` | 1.5 GB | ⚡⚡⚡⚡⚡ | ⭐⭐⭐⭐ | Maximum speed |
+| `base.en` | 148 MB | ⚡⚡⚡ | ⭐⭐⭐ | Quick start, English only |
+| `tiny.en` | 78 MB | ⚡⚡⚡⚡⚡ | ⭐⭐ | Testing, low resources |
+
+### All Available Models
+
+<details>
+<summary>View all 31 models</summary>
+
+**Large V3 Turbo:**
+- `large-v3-turbo` (1625 MB) — Recommended
+- `large-v3-turbo-q5_0` (547 MB) — Quantized
+- `large-v3-turbo-q8_0` (834 MB) — Quantized
+
+**Distil-Whisper:**
+- `distil-large-v3.5` (1449 MB)
+- `distil-large-v3` (1520 MB)
+- `distil-large-v2` (1449 MB)
+- `distil-medium.en` (757 MB) — English only
+- `distil-small.en` (321 MB) — English only
+
+**Large:**
+- `large-v3` (3100 MB)
+- `large-v3-q5_0` (1031 MB)
+- `large-v2` (2950 MB)
+- `large-v2-q5_0` (1031 MB)
+- `large-v1` (2950 MB)
+
+**Medium:**
+- `medium` (1463 MB)
+- `medium.en` (1530 MB) — English only
+- `medium-q5_0` (514 MB)
+- `medium.en-q5_0` (514 MB) — English only
+
+**Small:**
+- `small` (488 MB)
+- `small.en` (488 MB) — English only
+- `small-q5_1` (181 MB)
+- `small.en-q5_1` (181 MB) — English only
+
+**Base:**
+- `base` (148 MB)
+- `base.en` (148 MB) — English only
+- `base-q5_1` (57 MB)
+- `base.en-q5_1` (57 MB) — English only
+
+**Tiny:**
+- `tiny` (78 MB)
+- `tiny.en` (78 MB) — English only
+- `tiny-q5_1` (31 MB)
+- `tiny.en-q5_1` (31 MB) — English only
+
+</details>
+
+---
+
+## 💻 CLI Reference
+
+| Command | Description |
+|---------|-------------|
+| `mojovoice start` | Begin recording (use with hotkey) |
+| `mojovoice stop` | Stop recording and transcribe |
+| `mojovoice cancel` | Cancel recording without transcribing |
+| `mojovoice daemon up` | Start the daemon |
+| `mojovoice daemon down` | Stop the daemon |
+| `mojovoice daemon restart` | Restart the daemon |
+| `mojovoice daemon status` | Check daemon status |
+| `mojovoice daemon logs -f` | Follow daemon logs |
+| `mojovoice download <model>` | Download a Whisper model |
+| `mojovoice config --check` | Validate configuration |
+| `mojovoice doctor` | Check system dependencies |
+| `mojovoice benchmark` | Run performance benchmark |
+
+### Options
+
+```bash
+mojovoice start -c              # Copy to clipboard instead of typing
+mojovoice start -d 10           # Record for exactly 10 seconds
+mojovoice daemon logs -n 50     # Show last 50 log lines
+mojovoice benchmark --report    # Generate HTML benchmark report
+```
+
+---
+
+## ⚙️ Configuration
+
+Config file: `~/.config/mojovoice/config.toml`
+
+```toml
+[model]
+model_id = "large-v3-turbo"
+language = "en"
+# Optional: bias transcription toward technical terms
+prompt = "async, await, rust, cargo, kubernetes, docker"
+
+[audio]
+sample_rate = 16000
+timeout_secs = 180        # Max recording duration
+# device_name = "default"  # Uncomment to specify audio device
+
+[output]
+append_space = true
+refresh_command = "pkill -RTMIN+8 waybar"  # Update status bar
+
+[history]
+max_entries = 1000
+```
+
+---
+
+## 🖥️ Platform Support
+
+| Platform | Architecture | GPU | Status |
+|----------|--------------|-----|--------|
+| Linux | x86_64 | CUDA (NVIDIA) | ✅ Tested |
+| Linux | x86_64 | ROCm (AMD) | 🟡 Untested |
+| Linux | x86_64 | CPU | ✅ Tested |
+| macOS | Apple Silicon | Metal | ✅ Tested |
+| macOS | Intel | CPU | ✅ Tested |
+| Windows | x86_64 | — | 🟡 Planned |
+
+**Tested on:** Fedora 42, Ubuntu 24.04, macOS 14-15
+
+---
+
+## 🔌 Integrations
+
+### Waybar (Hyprland/Sway)
+
+Real-time status indicator showing: Offline → Idle → Recording → Processing
+
+```bash
+cd integrations/waybar
+./install.sh
+```
+
+See [integrations/waybar/README.md](integrations/waybar/README.md) for details.
+
+### Hyprland Keybinds
+
+```conf
+# ~/.config/hypr/hyprland.conf
+bind = SUPER, V, exec, mojovoice start
+bind = SUPER SHIFT, V, exec, mojovoice stop
+bind = SUPER, Escape, exec, mojovoice cancel
+```
+
+### Systemd Service
+
+```bash
+# Create user service
+mkdir -p ~/.config/systemd/user
+cat > ~/.config/systemd/user/mojovoice.service << 'EOF'
+[Unit]
+Description=Mojo Voice Daemon
+After=graphical-session.target
+
+[Service]
+ExecStart=/usr/local/bin/mojovoice daemon up
+ExecStop=/usr/local/bin/mojovoice daemon down
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+EOF
+
+systemctl --user enable --now mojovoice
+```
+
+---
+
+## 🛠️ Building from Source
+
+```bash
+git clone https://github.com/itsdevcoffee/mojovoice.git
+cd mojovoice
+
+# Using just (recommended)
+just build-cuda      # NVIDIA GPU
+just build           # CPU only
+
+# Or cargo directly
+cargo build --release --features cuda    # NVIDIA
+cargo build --release --features metal   # macOS
+cargo build --release                    # CPU only
+```
 
 ---
 
 ## 🗺️ Roadmap
 
-### ✅ **v0.2.0 - Current** (Cross-Platform Foundation)
-- [x] Candle-based Whisper engine (Rust-native, Python-free)
-- [x] GPU acceleration (CUDA, Metal)
-- [x] Cross-platform audio (CPAL)
-- [x] macOS and Linux support
-- [x] Waybar integration
+### ✅ Completed
 
-### 🚧 **v0.3.0 - Next** (Performance & Polish)
-- [ ] **Flash Attention v2** for 2x faster inference
-- [ ] **Speculative decoding** with draft models (30-50% speedup)
-- [ ] Polybar integration (X11/i3 users)
-- [ ] Automated model downloads on first run
-- [ ] Performance benchmarking suite
+- **v0.5.x** — Model management UI, transcription history, audio device selection, daemon subcommands, visual quality meters
+- **v0.4.x** — Tauri desktop app, dashboard, settings UI, dev tools
+- **v0.3.x** — Project rename to Mojo Voice
+- **v0.2.x** — Cross-platform support (macOS, Linux), CPAL audio, clipboard mode
 
-### 🎨 **v0.4.0 - UI & Developer Experience** (Next Major)
-- [ ] **Tauri-based GUI** with glassmorphic design
-- [ ] Real-time dashboard (stats, audio visualizer, GPU usage)
-- [ ] Visual settings editor (models, audio devices, vocabulary)
-- [ ] Transcription history with export
-- [ ] Developer tools panel (logs, diagnostics, benchmarks)
-- [ ] System tray integration
-- [ ] One-click model management
+### 🔮 Future
 
-### 🔮 **v0.5.0 - Advanced Features**
-- [ ] Context-aware vocabulary (detect `.rs`, `.py`, `.ts` files, bias accordingly)
-- [ ] DeepFilterNet noise cancellation (handle keyboard/fan noise)
-- [ ] AT-SPI2 integration (pull active window context for better accuracy)
-- [ ] Multi-language testing (Spanish, French, German)
-- [ ] Custom wake words for hands-free mode
-
-### 🌟 **v1.0.0 - Production Ready**
-- [ ] IDE plugins (VSCode, Neovim, JetBrains)
-- [ ] Voice commands ("undo last", "format code", "new line")
-- [ ] Project-specific vocabulary learning
-- [ ] Mobile companion app (trigger from phone)
+- **v0.6** — Polybar integration, noise cancellation (DeepFilterNet)
+- **v0.7** — Context-aware vocabulary (detect file types, bias accordingly)
+- **v1.0** — IDE plugins (VSCode, Neovim), voice commands, production-ready polish
 
 [Full roadmap →](docs/project/todos/roadmap.md)
 
@@ -151,198 +336,56 @@ mojovoice stop     # Transcribe and inject text
 
 ## 📚 Documentation
 
-### Installation Guides
-- **[Linux Setup](docs/setup-linux.md)** (Fedora, Ubuntu, Arch)
-- **[macOS Setup](docs/setup-macos.md)** (Intel and Apple Silicon)
-- **[GPU Acceleration](docs/gpu-setup.md)** (CUDA, Metal, ROCm)
-- **[Building from Source](docs/build.md)**
-
-### Integration
-- **[Waybar Module](integrations/waybar/README.md)** (Live status widget)
-- **[Hyprland Keybinds](docs/keybinds-hyprland.md)**
-- **[Systemd Service](docs/systemd.md)** (Auto-start daemon)
-
-### Advanced
-- **[Architecture Overview](docs/context/current-implementation-state.md)**
-- **[Model Selection Guide](docs/models.md)**
-- **[Performance Tuning](docs/performance.md)**
-- **[Troubleshooting](docs/troubleshooting.md)**
-
----
-
-## 🏗️ How It Works
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  1. Press Hotkey (Super+V)                                  │
-│     ↓                                                        │
-│  2. Audio Capture (CPAL) → 44.1kHz stereo                   │
-│     ↓                                                        │
-│  3. Resample to 16kHz mono (Rubato)                         │
-│     ↓                                                        │
-│  4. Whisper Transcription                                   │
-│     ├─ Encoder (GPU/CPU) → Audio features                   │
-│     └─ Decoder (Greedy/Beam) → Text tokens                  │
-│     ↓                                                        │
-│  5. Text Injection (Enigo) → Types at cursor                │
-│     OR Clipboard (wl-copy/arboard) → Paste manually         │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**Key Technologies:**
-- **Rust** - Memory-safe, zero-cost abstractions
-- **Candle** - Pure Rust ML framework (no Python!)
-- **Whisper Large V3 Turbo** - 809M params, 4 decoder layers
-- **CPAL** - Cross-platform audio
-- **Enigo** - Cross-platform keyboard injection
-
----
-
-## 🎛️ Model Options
-
-| Model | Size | Speed | Accuracy | Best For |
-|-------|------|-------|----------|----------|
-| **tiny.en** | 78 MB | ⚡⚡⚡ | ⭐⭐ | Testing, instant feedback |
-| **base.en** | 148 MB | ⚡⚡ | ⭐⭐⭐ | **Recommended** - Balanced |
-| **small.en** | 488 MB | ⚡ | ⭐⭐⭐⭐ | Higher accuracy |
-| **large-v3-turbo** | 1.6 GB | ⚡⚡ | ⭐⭐⭐⭐⭐ | Maximum quality |
-
-**Recommendation:** Start with `base.en` (148MB). Upgrade to `large-v3-turbo` if you need near-perfect accuracy.
-
----
-
-## 🖥️ Platform Support
-
-| OS | Architecture | GPU | Status |
-|----|--------------|-----|--------|
-| **Linux** | x86_64 | CUDA (NVIDIA) | ✅ **Tested** |
-| **Linux** | x86_64 | ROCm (AMD) | 🟡 **Untested** |
-| **macOS** | Apple Silicon | Metal | ✅ **Tested** |
-| **macOS** | Intel | None | ✅ **Tested** |
-| **Windows** | x86_64 | None | 🟡 **Code Ready** |
-
-**Tested Environments:**
-- Fedora 42 (Wayland/Hyprland)
-- Ubuntu 24.04 (Wayland/GNOME)
-- macOS 14-26 (Intel & Apple Silicon)
-
----
-
-## 🔧 Configuration Example
-
-**`~/.config/mojovoice/config.toml`**
-
-```toml
-[model]
-model_id = "openai/whisper-large-v3-turbo"
-language = "en"
-prompt = "async, await, rust, cargo, kubernetes, docker, typescript"
-
-[audio]
-sample_rate = 16000    # Auto-resamples from device default
-timeout_secs = 30      # Max recording duration
-
-[output]
-append_space = true
-refresh_command = "pkill -RTMIN+8 waybar"  # Update Waybar status
-```
+| Guide | Description |
+|-------|-------------|
+| [Waybar Integration](integrations/waybar/README.md) | Status indicator setup |
+| [Architecture](docs/context/current-implementation-state.md) | Technical overview |
+| [Roadmap](docs/project/todos/roadmap.md) | Feature planning |
 
 ---
 
 ## 🤝 Contributing
 
-We welcome contributions! Mojo Voice is **open source** (MIT license) and community-driven.
-
-### Ways to Contribute
-- 🐛 **Report bugs** via [GitHub Issues](https://github.com/itsdevcoffee/mojovoice/issues)
-- 💡 **Suggest features** on our [Discussions](https://github.com/itsdevcoffee/mojovoice/discussions)
-- 📝 **Improve docs** (setup guides, troubleshooting, translations)
-- 🔌 **Build integrations** (Polybar, i3status, GNOME extension)
-- 🧪 **Test on your platform** and share results
-
-### Development Setup
-
 ```bash
 git clone https://github.com/itsdevcoffee/mojovoice.git
 cd mojovoice
-
-# Using just (recommended)
-just --list          # Show all commands
-just build-cuda      # Build with CUDA support
-just install-cuda    # Install to ~/.local/bin
-just daemon-restart  # Restart daemon with new build
-just ui              # Run Tauri UI in dev mode
-
-# Or using cargo directly
-cargo build --release --features cuda  # or 'metal' for macOS
-cargo test
-cargo clippy
-cargo fmt --all
+just build           # Build
+cargo test           # Test
+cargo clippy         # Lint
+cargo fmt --check    # Format check
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ---
 
-## 📊 Performance Benchmarks
+## 📊 Performance
 
-**Whisper Base Model, 10-second audio clip:**
+| Hardware | Model | 10s Audio |
+|----------|-------|-----------|
+| RTX 4090 (CUDA) | large-v3-turbo | ~0.5s |
+| Apple M2 (Metal) | large-v3-turbo | ~1.0s |
+| Ryzen 7 (CPU) | large-v3-turbo | ~3.0s |
 
-| Hardware | Time | Speedup |
-|----------|------|---------|
-| AMD Ryzen 7 (CPU) | 3.0s | 1x |
-| Apple M1 (CPU) | 2.2s | 1.4x |
-| **NVIDIA RTX 4090 (CUDA)** | **0.5s** | **6x** |
-| **Apple M2 (Metal)** | **1.0s** | **3x** |
-
-*Results may vary based on model size and audio complexity.*
-
----
-
-## 🙏 Acknowledgments
-
-Built on the shoulders of giants:
-
-- **[OpenAI Whisper](https://github.com/openai/whisper)** - State-of-the-art speech recognition
-- **[Candle](https://github.com/huggingface/candle)** - Minimalist ML framework in Rust
-- **[CPAL](https://github.com/RustAudio/cpal)** - Cross-platform audio library
-- **[Enigo](https://github.com/enigo-rs/enigo)** - Cross-platform input simulation
-
-Special thanks to the Hyprland and Rust communities for inspiration and support.
+Run your own benchmark:
+```bash
+mojovoice benchmark --report
+```
 
 ---
 
 ## 📄 License
 
-**MIT License** - See [LICENSE](LICENSE) for details.
-
-Free and open source forever. Use it, fork it, contribute back.
+[MIT License](LICENSE) — Free and open source.
 
 ---
 
-## 🌟 Why We Built This
+## 🙏 Acknowledgments
 
-We're developers who got tired of:
-- Typing the same technical terms over and over
-- Slow cloud transcription breaking our flow
-- Privacy concerns with commercial voice tools
-- Lack of Linux-first voice solutions
-
-Mojo Voice is our answer: a tool that respects your privacy, runs at the speed of thought, and understands the language you actually speak.
-
-**If you think faster than you type, Mojo Voice is for you.**
-
----
-
-<div align="center">
-
-**[⬆ Back to Top](#mojo-voice)**
-
-Made with ❤️ for developers who value speed, privacy, and control.
-
-**Star us on GitHub** if you find this useful!
-
-</div>
+- [OpenAI Whisper](https://github.com/openai/whisper) — Speech recognition model
+- [Candle](https://github.com/huggingface/candle) — Rust ML framework
+- [Tauri](https://tauri.app) — Desktop app framework
+- [CPAL](https://github.com/RustAudio/cpal) — Cross-platform audio
 
 ---
 
