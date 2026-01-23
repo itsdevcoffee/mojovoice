@@ -63,6 +63,49 @@ When researching or discussing potential features:
 
 **Example:** VibeVoice-ASR speaker diarization analysis (see roadmap.md)
 
+## Release Workflow
+
+When creating a new release:
+
+**1. Update version numbers:**
+- `Cargo.toml` (root)
+- `ui/src-tauri/Cargo.toml`
+- `ui/src-tauri/tauri.conf.json`
+- `CHANGELOG.md` (change `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD`)
+
+**2. Commit and tag:**
+```bash
+cargo check  # updates Cargo.lock
+git add -A && git commit -m "chore: release vX.Y.Z"
+git tag -a vX.Y.Z -m "Release vX.Y.Z"
+git push && git push origin vX.Y.Z
+```
+
+**3. Manually build and upload CUDA binary:**
+
+GitHub Actions builds CPU-only binaries. CUDA builds require local machine with CUDA toolkit.
+
+```bash
+# Build CUDA release
+RUSTFLAGS="-L /usr/lib64 -L /usr/local/lib/ollama" cargo build --release --features cuda
+
+# Package and upload to release
+cp target/release/mojovoice /tmp/mojovoice
+cd /tmp && tar -czvf mojovoice-linux-x64-cuda.tar.gz mojovoice
+gh release upload vX.Y.Z /tmp/mojovoice-linux-x64-cuda.tar.gz --clobber
+```
+
+**4. Verify release assets:**
+```bash
+gh release view vX.Y.Z --json assets --jq '.assets[].name'
+```
+
+Expected assets:
+- `mojovoice-linux-x64.tar.gz` (CPU, from CI)
+- `mojovoice-linux-x64-cuda.tar.gz` (CUDA, manual upload)
+- `mojovoice-macos-arm64.tar.gz` (from CI)
+- `mojovoice-macos-intel.tar.gz` (from CI)
+
 ## Project-Specific Notes
 
 **Mojo-Audio FFI Integration:**
