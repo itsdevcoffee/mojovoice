@@ -8,11 +8,50 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use tracing::{error, info, warn};
 
-use crate::audio::capture_toggle;
+use crate::audio::{capture_toggle, list_input_devices};
 use crate::daemon::protocol::{DaemonRequest, DaemonResponse};
 use crate::history::{self, HistoryEntry, enforce_max_entries};
 use crate::state;
 // Transcriber trait is now used via Box<dyn ...>
+
+/// Validate configured audio device exists, returns None (system default) if not found.
+/// If the device is stale (no longer available), updates the config file to remove it.
+fn validate_audio_device(configured_device: Option<String>) -> Option<String> {
+    let Some(ref name) = configured_device else {
+        return None;
+    };
+
+    match list_input_devices() {
+        Ok(devices) => {
+            let device_exists = devices.iter().any(|d| &d.name == name);
+            if device_exists {
+                configured_device
+            } else {
+                let available: Vec<_> = devices.iter().map(|d| d.name.as_str()).collect();
+                warn!(
+                    "Configured audio device '{}' not found. Available: {:?}. Falling back to system default.",
+                    name, available
+                );
+
+                // Update config to remove the stale device
+                if let Ok(mut config) = crate::config::load() {
+                    config.audio.device_name = None;
+                    if let Err(e) = crate::config::save(&config) {
+                        warn!("Failed to update config with cleared device: {}", e);
+                    } else {
+                        info!("Updated config: cleared stale device_name");
+                    }
+                }
+
+                None
+            }
+        }
+        Err(e) => {
+            warn!("Failed to list audio devices: {}. Using configured device anyway.", e);
+            configured_device
+        }
+    }
+}
 
 /// Get the path to the daemon socket
 pub fn get_socket_path() -> Result<PathBuf> {
@@ -254,9 +293,9 @@ impl DaemonServer {
 
         info!("Starting background recording (max {}s)", max_duration);
 
-        // Load config to get device_name
+        // Load config and validate device exists
         let config = crate::config::load()?;
-        let device_name = config.audio.device_name.clone();
+        let device_name = validate_audio_device(config.audio.device_name.clone());
 
         // Create PID file for UI state (Waybar uses this)
         state::toggle::start_recording()?;
@@ -530,6 +569,14 @@ pub fn run_daemon(model_path: &Path) -> Result<()> {
         std::process::id(),
         daemon_pid_file.display()
     );
+
+    // Validate audio device configuration at startup
+    if let Ok(config) = crate::config::load() {
+        if config.audio.device_name.is_some() {
+            // This will log a warning if the device is not found
+            let _ = validate_audio_device(config.audio.device_name);
+        }
+    }
 
     info!("Daemon listening on {}", socket_path.display());
 

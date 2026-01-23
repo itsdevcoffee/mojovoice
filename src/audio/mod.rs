@@ -208,6 +208,32 @@ fn set_pipewire_source_temporarily(_source_name: &str) -> Result<()> {
     Ok(())
 }
 
+/// Get the current PipeWire/PulseAudio default source name
+#[cfg(target_os = "linux")]
+fn get_pipewire_default_source() -> Result<String> {
+    use std::process::Command;
+
+    let output = Command::new("pactl")
+        .args(["info"])
+        .output()
+        .context("Failed to run pactl")?;
+
+    if !output.status.success() {
+        anyhow::bail!("pactl info failed");
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines() {
+        if line.starts_with("Default Source:") {
+            if let Some(source) = line.strip_prefix("Default Source:") {
+                return Ok(source.trim().to_string());
+            }
+        }
+    }
+
+    anyhow::bail!("Could not find default source in pactl info")
+}
+
 /// Audio device configuration
 struct AudioSetup {
     device: Device,
@@ -220,20 +246,35 @@ struct AudioSetup {
 fn setup_audio_device(device_name: Option<&str>) -> Result<AudioSetup> {
     // On Linux with PipeWire, handle device selection specially
     #[cfg(target_os = "linux")]
-    if let Some(name) = device_name {
-        // Try to resolve device name (handles both display names and internal names)
-        if let Ok(internal_name) = resolve_device_name(name) {
-            info!("Resolved device '{}' to PipeWire source '{}'", name, internal_name);
-            // Set as default PipeWire source, then use ALSA "default" device
-            if let Err(e) = set_pipewire_source_temporarily(&internal_name) {
-                warn!("Failed to set PipeWire source: {}. Falling back to default device.", e);
-            } else {
-                return setup_cpal_device(Some("default"));
+    {
+        if let Some(name) = device_name {
+            // Try to resolve device name (handles both display names and internal names)
+            if let Ok(internal_name) = resolve_device_name(name) {
+                info!("Resolved device '{}' to PipeWire source '{}'", name, internal_name);
+                // Set as default PipeWire source, then use ALSA "default" device
+                if let Err(e) = set_pipewire_source_temporarily(&internal_name) {
+                    warn!("Failed to set PipeWire source: {}. Falling back to default device.", e);
+                } else {
+                    return setup_cpal_device(Some("default"));
+                }
+            }
+
+            // Fallback: try direct CPAL device lookup
+            info!("Using device name '{}' directly with CPAL", name);
+        } else {
+            // No device specified - use PipeWire's actual default source
+            // CPAL's default_input_device() doesn't respect PipeWire's default on Linux
+            match get_pipewire_default_source() {
+                Ok(source) => {
+                    info!("Using PipeWire default source: {}", source);
+                    // The source is already the default in PipeWire, just use CPAL's "default"
+                    return setup_cpal_device(Some("default"));
+                }
+                Err(e) => {
+                    warn!("Failed to get PipeWire default source: {}. Using CPAL default.", e);
+                }
             }
         }
-
-        // Fallback: try direct CPAL device lookup
-        info!("Using device name '{}' directly with CPAL", name);
     }
 
     // Standard CPAL device selection for ALSA device names or other platforms
