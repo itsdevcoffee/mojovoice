@@ -5,6 +5,13 @@ All notable changes to mojovoice will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3] - 2026-01-23
+
+### Fixed
+- **Tauri CI builds:** Add icon paths for AppImage bundling
+- **macOS CI runners:** Update from retired macos-13 to macos-15
+- **Release asset paths:** Fix version format in bundle filenames
+
 ## [0.5.2] - 2026-01-23
 
 ### Added

@@ -1,6 +1,6 @@
 {
   "productName": "mojovoice",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "identifier": "com.mojovoice.app",
   "build": {
     "beforeDevCommand": "npm run dev",
