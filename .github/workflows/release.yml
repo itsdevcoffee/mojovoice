@@ -100,7 +100,7 @@ jobs:
   build-macos-intel:
     name: Build macOS CLI (Intel)
     needs: create-release
-    runs-on: macos-15
+    runs-on: macos-12
     steps:
       - uses: actions/checkout@v4
 
@@ -254,7 +254,7 @@ jobs:
   build-tauri-macos-intel:
     name: Build Desktop App (macOS Intel)
     needs: create-release
-    runs-on: macos-15
+    runs-on: macos-12
     steps:
       - uses: actions/checkout@v4
 
@@ -295,6 +295,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./ui/src-tauri/target/release/bundle/dmg/mojovoice_${{ steps.version.outputs.VERSION }}_x64.dmg
+          asset_path: ./ui/src-tauri/target/release/bundle/dmg/mojovoice_${{ steps.version.outputs.VERSION }}_x86_64.dmg
           asset_name: MojoVoice-macos-intel.dmg
           asset_content_type: application/octet-stream
