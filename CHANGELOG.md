@@ -7,8 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.5] - 2026-02-04
 
+### Changed
+- **macOS Intel support:** Removed dedicated Intel builds from CI (GitHub deprecated macos-12/13 runners)
+- **Intel Macs via Rosetta 2:** ARM binaries now recommended for all Macs (works on Intel via Rosetta 2)
+
 ### Fixed
-- **macOS Intel CI builds:** Use macos-12 runner and correct x86_64 dmg filename
+- **Desktop App CI:** Successfully building Linux AppImage, .deb, and macOS ARM .dmg
 
 ## [0.5.4] - 2026-01-23
 

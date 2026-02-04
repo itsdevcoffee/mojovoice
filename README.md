@@ -55,8 +55,9 @@ sudo mv mojovoice /usr/local/bin/
 
 **macOS (Intel):**
 ```bash
-curl -LO https://github.com/itsdevcoffee/mojovoice/releases/latest/download/mojovoice-macos-intel.tar.gz
-tar -xzf mojovoice-macos-intel.tar.gz
+# Intel Macs can use the ARM binary via Rosetta 2
+curl -LO https://github.com/itsdevcoffee/mojovoice/releases/latest/download/mojovoice-macos-arm64.tar.gz
+tar -xzf mojovoice-macos-arm64.tar.gz
 sudo mv mojovoice /usr/local/bin/
 ```
 
@@ -112,8 +113,9 @@ Mojo Voice includes a full desktop application built with Tauri. **Download and 
 |----------|----------|
 | Linux | [MojoVoice-linux-x64.AppImage](https://github.com/itsdevcoffee/mojovoice/releases/latest/download/MojoVoice-linux-x64.AppImage) |
 | Linux (Debian/Ubuntu) | [MojoVoice-linux-x64.deb](https://github.com/itsdevcoffee/mojovoice/releases/latest/download/MojoVoice-linux-x64.deb) |
-| macOS (Apple Silicon) | [MojoVoice-macos-arm64.dmg](https://github.com/itsdevcoffee/mojovoice/releases/latest/download/MojoVoice-macos-arm64.dmg) |
-| macOS (Intel) | [MojoVoice-macos-intel.dmg](https://github.com/itsdevcoffee/mojovoice/releases/latest/download/MojoVoice-macos-intel.dmg) |
+| macOS (All Macs) | [MojoVoice-macos-arm64.dmg](https://github.com/itsdevcoffee/mojovoice/releases/latest/download/MojoVoice-macos-arm64.dmg) |
+
+> **Note:** Intel Macs (2020 and earlier) can run the ARM binary via Rosetta 2 with minimal performance impact.
 
 ### Features
 
@@ -250,10 +252,10 @@ max_entries = 1000
 | Linux | x86_64 | ROCm (AMD) | 🟡 Untested |
 | Linux | x86_64 | CPU | ✅ Tested |
 | macOS | Apple Silicon | Metal | ✅ Tested |
-| macOS | Intel | CPU | ✅ Tested |
+| macOS | Intel (via Rosetta 2) | CPU | ✅ Tested |
 | Windows | x86_64 | — | 🟡 Planned |
 
-**Tested on:** Fedora 42, Ubuntu 24.04, macOS 14-15
+**Tested on:** Fedora 42, Ubuntu 24.04, macOS 14-15 (Apple Silicon + Intel)
 
 ---
 

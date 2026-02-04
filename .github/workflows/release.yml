@@ -97,37 +97,6 @@ jobs:
           asset_name: mojovoice-macos-arm64.tar.gz
           asset_content_type: application/gzip
 
-  build-macos-intel:
-    name: Build macOS CLI (Intel)
-    needs: create-release
-    runs-on: macos-12
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Build
-        run: cargo build --release
-
-      - name: Package binary
-        run: |
-          mkdir -p mojovoice-macos-intel
-          cp target/release/mojovoice mojovoice-macos-intel/
-          cp README.md mojovoice-macos-intel/
-          cp LICENSE mojovoice-macos-intel/
-          tar -czf mojovoice-macos-intel.tar.gz mojovoice-macos-intel/
-
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./mojovoice-macos-intel.tar.gz
-          asset_name: mojovoice-macos-intel.tar.gz
-          asset_content_type: application/gzip
-
   # ==========================================================================
   # Tauri Desktop App Builds
   # ==========================================================================
@@ -251,50 +220,3 @@ jobs:
           asset_name: MojoVoice-macos-arm64.dmg
           asset_content_type: application/octet-stream
 
-  build-tauri-macos-intel:
-    name: Build Desktop App (macOS Intel)
-    needs: create-release
-    runs-on: macos-12
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 'lts/*'
-          cache: 'npm'
-          cache-dependency-path: ui/package-lock.json
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: './ui/src-tauri -> target'
-
-      - name: Install frontend dependencies
-        working-directory: ui
-        run: npm ci
-
-      - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          projectPath: ui
-          tauriScript: npm run tauri
-
-      - name: Get version without v prefix
-        id: version
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
-
-      - name: Upload dmg
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./ui/src-tauri/target/release/bundle/dmg/mojovoice_${{ steps.version.outputs.VERSION }}_x86_64.dmg
-          asset_name: MojoVoice-macos-intel.dmg
-          asset_content_type: application/octet-stream
