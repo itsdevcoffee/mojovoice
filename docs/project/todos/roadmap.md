@@ -1,24 +1,123 @@
 # mojovoice Project Roadmap
 
-**Status:** Active Development | **Last Updated:** 2026-01-23
+**Status:** Active Development | **Last Updated:** 2026-02-04
 
 Project roadmap and feature planning.
 
-## Agreed Upon Future Features
+---
 
-### Polybar Integration
-**Priority:** High
-**Effort:** Small (2-4 hours)
+## Version Roadmap
 
-- [ ] Create integrations/polybar/ directory structure
-- [ ] Write polybar-compatible status script (IPC or tail -f approach)
-- [ ] Create module.ini config snippet
-- [ ] Write install.sh for Polybar users
-- [ ] Create README.md with Polybar-specific instructions
-- [ ] Test on i3/bspwm environment
-- [ ] Update integrations/README.md with Polybar entry
+### v0.6.0 - Platform Maturity & Polish
 
-**Rationale:** Expands reach to X11/i3 users (large community). Natural extension of existing Waybar integration pattern.
+**Theme:** Production-ready platform support with best-in-class onboarding
+
+**Priority Order:**
+
+1. **Model Setup Wizard** (Critical - Biggest UX improvement)
+   - Detect hardware (GPU type, VRAM, available disk space)
+   - Recommend optimal model based on capabilities
+   - Guide through first download with progress feedback
+   - Test recording/transcription in wizard
+   - Auto-configure based on detected environment
+
+2. **Linux Automated Testing** (Critical - Reliability)
+   - CI testing on Ubuntu, Fedora, Arch
+   - Validate CUDA installation across distros
+   - Test audio capture on different audio servers (PipeWire, PulseAudio, ALSA)
+   - Integration tests for Waybar/systemd
+   - Distro-specific packaging validation
+
+3. **Cross-Platform Dictation Indicator** (High - Consistency)
+   - System tray icon with recording state (all platforms)
+   - Visual feedback during recording (waveform/pulsing indicator)
+   - Status overlay (OSD) support
+   - Consistent behavior on Linux/macOS/Windows
+
+4. **CUDA Multi-Distro Support** (High - Remove friction)
+   - Automated CUDA detection and fallback
+   - Distro-specific CUDA path handling
+   - Better error messages for missing CUDA
+   - Documentation for each major distro
+
+5. **macOS Unsigned .dmg** (Medium - Good enough for v0.6.0)
+   - Improve .dmg with better first-run experience
+   - Handle permission prompts gracefully
+   - Clear instructions for Accessibility/Microphone permissions
+
+6. **UI/UX Polish** (Medium - Incremental improvements)
+   - Recording feedback improvements (waveform visualization?)
+   - Dashboard layout refinements
+   - Settings organization improvements
+   - Better error states and messaging
+
+**Deferred to v0.6.1+:**
+- macOS signed installer with code signing/notarization (requires $99/year Apple Developer account)
+
+---
+
+### v0.7.0 - Platform Expansion
+
+**Theme:** AMD and Windows support
+
+**Features:**
+- **AMD ROCm Support** (Critical)
+  - ROCm GPU acceleration for AMD graphics cards
+  - Automated ROCm detection and fallback
+  - Testing on popular AMD GPUs
+
+- **Windows Support** (Critical)
+  - Full Windows 10/11 support
+  - Audio capture validation
+  - Text injection via Windows APIs
+  - Installer with proper permissions
+
+- **Polybar Integration** (High)
+  - Status module for X11/i3/bspwm users
+  - Mirrors Waybar integration pattern
+
+---
+
+### v0.8.0 - Intelligence & Performance
+
+**Theme:** Smarter transcription and quality-of-life improvements
+
+**Features:**
+- **Context-Aware Vocabulary**
+  - Detect active file type (.rs, .py, .ts, .md)
+  - Auto-bias toward relevant technical terms
+  - Project-specific vocabulary learning
+
+- **Speculative Decoding**
+  - Draft model integration for 30-50% speedup
+  - Research correct Whisper API implementation
+
+- **Mojo-Audio 0.1.2**
+  - Performance improvements
+  - Better audio preprocessing
+
+- **Dynamic Prompt Biasing**
+  - UI for adjusting biasing prompts
+  - Preset vocabularies (Rust dev, Python dev, DevOps, etc.)
+  - Learn from correction history
+
+- **General QoL Improvements**
+  - Voice commands ("undo last", "new line", "format code")
+  - Better error recovery
+  - Performance optimizations
+
+---
+
+## Completed Features (v0.5.x)
+
+- ✅ **Desktop App CI Builds** - Automated Tauri builds for Linux/macOS
+- ✅ **Documentation Overhaul** - Complete README rewrite
+- ✅ **Performance Benchmarking** - `mojovoice benchmark` command
+- ✅ **Community Infrastructure** - LICENSE, CONTRIBUTING.md
+- ✅ **Model Management UI** - Download, switch, delete with visual meters
+- ✅ **Transcription History** - Searchable persistent history
+- ✅ **Audio Device Selection** - UI-based device picker
+- ✅ **Daemon Subcommands** - up, down, restart, status, logs
 
 ---
 
@@ -90,118 +189,21 @@ Qwen's newly released Qwen3-TTS models offer text-to-speech capabilities that co
 
 ---
 
-## Need to Review
+## Ideas & Future Exploration
 
-Items from previous roadmap (2025-12-20) that require status review and re-prioritization.
+### Advanced Features (Post v0.8.0)
+- Custom wake word for hands-free mode
+- Multi-language support testing (Spanish, French, German, etc.)
+- Noise cancellation preprocessing (DeepFilterNet)
+- IDE plugins (VSCode, Neovim, JetBrains)
+- Mobile companion app (trigger from phone)
 
-### 1. Fix Speculative Decoding API
-**Previous Status:** Blocked - API Research Needed
-**Previous Priority:** Critical
-**Effort:** Medium (4-8 hours)
-
-- [ ] Research correct whisper-rs API for draft model integration
-- [ ] Replace commented `set_encoder_begin_callback` with working implementation
-- [ ] Test performance improvements (target: 30-50% speedup)
-- [ ] Document actual vs theoretical performance gains
-- [ ] Update model-revamp-tasklist.md with final benchmarks
-
-**Previous Rationale:** Core performance feature that unlocks the full speed potential.
-
-### 2. Documentation Overhaul
-**Previous Status:** Not Started
-**Previous Priority:** Critical
-**Effort:** Large (8-12 hours)
-
-- [ ] Update main README.md with new features (Turbo models, technical vocab)
-- [ ] Create QUICKSTART.md for new users
-- [ ] Document integrations/ pattern for contributors
-- [ ] Add screenshots/GIFs of Waybar integration in action
-- [ ] Create ARCHITECTURE.md explaining daemon/client model
-- [ ] Document GPU vs CPU fallback behavior
-
-**Previous Rationale:** Essential for onboarding new users and contributors.
-
-### 3. Performance Benchmarking
-**Previous Status:** Not Started
-**Previous Priority:** Medium
-**Effort:** Medium (4-6 hours)
-
-- [ ] Create benchmarking test suite (cargo bench)
-- [ ] Compare old models (medium.en) vs new (large-v3-turbo)
-- [ ] Measure with/without draft models
-- [ ] Test across different audio lengths (5s, 30s, 60s)
-- [ ] Document results in docs/research/benchmarks.md
-- [ ] Add performance regression tests to CI
-
-**Previous Rationale:** Validate the "bleeding edge" claims with data.
-
-### 4. Better First-Run Experience
-**Previous Status:** Not Started
-**Previous Priority:** Medium
-**Effort:** Medium (6-8 hours)
-
-- [ ] Auto-download large-v3-turbo + tiny.en on first run
-- [ ] Interactive setup wizard (mojovoice setup)
-- [ ] Auto-detect desktop environment (Waybar/Polybar/none)
-- [ ] Offer integration installation during setup
-- [ ] Show welcome message with keybind instructions
-- [ ] Create getting-started tutorial
-
-**Previous Rationale:** Reduce friction for new users.
-
-### 5. CI/CD for New Models
-**Previous Status:** Not Started
-**Previous Priority:** Medium
-**Effort:** Medium (4-6 hours)
-
-- [ ] Update .github/workflows/ci.yml for new model registry
-- [ ] Add model checksum verification to CI
-- [ ] Build artifacts with new default models
-- [ ] Automated release workflow (tags → GitHub Releases)
-- [ ] Generate checksums for all binaries
-- [ ] AUR package automation
-
-**Previous Rationale:** Streamlines releases and builds trust.
-
-### 6. Advanced Features
-**Previous Status:** Ideas Stage
-**Previous Priority:** Low
-**Effort:** Large (12+ hours each)
-
-- [ ] Project-aware vocabulary (detect .rs/.py/.ts, bias accordingly)
-- [ ] Custom wake word for hands-free mode
-- [ ] Multi-language support testing (Spanish, French, etc.)
-- [ ] Noise cancellation preprocessing
-- [ ] Voice commands (e.g., "undo last", "clear line")
-- [ ] Integration with IDE plugins (VSCode, Neovim)
-
-**Previous Rationale:** Differentiate from other voice tools.
-
-### 7. Community Infrastructure
-**Previous Status:** Partially Done
-**Previous Priority:** Medium (for open source)
-**Effort:** Small (2-3 hours)
-
-- [x] LICENSE file (MIT)
+### Community Infrastructure (Ongoing)
+- [x] LICENSE file (MIT) ✅
+- [x] CONTRIBUTING.md ✅
 - [ ] CODE_OF_CONDUCT.md
-- [ ] CONTRIBUTING.md with development setup
 - [ ] Issue templates (bug report, feature request)
 - [ ] PR template with checklist
 - [ ] Discord/Matrix community channel
-
-**Previous Rationale:** Prepare for community contributions.
-
-### 8. Cross-Platform Testing
-**Previous Status:** Not Started
-**Previous Priority:** Low
-**Effort:** Large (platform-dependent)
-
-- [ ] Test macOS Metal backend with new models
-- [ ] Verify Windows compatibility (if supporting)
-- [ ] Test on various Linux distros (Arch, Ubuntu, Fedora)
-- [ ] Validate all GPU backends (CUDA, ROCm, Vulkan)
-- [ ] Document platform-specific quirks
-
-**Previous Rationale:** Ensure reliability across environments.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
