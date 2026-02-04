@@ -1,6 +1,6 @@
 [package]
 name = "mojovoice-ui"
-version = "0.5.4"
+version = "0.5.5"
 description = "GPU-accelerated voice dictation UI for Mojo Voice"
 authors = ["itsdevcoffee"]
 license = "MIT"
