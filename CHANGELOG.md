@@ -5,6 +5,21 @@ All notable changes to mojovoice will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **macOS support:** Platform-specific library loading for mojo-audio v0.2.0 (`.dylib` for macOS, `.so` for Linux)
+- **Cross-platform paths:** Config and daemon socket paths now use platform-appropriate locations on macOS
+- **macOS Tauri schema:** Added macOS-specific schema for desktop app bundling
+- **SECURITY.md:** Added security policy for responsible vulnerability disclosure
+
+### Changed
+- **mojo-audio v0.2.0:** Updated to latest mojo-audio release with macOS arm64 support and Mojo 0.26.2+ API compatibility
+
+### Documentation
+- **Roadmap restructure:** Updated roadmap with v0.6.0-v0.8.0 version structure and priorities
+- **Build handoff guide:** Added mojo-audio v0.2.0 Linux build handoff documentation
+
 ## [0.5.5] - 2026-02-04
 
 ### Changed
