@@ -46,12 +46,10 @@ pub enum DaemonResponse {
 }
 
 /// Get the daemon socket path
+/// Uses the same path as the CLI for cross-platform compatibility
 fn get_socket_path() -> Result<PathBuf> {
-    let home = std::env::var("HOME").context("HOME env var not set")?;
-    let state_dir = PathBuf::from(home)
-        .join(".local")
-        .join("state")
-        .join("mojovoice");
+    let state_dir = mojovoice::state::get_state_dir()
+        .context("Failed to get state directory")?;
     Ok(state_dir.join("daemon.sock"))
 }
 

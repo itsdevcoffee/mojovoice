@@ -115,7 +115,7 @@ impl MojoAudio {
     fn load_from_path(lib_path: &Path) -> Result<Self> {
         // SAFETY: We're loading a known library with C ABI functions
         let lib = unsafe { Library::new(lib_path) }
-            .map_err(|e| anyhow!("Failed to load libmojo_audio.so: {}", e))?;
+            .map_err(|e| anyhow!("Failed to load mojo-audio library: {}", e))?;
 
         // SAFETY: These symbols match the C header definitions
         unsafe {
@@ -159,16 +159,22 @@ impl MojoAudio {
     /// Get the global mojo-audio instance, loading if necessary
     pub fn get() -> Result<&'static Self> {
         let result = MOJO_AUDIO.get_or_init(|| {
+            // Platform-specific library name
+            #[cfg(target_os = "macos")]
+            let lib_name = "libmojo_audio.dylib";
+            #[cfg(not(target_os = "macos"))]
+            let lib_name = "libmojo_audio.so";
+
             // Try multiple paths for the library
             let paths = [
                 // Relative to executable (for releases)
                 std::env::current_exe()
                     .ok()
-                    .and_then(|p| p.parent().map(|p| p.join("lib/libmojo_audio.so"))),
+                    .and_then(|p| p.parent().map(|p| p.join(format!("lib/{}", lib_name)))),
                 // Development path
-                Some(std::path::PathBuf::from("lib/libmojo_audio.so")),
+                Some(std::path::PathBuf::from(format!("lib/{}", lib_name))),
                 // System path
-                Some(std::path::PathBuf::from("/usr/local/lib/libmojo_audio.so")),
+                Some(std::path::PathBuf::from(format!("/usr/local/lib/{}", lib_name))),
             ];
 
             for path in paths.iter().flatten() {
@@ -189,7 +195,7 @@ impl MojoAudio {
                 }
             }
 
-            Err("Could not find libmojo_audio.so in any search path".to_string())
+            Err(format!("Could not find {} in any search path", lib_name))
         });
 
         result.as_ref().map_err(|e| anyhow!("{}", e))

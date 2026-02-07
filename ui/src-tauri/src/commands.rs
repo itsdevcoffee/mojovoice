@@ -300,10 +300,10 @@ pub async fn cancel_recording() -> Result<(), String> {
 }
 
 /// Get the path to the mojovoice config file
+/// Uses the same path as the CLI (via confy) for consistency
 fn get_config_path() -> Result<std::path::PathBuf, String> {
-    dirs::config_dir()
-        .map(|dir| dir.join("mojovoice").join("config.toml"))
-        .ok_or_else(|| "Could not determine config directory".to_string())
+    mojovoice::config::config_path()
+        .map_err(|e| format!("Could not determine config path: {}", e))
 }
 
 /// Refresh status bar (execute user-configured refresh_command)
@@ -994,10 +994,7 @@ impl Default for HistoryConfig {
 /// Get current configuration
 #[tauri::command]
 pub async fn get_config() -> Result<AppConfig, String> {
-    let config_path = dirs::config_dir()
-        .ok_or("Could not determine config directory")?
-        .join("mojovoice")
-        .join("config.toml");
+    let config_path = get_config_path()?;
 
     let config_str = std::fs::read_to_string(&config_path)
         .map_err(|e| format!("Failed to read config: {}", e))?;
@@ -1011,10 +1008,7 @@ pub async fn get_config() -> Result<AppConfig, String> {
 /// Save configuration
 #[tauri::command]
 pub async fn save_config(config: AppConfig) -> Result<(), String> {
-    let config_path = dirs::config_dir()
-        .ok_or("Could not determine config directory")?
-        .join("mojovoice")
-        .join("config.toml");
+    let config_path = get_config_path()?;
 
     let config_str = toml::to_string_pretty(&config)
         .map_err(|e| format!("Failed to serialize config: {}", e))?;
