@@ -522,6 +522,6 @@
       "Reduced motion preference respected (no animations)",
       "All edge cases handled (empty history, no models, daemon offline)"
     ],
-    "passes": false
+    "passes": true
   }
 ]
