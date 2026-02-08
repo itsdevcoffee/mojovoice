@@ -236,3 +236,51 @@ Verification:
 - Layout structure matches MojoVoice Style Guide specifications
 - Ready for next iteration (giant test button implementation)
 Commit: 1d9b419
+## Iteration 6 - 2026-02-08 17:15 UTC
+Task: #6 - Giant test recording button
+Status: Complete
+Changes:
+- ui/src/components/MissionControl.tsx: Implemented giant test recording button
+  - Added useState hooks for isRecording, transcription, and error state
+  - Created handleTestRecording async function that:
+    - Calls invoke('start_recording') to start recording
+    - Waits 5 seconds using setTimeout promise
+    - Calls invoke('stop_recording') to get transcription result
+    - Handles errors with try/catch and displays error messages
+  - Rendered giant Button component with:
+    - 280px width × 120px height (w-[280px] h-[120px])
+    - Text: '⏺ TEST MIC' with recording icon
+    - Loading state during recording shows 'RECORDING...'
+    - Disabled state during recording
+    - Primary variant (neubrutalist style with brutal shadow)
+    - Text size xl (text-xl)
+  - Added transcription result display below button:
+    - Card with neubrutalist styling (bg-surface, 2px border)
+    - Shows transcription text with proper typography
+    - Only displays when transcription exists
+  - Added error message display:
+    - Red-themed card for error states
+    - Shows error message with proper styling
+    - Only displays when error exists
+  - Button centered with margin-top 64px (mt-16) and margin-bottom 48px (mb-12)
+  - Imports: Added useState from react, Button component, invoke from lib/ipc
+Verification:
+- Build succeeded with no errors (npm run build: ✓ built in 1.53s)
+- TypeScript compilation successful (no errors)
+- All acceptance criteria verified:
+  - Giant button rendered in center ✓
+  - Dimensions 280px × 120px ✓
+  - Text '⏺ TEST MIC' with icon ✓
+  - Uses neubrutalist Button component ✓
+  - Brutal shadow animation inherited from Button ✓
+  - Click handler calls start_recording/stop_recording ✓
+  - Loading state during 5-second recording ✓
+  - Transcription result displays below ✓
+  - Error handling implemented ✓
+  - 48px margin-bottom (mb-12) ✓
+  - Visual matches style guide ✓
+- Component structure clean and follows React best practices
+- State management with useState hooks
+- Async/await pattern for Tauri IPC calls
+- Proper error handling with try/catch
+Commit: [pending]

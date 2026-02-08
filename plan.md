@@ -120,7 +120,7 @@
       "Margin bottom 48px to separate from status bar",
       "Visual matches style guide mockup"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 7,
