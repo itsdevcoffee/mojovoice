@@ -408,7 +408,7 @@
       "Success message after clear: 'History cleared'",
       "Buttons use ghost neubrutalist style"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 20,

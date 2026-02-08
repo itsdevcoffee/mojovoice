@@ -6,7 +6,7 @@ import SectionHeader from './ui/SectionHeader';
 import { TranscriptionCard } from './ui/TranscriptionCard';
 import { SystemStatus } from './ui/SystemStatus';
 import { Drawer } from './ui/Drawer';
-import { Modal, ModalHeader, ModalBody } from './ui/Modal';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from './ui/Modal';
 import { invoke } from '../lib/ipc';
 import { useAppStore } from '../stores/appStore';
 
@@ -23,8 +23,15 @@ export default function MissionControl() {
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
   const [wordCountFilter, setWordCountFilter] = useState<'all' | 'short' | 'medium' | 'long'>('all');
 
+  // Export and clear state
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportSuccess, setExportSuccess] = useState(false);
+  const [showClearConfirmation, setShowClearConfirmation] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+  const [clearSuccess, setClearSuccess] = useState(false);
+
   // Get history data from store
-  const { historyEntries, loadHistory, deleteHistoryEntry } = useAppStore();
+  const { historyEntries, loadHistory, deleteHistoryEntry, clearHistory } = useAppStore();
 
   // Load recent transcriptions on mount
   useEffect(() => {
@@ -73,6 +80,69 @@ export default function MissionControl() {
 
   const handleDeleteTranscription = async (id: string) => {
     await deleteHistoryEntry(id);
+  };
+
+  const handleExportAll = async () => {
+    try {
+      setIsExporting(true);
+      setExportSuccess(false);
+
+      // Format entries for export
+      const exportData = historyEntries.map((entry) => ({
+        text: entry.text,
+        timestamp: entry.timestamp,
+        word_count: entry.text.split(/\s+/).filter(Boolean).length,
+        model_used: entry.model,
+      }));
+
+      // Create JSON blob
+      const jsonString = JSON.stringify(exportData, null, 2);
+      const blob = new Blob([jsonString], { type: 'application/json' });
+
+      // Generate filename with current date
+      const now = new Date();
+      const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD format
+      const filename = `mojovoice-history-${dateStr}.json`;
+
+      // Create download link and trigger download
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      // Show success state
+      setExportSuccess(true);
+      setTimeout(() => setExportSuccess(false), 3000);
+    } catch (error) {
+      console.error('Failed to export history:', error);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleClearHistory = async () => {
+    try {
+      setIsClearing(true);
+      setClearSuccess(false);
+
+      // Call backend to clear all history
+      await clearHistory();
+
+      // Show success state
+      setClearSuccess(true);
+      setShowClearConfirmation(false);
+
+      // Clear success message after 3 seconds
+      setTimeout(() => setClearSuccess(false), 3000);
+    } catch (error) {
+      console.error('Failed to clear history:', error);
+    } finally {
+      setIsClearing(false);
+    }
   };
 
   // Filtered history entries based on search and filters
@@ -393,6 +463,64 @@ export default function MissionControl() {
             )}
           </div>
         </ModalBody>
+
+        {/* Modal Footer with Export and Clear Actions */}
+        <ModalFooter>
+          {/* Export All button (left side) */}
+          <Button
+            variant="ghost"
+            size="md"
+            onClick={handleExportAll}
+            loading={isExporting}
+            disabled={isExporting || historyEntries.length === 0}
+            className={`
+              ${exportSuccess ? 'text-green-400' : ''}
+              transition-all duration-150
+            `}
+          >
+            {exportSuccess ? `Exported ${historyEntries.length} transcriptions` : 'Export All'}
+          </Button>
+
+          {/* Clear History button (right side) */}
+          {!showClearConfirmation ? (
+            <Button
+              variant="ghost"
+              size="md"
+              onClick={() => setShowClearConfirmation(true)}
+              disabled={isClearing || historyEntries.length === 0}
+              className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+            >
+              {clearSuccess ? 'History cleared' : 'Clear History'}
+            </Button>
+          ) : (
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-[var(--text-tertiary)] font-ui">
+                Delete all transcriptions?
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowClearConfirmation(false)}
+                  disabled={isClearing}
+                  className="text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleClearHistory}
+                  loading={isClearing}
+                  disabled={isClearing}
+                  className="text-xs bg-red-500 hover:bg-red-600 border-red-600 hover:border-red-700"
+                >
+                  Confirm
+                </Button>
+              </div>
+            </div>
+          )}
+        </ModalFooter>
       </Modal>
     </div>
   );

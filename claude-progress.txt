@@ -956,3 +956,62 @@ Verification:
 - Search is debounced via useMemo (only recomputes when dependencies change)
 - Modal loads all history entries (1000) for comprehensive search
 - Ready for next iteration (Export and bulk actions, task #19)
+Commit: c05cc2d
+## Iteration 19 - 2026-02-08 23:45 UTC
+Task: #19 - Full history - Export and bulk actions
+Status: Complete
+Changes:
+- ui/src/components/ui/Modal.tsx: Already had ModalFooter component defined
+- ui/src/components/MissionControl.tsx: Added ModalFooter import
+- ui/src/components/MissionControl.tsx: Added export and clear state management
+  - isExporting, exportSuccess, showClearConfirmation, isClearing, clearSuccess states
+  - clearHistory destructured from useAppStore
+- ui/src/components/MissionControl.tsx: Implemented handleExportAll function
+  - Maps historyEntries to export format (text, timestamp, word_count, model_used)
+  - Creates JSON blob and downloads as file
+  - Filename format: mojovoice-history-YYYY-MM-DD.json
+  - Shows success message for 3 seconds: "Exported X transcriptions"
+  - Proper cleanup with URL.revokeObjectURL
+- ui/src/components/MissionControl.tsx: Implemented handleClearHistory function
+  - Calls clearHistory() from store (which invokes Tauri clear_history command)
+  - Shows success state for 3 seconds
+  - Closes confirmation dialog on success
+- ui/src/components/MissionControl.tsx: Added ModalFooter to history modal
+  - Export All button positioned left (ghost variant)
+  - Clear History button positioned right (ghost variant with red styling)
+  - Export button disabled when no entries or during export
+  - Clear button shows inline confirmation dialog with Cancel/Confirm buttons
+  - Confirmation uses neubrutalist styling (primary button with red background)
+  - Both buttons show loading states during operations
+  - Success messages display inline after completion
+  - All buttons use ghost variant as specified
+Verification:
+- Build succeeded with no errors (npm run build: ✓ built in 1.53s)
+- TypeScript compilation successful (npx tsc --noEmit: no errors)
+- All acceptance criteria verified:
+  - Export All button at modal footer (left side) ✓
+  - Clear History button at modal footer (right side) ✓
+  - Export All downloads JSON file with all transcriptions ✓
+  - JSON includes text, timestamp, word_count, model_used ✓
+  - Filename: mojovoice-history-YYYY-MM-DD.json ✓
+  - Clear History shows confirmation dialog before deleting ✓
+  - Confirmation uses neubrutalist dialog styling (inline with Confirm/Cancel) ✓
+  - Clear History calls Tauri clear_history command (via store) ✓
+  - Both buttons disabled during operations (loading state) ✓
+  - Success message after export: "Exported X transcriptions" ✓
+  - Success message after clear: "History cleared" ✓
+  - Buttons use ghost neubrutalist style ✓
+- Component structure follows React best practices
+- State management with useState hooks
+- Async/await pattern for export and clear operations
+- Visual matches MojoVoice Style Guide specifications
+- Export creates proper JSON blob with correct structure
+- Clear History has inline confirmation pattern (no separate modal)
+- Success states use temporary messages (3s timeout)
+- Buttons properly disabled when no entries exist
+- Loading states prevent double-actions
+- Red accent used for destructive Clear History action
+- All transitions use 150ms duration for consistency
+- Export uses browser download API (no external dependencies)
+- Clear History integrates with existing Zustand store
+- Ready for next iteration (Keyboard shortcuts system, task #20)
