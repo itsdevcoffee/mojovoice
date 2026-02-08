@@ -5,6 +5,7 @@ import { StatusBar } from './ui/StatusBar';
 import SectionHeader from './ui/SectionHeader';
 import { TranscriptionCard } from './ui/TranscriptionCard';
 import { SystemStatus } from './ui/SystemStatus';
+import { Drawer } from './ui/Drawer';
 import { invoke } from '../lib/ipc';
 import { useAppStore } from '../stores/appStore';
 
@@ -12,6 +13,7 @@ export default function MissionControl() {
   const [isRecording, setIsRecording] = useState(false);
   const [transcription, setTranscription] = useState<string>('');
   const [error, setError] = useState<string>('');
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Get history data from store
   const { historyEntries, loadHistory, deleteHistoryEntry } = useAppStore();
@@ -66,8 +68,9 @@ export default function MissionControl() {
           MOJOVOICE
         </h1>
         <button
-          className="p-3 text-[var(--text-secondary)] hover:text-[var(--accent-primary)] transition-colors duration-150"
+          className="p-3 text-[var(--text-secondary)] hover:text-[var(--accent-primary)] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-2 focus-visible:shadow-[0_0_20px_rgba(59,130,246,0.5)]"
           aria-label="Settings"
+          onClick={() => setIsSettingsOpen(true)}
         >
           <SettingsIcon className="w-6 h-6" />
         </button>
@@ -167,6 +170,16 @@ export default function MissionControl() {
           Press hotkey to start recording
         </p>
       </footer>
+
+      {/* Settings Drawer */}
+      <Drawer isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)}>
+        <h2 id="drawer-title" className="text-xl font-mono font-bold text-[var(--text-primary)] mb-8">
+          SETTINGS
+        </h2>
+        <p className="text-sm text-[var(--text-secondary)] font-ui">
+          Settings content will be implemented in upcoming tasks.
+        </p>
+      </Drawer>
     </div>
   );
 }

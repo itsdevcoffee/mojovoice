@@ -1,0 +1,39 @@
+Perfect! Task #10 is now complete. Let me create a summary of what was accomplished:
+
+---
+
+## ✅ Task #10 Complete: Collapsible System Status Section
+
+I've successfully implemented the collapsible system status section. Here's what was delivered:
+
+### Created Components
+- **`ui/src/components/ui/SystemStatus.tsx`** - New collapsible system status component
+
+### Features Implemented
+✅ **Collapsible section** with click-to-toggle header  
+✅ **SectionHeader** with animated ChevronDown icon (rotates on collapse)  
+✅ **Real system data** from Tauri backend:
+  - GPU name (or "CPU Only" if no GPU)
+  - Memory: formatted as "X.X GB / X.X GB"
+  - Daemon status: ✓ Running (green) / ✗ Stopped (red)
+  - Uptime: formatted as "3h 42m" style
+✅ **Smooth 200ms animation** with ease-out transition  
+✅ **LocalStorage persistence** - collapse state saved between sessions  
+✅ **Neubrutalist styling** - 2px borders, bg-surface, proper spacing  
+✅ **Positioned below Recent Transcriptions** with 48px margin  
+
+### Design System Compliance
+- JetBrains Mono font for all values (GPU, memory, uptime)
+- Inter font for labels
+- Electric blue (#3B82F6) for interactive elements
+- Green (#22C55E) for success states (Running)
+- Red (#EF4444) for error states (Stopped)
+- Proper spacing (space-y-4 for rows)
+
+### Verification
+✅ Build successful (1.52s)  
+✅ No TypeScript errors  
+✅ All acceptance criteria met  
+✅ Committed: `6e51480`  
+
+**Next task:** #11 - Slide-in settings drawer

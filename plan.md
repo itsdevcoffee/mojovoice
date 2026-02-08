@@ -234,7 +234,7 @@
       "Drawer accepts children (settings content)",
       "Open/close state managed by parent component"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 12,

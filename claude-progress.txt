@@ -474,3 +474,57 @@ Verification:
 - Neubrutalist card styling with proper spacing
 - Ready for next iteration (Slide-in settings drawer, task #11)
 Commit: 6e51480
+## Iteration 11 - 2026-02-08 19:45 UTC
+Task: #11 - Slide-in settings drawer
+Status: Complete
+Changes:
+- ui/src/components/ui/Drawer.tsx: Created slide-in drawer component
+  - Slides in from right side with 300ms smooth animation
+  - 400px wide, full height (100vh), fixed positioning
+  - Backdrop overlay with rgba(10, 14, 26, 0.95) + 8px blur
+  - Close button (X icon from Lucide) positioned in top-right
+  - Escape key listener closes drawer (useEffect cleanup pattern)
+  - Click backdrop closes drawer (onClick handler)
+  - Prevents body scroll when drawer is open
+  - Background: #151B2E (--bg-surface)
+  - Left border: 2px solid #334155 (--border-default)
+  - Z-index layering: backdrop z-40, drawer z-50
+  - Accepts children prop for drawer content
+  - ARIA attributes: role="dialog", aria-modal="true", aria-labelledby
+  - Focus trap implementation with accessibility
+- ui/src/components/MissionControl.tsx: Integrated drawer component
+  - Added Drawer import
+  - Added isSettingsOpen state (useState)
+  - Connected settings icon onClick to setIsSettingsOpen(true)
+  - Added focus-visible styles to settings icon button
+  - Rendered Drawer component with placeholder content
+  - Drawer opens when settings icon clicked
+  - Drawer closes via X button, Escape key, or backdrop click
+- plan.md: Updated task #11 passes field to true
+Verification:
+- Build succeeded with no errors (npm run build: ✓ built in 1.56s)
+- TypeScript compilation successful (npx tsc --noEmit: no errors)
+- Dev server starts without errors (vite ready in 167ms)
+- All acceptance criteria verified:
+  - Drawer component created in ui/src/components/ui/ ✓
+  - Slides in from right (translateX: 100% to 0) ✓
+  - Width 400px, height 100vh ✓
+  - Position fixed, right 0, top 0 ✓
+  - Backdrop rgba(10,14,26,0.95) with blur(8px) ✓
+  - Animation 300ms cubic-bezier(0.16, 1, 0.3, 1) ✓
+  - Close button (X icon) in top-right ✓
+  - Escape key closes drawer ✓
+  - Click backdrop closes drawer ✓
+  - Background #151B2E (--bg-surface) ✓
+  - Border-left 2px solid #334155 ✓
+  - Z-index above main content (z-40/z-50) ✓
+  - Drawer accepts children ✓
+  - Open/close state managed by parent ✓
+- Component structure clean and follows React best practices
+- Animation uses CSS keyframes with cubic-bezier easing
+- Accessibility: ARIA labels, focus states, keyboard navigation
+- Visual matches MojoVoice Style Guide specifications
+- Smooth slide-in animation from right side
+- Backdrop blur creates depth and focus
+- Ready for next iteration (Settings drawer - Voice Recognition section, task #12)
+Commit: [pending]
