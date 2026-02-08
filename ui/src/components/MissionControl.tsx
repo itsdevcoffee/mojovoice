@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Settings as SettingsIcon } from 'lucide-react';
 import { Button } from './ui/Button';
+import { StatusBar } from './ui/StatusBar';
 import { invoke } from '../lib/ipc';
 
 export default function MissionControl() {
@@ -88,6 +89,9 @@ export default function MissionControl() {
             </div>
           )}
         </div>
+
+        {/* Status bar */}
+        <StatusBar className="mt-12" />
       </main>
 
       {/* Footer */}

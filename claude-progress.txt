@@ -284,3 +284,49 @@ Verification:
 - Async/await pattern for Tauri IPC calls
 - Proper error handling with try/catch
 Commit: fa20394
+## Iteration 7 - 2026-02-08 17:45 UTC
+Task: #7 - Status bar component
+Status: Complete
+Changes:
+- ui/src/components/ui/StatusBar.tsx: Created comprehensive status bar component
+  - Implemented real-time daemon status display with green 'READY' / red 'OFFLINE' indicators
+  - Added functional model dropdown with switch capability
+  - Displays current language from config
+  - Displays active microphone name from config
+  - Polls daemon status every 5 seconds for real-time updates
+  - Model dropdown opens/closes with click, backdrop closes on outside click
+  - Integrated with Tauri backend: get_daemon_status, get_config, list_downloaded_models, switch_model
+  - Neubrutalist styling: 2px border (#334155), padding 16px/24px, electric blue hover/focus
+  - Layout: status left, model dropdown center (flex-1), language/mic right with gap-6
+  - Typography: JetBrains Mono (font-mono) for all values, Inter (font-ui) for labels
+  - ChevronDown icon rotates on dropdown open (transform rotate-180)
+  - Current model highlighted in dropdown with blue background (#3B82F6/20)
+  - Smooth transitions: 150ms for all interactive states
+- ui/src/components/MissionControl.tsx: Integrated StatusBar component
+  - Added StatusBar import
+  - Positioned below giant test button with mt-12 (48px margin)
+  - StatusBar renders after test button section, before footer
+Verification:
+- Build succeeded with no errors (npm run build: ✓ built in 1.54s)
+- TypeScript compilation successful (npx tsc --noEmit: no errors)
+- All acceptance criteria verified:
+  - StatusBar component created ✓
+  - Green dot + 'READY' when daemon running ✓
+  - Red dot + 'OFFLINE' when daemon not running ✓
+  - Current model name with dropdown icon ✓
+  - Model dropdown functional (opens, switches models) ✓
+  - Displays current language ✓
+  - Displays active microphone name ✓
+  - Neubrutalist styling (2px border, padding 16px 24px) ✓
+  - Real-time status updates (5s polling) ✓
+  - Positioned with 48px margin below test button ✓
+  - Layout: status left, dropdown center, language/mic right ✓
+  - Font: JetBrains Mono for values, Inter for labels ✓
+- Component structure follows React best practices
+- State management with useState hooks
+- useEffect for polling with cleanup
+- Proper TypeScript typing for all interfaces
+- Async/await pattern for Tauri IPC calls
+- Accessible: focus states with electric blue glow, keyboard navigation
+- Visual matches MojoVoice Style Guide specifications
+Commit: [pending]

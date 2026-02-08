@@ -142,7 +142,7 @@
       "Layout: dot + text on left, model dropdown center, language/mic right",
       "Font: JetBrains Mono for values, Inter for labels"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 8,
