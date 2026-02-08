@@ -1261,4 +1261,4 @@ Verification:
 - Prefers-reduced-motion support verified (from iteration 22)
 - Performance budget met: Initial load <250KB total
 - Ready for next iteration (Manual testing and bug fixes, task #24)
-Commit: (pending)
+Commit: 1d6c1c4
