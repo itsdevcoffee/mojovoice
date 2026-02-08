@@ -45,6 +45,90 @@ export default function MissionControl() {
     }
   }, [isHistoryModalOpen, loadHistory]);
 
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Check if user is typing in an input field (don't intercept)
+      const target = event.target as HTMLElement;
+      const isInputField =
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable;
+
+      // Escape: always works (close modals/drawers)
+      if (event.key === 'Escape') {
+        if (isHistoryModalOpen) {
+          setIsHistoryModalOpen(false);
+          return;
+        }
+        if (isSettingsOpen) {
+          setIsSettingsOpen(false);
+          return;
+        }
+      }
+
+      // Don't handle other shortcuts if typing in input field
+      if (isInputField && event.key !== 'Escape') {
+        return;
+      }
+
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const modifierKey = isMac ? event.metaKey : event.ctrlKey;
+
+      // Space: test recording (when main screen focused)
+      if (event.key === ' ' && !isInputField && !isHistoryModalOpen && !isSettingsOpen) {
+        event.preventDefault();
+        if (!isRecording) {
+          handleTestRecording();
+        }
+        return;
+      }
+
+      // Cmd+, or Ctrl+,: open settings
+      if (modifierKey && event.key === ',') {
+        event.preventDefault();
+        setIsSettingsOpen(true);
+        return;
+      }
+
+      // Cmd+H or Ctrl+H: open history modal
+      if (modifierKey && event.key === 'h') {
+        event.preventDefault();
+        setIsHistoryModalOpen(true);
+        return;
+      }
+
+      // Cmd+K or Ctrl+K: open history modal with search focused
+      if (modifierKey && event.key === 'k') {
+        event.preventDefault();
+        setIsHistoryModalOpen(true);
+        // Focus search input after a brief delay (modal needs to render first)
+        setTimeout(() => {
+          const searchInput = document.querySelector<HTMLInputElement>('[data-search-input]');
+          if (searchInput) {
+            searchInput.focus();
+          }
+        }, 100);
+        return;
+      }
+
+      // Cmd+C or Ctrl+C: copy last transcription (only if not in input field)
+      if (modifierKey && event.key === 'c' && !isInputField) {
+        event.preventDefault();
+        if (historyEntries.length > 0) {
+          const lastEntry = historyEntries[0];
+          handleCopyTranscription(lastEntry.text);
+          // Brief visual feedback (we'll add this later)
+          console.log('Copied last transcription to clipboard');
+        }
+        return;
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isHistoryModalOpen, isSettingsOpen, isRecording, historyEntries]);
+
   const handleTestRecording = async () => {
     try {
       setError('');
@@ -212,6 +296,7 @@ export default function MissionControl() {
         <button
           className="p-3 text-[var(--text-secondary)] hover:text-[var(--accent-primary)] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-2 focus-visible:shadow-[0_0_20px_rgba(59,130,246,0.5)]"
           aria-label="Settings"
+          title={`Settings (${navigator.platform.toUpperCase().indexOf('MAC') >= 0 ? 'Cmd' : 'Ctrl'}+,)`}
           onClick={() => setIsSettingsOpen(true)}
         >
           <SettingsIcon className="w-6 h-6" />
@@ -232,6 +317,11 @@ export default function MissionControl() {
           >
             {isRecording ? 'RECORDING...' : '⏺ TEST MIC'}
           </Button>
+
+          {/* Keyboard shortcut hint */}
+          <p className="mt-3 text-xs text-[var(--text-tertiary)] font-ui">
+            Press <kbd className="px-2 py-1 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded font-mono text-[var(--text-secondary)]">Space</kbd> to start recording
+          </p>
 
           {/* Transcription result */}
           {transcription && (
@@ -290,6 +380,7 @@ export default function MissionControl() {
               <div className="flex justify-center mt-6">
                 <button
                   className="px-4 py-2 text-sm font-ui text-[var(--accent-primary)] hover:text-[var(--accent-glow)] transition-colors duration-150"
+                  title={`View All History (${navigator.platform.toUpperCase().indexOf('MAC') >= 0 ? 'Cmd' : 'Ctrl'}+H)`}
                   onClick={() => setIsHistoryModalOpen(true)}
                 >
                   View All →
@@ -332,6 +423,7 @@ export default function MissionControl() {
                   placeholder="Search transcriptions..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  data-search-input
                   className="w-full px-4 py-3 pr-10 bg-[var(--bg-surface)] border-2 border-[var(--border-default)] text-[var(--text-primary)] font-mono text-sm rounded focus:border-[var(--accent-primary)] focus:outline-none focus:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-150"
                 />
                 {/* Clear search button (X) */}

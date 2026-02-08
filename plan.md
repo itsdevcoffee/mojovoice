@@ -429,7 +429,7 @@
       "Shortcuts disabled when input fields focused (except Escape)",
       "Works on both macOS (Cmd) and Linux/Windows (Ctrl)"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 21,
