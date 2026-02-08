@@ -52,17 +52,20 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         active:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]
         active:translate-x-[2px] active:translate-y-[2px]
         disabled:translate-x-0 disabled:translate-y-0
+        will-change-transform
       `.trim().replace(/\s+/g, ' '),
       secondary: `
         bg-transparent text-blue-500
         border-2 border-blue-500
         hover:bg-blue-500 hover:text-white
         hover:shadow-[0_0_20px_rgba(59,130,246,0.5)]
+        will-change-transform
       `.trim().replace(/\s+/g, ' '),
       ghost: `
         bg-transparent text-slate-400
         border-2 border-transparent
         hover:bg-slate-800 hover:text-slate-100
+        will-change-transform
       `.trim().replace(/\s+/g, ' '),
     };
 

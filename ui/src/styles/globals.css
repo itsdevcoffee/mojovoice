@@ -825,6 +825,26 @@
   }
 }
 
+@keyframes scan {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(200%);
+  }
+}
+
+@keyframes dropdown-slide {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .animate-card-enter {
   animation: card-enter 400ms ease-out forwards;
 }
@@ -847,6 +867,14 @@
 
 .animate-modal-fade-in {
   animation: modal-fade-in 200ms ease-out forwards;
+}
+
+.animate-scan {
+  animation: scan 2s ease-in-out infinite;
+}
+
+.animate-dropdown-slide {
+  animation: dropdown-slide 250ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* Stagger delay utilities */
@@ -892,7 +920,19 @@
 
 /* Reduce motion preference */
 @media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
   .progress-bar-fill::after {
+    animation: none;
+  }
+
+  .download-progress-fill::after {
     animation: none;
   }
 
@@ -909,5 +949,21 @@
 
   .animate-pulse-dot {
     animation: none;
+  }
+
+  .animate-scan {
+    animation: none;
+  }
+
+  .animate-dropdown-slide {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .animate-modal-fade-in {
+    animation: none;
+    opacity: 1;
+    transform: none;
   }
 }

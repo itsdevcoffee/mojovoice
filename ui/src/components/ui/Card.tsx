@@ -17,6 +17,7 @@ export const Card: React.FC<CardProps> = ({ children, badge, className = '' }) =
         hover:border-[#3B82F6]
         hover:shadow-[0_0_20px_rgba(59,130,246,0.5)]
         transition-all duration-200
+        will-change-auto
         ${className}
       `.trim()}
     >

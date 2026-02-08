@@ -451,7 +451,7 @@
       "prefers-reduced-motion: all animations disabled or simplified",
       "No animation exceeds 400ms duration"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 22,

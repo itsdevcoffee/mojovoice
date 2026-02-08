@@ -172,6 +172,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
                 shadow-[0_0_20px_rgba(59,130,246,0.5)]
                 max-h-64 overflow-y-auto
                 z-20
+                animate-dropdown-slide
               "
             >
               {downloadedModels.length > 0 ? (
