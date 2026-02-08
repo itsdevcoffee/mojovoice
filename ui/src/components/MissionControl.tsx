@@ -1,13 +1,24 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Settings as SettingsIcon } from 'lucide-react';
 import { Button } from './ui/Button';
 import { StatusBar } from './ui/StatusBar';
+import SectionHeader from './ui/SectionHeader';
+import { TranscriptionCard } from './ui/TranscriptionCard';
 import { invoke } from '../lib/ipc';
+import { useAppStore } from '../stores/appStore';
 
 export default function MissionControl() {
   const [isRecording, setIsRecording] = useState(false);
   const [transcription, setTranscription] = useState<string>('');
   const [error, setError] = useState<string>('');
+
+  // Get history data from store
+  const { historyEntries, loadHistory, deleteHistoryEntry } = useAppStore();
+
+  // Load recent transcriptions on mount
+  useEffect(() => {
+    loadHistory(5, 0); // Load last 5 entries
+  }, [loadHistory]);
 
   const handleTestRecording = async () => {
     try {
@@ -24,11 +35,26 @@ export default function MissionControl() {
       // Stop recording and get transcription
       const result = await invoke<string>('stop_recording');
       setTranscription(result);
+
+      // Reload history to show new transcription
+      loadHistory(5, 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsRecording(false);
     }
+  };
+
+  const handleCopyTranscription = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (err) {
+      console.error('Failed to copy to clipboard:', err);
+    }
+  };
+
+  const handleDeleteTranscription = async (id: string) => {
+    await deleteHistoryEntry(id);
   };
 
   return (
@@ -92,6 +118,43 @@ export default function MissionControl() {
 
         {/* Status bar */}
         <StatusBar className="mt-12" />
+
+        {/* Recent Transcriptions Section */}
+        <section className="mt-12">
+          <SectionHeader title="RECENT TRANSCRIPTIONS" />
+
+          {historyEntries.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-sm text-[var(--text-tertiary)] font-ui">
+                No transcriptions yet
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {historyEntries.slice(0, 5).map((entry) => (
+                <TranscriptionCard
+                  key={entry.id}
+                  transcription={entry}
+                  onCopy={handleCopyTranscription}
+                  onDelete={handleDeleteTranscription}
+                />
+              ))}
+
+              {/* View All button */}
+              <div className="flex justify-center mt-6">
+                <button
+                  className="px-4 py-2 text-sm font-ui text-[var(--accent-primary)] hover:text-[var(--accent-glow)] transition-colors duration-150"
+                  onClick={() => {
+                    // TODO: Open history modal (placeholder for task #17)
+                    console.log('View All clicked - History modal not yet implemented');
+                  }}
+                >
+                  View All →
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
       </main>
 
       {/* Footer */}

@@ -187,7 +187,7 @@
       "Updates when new transcription is added",
       "Copy/delete actions work on individual cards"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 10,

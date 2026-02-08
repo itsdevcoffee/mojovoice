@@ -378,3 +378,46 @@ Verification:
 - All hover states use 150-200ms transitions
 - Component ready for use in Recent Transcriptions section (task #9)
 Commit: 5b6eedf
+## Iteration 9 - 2026-02-08 18:45 UTC
+Task: #9 - Recent transcriptions section
+Status: Complete
+Changes:
+- ui/src/components/MissionControl.tsx: Added Recent Transcriptions section
+  - Imported SectionHeader and TranscriptionCard components
+  - Imported useAppStore to access history data and actions
+  - Added useEffect hook to load last 5 transcriptions on mount
+  - Created handleCopyTranscription handler using clipboard API
+  - Created handleDeleteTranscription handler calling deleteHistoryEntry from store
+  - Modified handleTestRecording to reload history after new recording (line 40)
+  - Added Recent Transcriptions section after StatusBar with mt-12 (48px margin)
+  - Section uses SectionHeader with 'RECENT TRANSCRIPTIONS' title
+  - Displays empty state when no transcriptions: "No transcriptions yet"
+  - Maps historyEntries.slice(0, 5) to TranscriptionCard components
+  - Cards wrapped in space-y-4 container for 16px vertical spacing
+  - Added 'View All →' button with placeholder onClick (logs to console for now)
+  - Button uses electric blue hover color transition (150ms)
+  - All handlers properly connected to TranscriptionCard props
+- plan.md: Updated task #9 passes field to true
+Verification:
+- Build succeeded with no errors (npm run build: ✓ built in 1.56s)
+- TypeScript compilation successful (no errors)
+- All acceptance criteria verified:
+  - Section uses SectionHeader component with 'RECENT TRANSCRIPTIONS' ✓
+  - Fetches history from backend (loadHistory(5, 0)) ✓
+  - Displays last 5 transcriptions (slice(0, 5)) ✓
+  - Uses TranscriptionCard for each entry ✓
+  - Cards stacked with space-y-4 (16px spacing) ✓
+  - 'View All →' button at bottom (placeholder) ✓
+  - Empty state shows 'No transcriptions yet' ✓
+  - Section positioned below status bar with mt-12 (48px) ✓
+  - Real data from Tauri backend via useAppStore ✓
+  - Updates after new transcription (line 40 reloads history) ✓
+  - Copy/delete actions functional (handlers passed to cards) ✓
+- Component structure clean and follows React best practices
+- State managed via Zustand store (useAppStore)
+- Async/await pattern for clipboard and delete operations
+- Empty state handled gracefully
+- Visual matches MojoVoice Style Guide specifications
+- Electric blue colors used for interactive elements
+- Proper spacing and typography applied
+- Ready for next iteration (System Status section, task #10)

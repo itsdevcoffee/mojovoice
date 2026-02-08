@@ -1,0 +1,47 @@
+Perfect! Task #8 is now complete. Let me provide a summary:
+
+## Iteration 8 Summary
+
+**Task #8: Transcription Card Component** ✅ **COMPLETE**
+
+### What Was Implemented
+
+Created a fully functional `TranscriptionCard` component (`ui/src/components/ui/TranscriptionCard.tsx`) with the following features:
+
+**Visual Design:**
+- 📝 Emoji icon in header for visual identification
+- Title showing first 7 words of transcription
+- Metadata: relative timestamp (e.g., "2m ago", "5h ago") + word count ("• 42 words")
+- Preview mode: truncated to 2 lines with CSS ellipsis
+- Expanded mode: full text with proper whitespace formatting
+
+**Interactive Features:**
+- Click card to toggle expansion between preview and full text
+- Hover reveals action buttons (Copy + Delete) with backdrop blur
+- Copy button: copies full transcription text via callback
+- Delete button: shows inline confirmation overlay before deleting
+- Confirmation uses neubrutalist brutal shadow animation
+
+**Styling:**
+- Uses existing Card component for neubrutalist aesthetic
+- JetBrains Mono font for title, timestamp, and word count
+- Inter font for transcription text
+- Electric blue (#3B82F6) hover states for Copy button
+- Red (#EF4444) hover state for Delete button
+- All transitions use 150ms duration for consistency
+- Brutal shadow animation on confirmation buttons (2px → 4px on hover)
+
+**Technical:**
+- TypeScript interfaces match existing `TranscriptionEntry` from appStore
+- Proper accessibility: ARIA labels, semantic `<time>` element
+- Responsive design with proper spacing
+- State management for expanded, hovered, and delete confirmation states
+
+### Verification
+
+✅ Build successful (1.48s)  
+✅ TypeScript compilation clean (no errors)  
+✅ All 14 acceptance criteria met  
+✅ Commits: `5b6eedf` (feature) + `9c8b36c` (docs)  
+
+The component is ready for integration in **Task #9: Recent Transcriptions Section**.
