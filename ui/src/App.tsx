@@ -1,7 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { invoke } from './lib/ipc';
 import { useAppStore } from './stores/appStore';
-import MissionControl from './components/MissionControl';
+
+// Lazy load MissionControl for code splitting
+const MissionControl = lazy(() => import('./components/MissionControl'));
 // Old components commented out - will be integrated into MissionControl in later iterations
 // import Navigation from './components/Navigation';
 // import Dashboard from './components/Dashboard';
@@ -88,7 +90,18 @@ function App() {
       >
         Skip to main content
       </a>
-      <MissionControl />
+      <Suspense
+        fallback={
+          <div className="flex items-center justify-center min-h-screen bg-[var(--bg-void)]">
+            <div className="text-center">
+              <div className="w-8 h-8 border-2 border-slate-700 border-t-blue-500 rounded-full animate-spin mx-auto mb-4" />
+              <p className="text-slate-400 font-mono text-sm">Loading...</p>
+            </div>
+          </div>
+        }
+      >
+        <MissionControl />
+      </Suspense>
     </>
   );
 }

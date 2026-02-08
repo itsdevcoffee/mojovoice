@@ -918,6 +918,21 @@
   outline-offset: 2px;
 }
 
+/* Performance optimizations */
+@layer utilities {
+  /* Prevent layout shifts - reserve space for async content */
+  .min-h-screen {
+    contain: layout style;
+  }
+
+  /* GPU acceleration for frequently animated elements */
+  .gpu-accelerated {
+    will-change: transform, opacity;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+  }
+}
+
 /* Reduce motion preference */
 @media (prefers-reduced-motion: reduce) {
   *,

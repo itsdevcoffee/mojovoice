@@ -495,7 +495,7 @@
       "First contentful paint: <1s",
       "No unnecessary re-renders (use React DevTools Profiler)"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 24,

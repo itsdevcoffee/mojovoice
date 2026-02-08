@@ -1,14 +1,19 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { Settings as SettingsIcon, ChevronDown, X as XIcon, Filter as FilterIcon } from 'lucide-react';
 import { Button } from './ui/Button';
 import { StatusBar } from './ui/StatusBar';
 import SectionHeader from './ui/SectionHeader';
 import { TranscriptionCard } from './ui/TranscriptionCard';
 import { SystemStatus } from './ui/SystemStatus';
-import { Drawer } from './ui/Drawer';
-import { Modal, ModalHeader, ModalBody, ModalFooter } from './ui/Modal';
 import { invoke } from '../lib/ipc';
 import { useAppStore } from '../stores/appStore';
+
+// Lazy load heavy components (only loaded when needed)
+const Drawer = lazy(() => import('./ui/Drawer').then(m => ({ default: m.Drawer })));
+const Modal = lazy(() => import('./ui/Modal').then(m => ({ default: m.Modal })));
+const ModalHeader = lazy(() => import('./ui/Modal').then(m => ({ default: m.ModalHeader })));
+const ModalBody = lazy(() => import('./ui/Modal').then(m => ({ default: m.ModalBody })));
+const ModalFooter = lazy(() => import('./ui/Modal').then(m => ({ default: m.ModalFooter })));
 
 export default function MissionControl() {
   const [isRecording, setIsRecording] = useState(false);
@@ -402,13 +407,19 @@ export default function MissionControl() {
         </p>
       </footer>
 
-      {/* Settings Drawer */}
-      <Drawer isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)}>
-        <SettingsContent />
-      </Drawer>
+      {/* Settings Drawer - Lazy loaded */}
+      {isSettingsOpen && (
+        <Suspense fallback={null}>
+          <Drawer isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)}>
+            <SettingsContent />
+          </Drawer>
+        </Suspense>
+      )}
 
-      {/* History Modal */}
-      <Modal isOpen={isHistoryModalOpen} onClose={() => setIsHistoryModalOpen(false)}>
+      {/* History Modal - Lazy loaded */}
+      {isHistoryModalOpen && (
+        <Suspense fallback={null}>
+          <Modal isOpen={isHistoryModalOpen} onClose={() => setIsHistoryModalOpen(false)}>
         <ModalHeader
           title="TRANSCRIPTION HISTORY"
           onClose={() => setIsHistoryModalOpen(false)}
@@ -615,6 +626,8 @@ export default function MissionControl() {
           )}
         </ModalFooter>
       </Modal>
+        </Suspense>
+      )}
     </div>
   );
 }
