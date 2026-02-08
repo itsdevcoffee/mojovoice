@@ -200,3 +200,39 @@ Verification:
 - Visual matches MojoVoice Style Guide neubrutalist card pattern
 - Electric blue glow effect on hover creates signature cyberpunk aesthetic
 Commit: cb7328f
+
+## Iteration 5 - 2026-02-08 16:45 UTC
+Task: #5 - Single-page layout structure
+Status: Complete
+Changes:
+- ui/src/components/MissionControl.tsx: Created new single-page Mission Control layout
+  - Header with 'MOJOVOICE' branding (left) + settings gear icon (right)
+  - Settings icon from Lucide React with aria-label for accessibility
+  - Main content container: max-width 800px, centered, padding 48px (pb-12) + 24px horizontal (px-6)
+  - Deep navy background using var(--bg-void) (#0A0E1A)
+  - Placeholder content for future iterations ("Mission Control interface coming soon...")
+  - Footer with hint text "Press hotkey to start recording"
+  - Header padding: py-8 (32px vertical spacing)
+- ui/src/App.tsx: Replaced tab-based navigation with MissionControl component
+  - Commented out old component imports (Navigation, Dashboard, DevTools, Settings, ModelManagement, TranscriptionHistory)
+  - Removed Navigation component from render
+  - Removed old view routing (activeView conditional rendering)
+  - Removed unused 'activeView' from useAppStore destructuring
+  - Simplified App component to just render <MissionControl />
+Verification:
+- Build succeeded with no errors (npm run build: ✓ built in 1.52s)
+- TypeScript compilation successful (no errors)
+- Dev server starts without errors (vite ready in 149ms)
+- All acceptance criteria verified:
+  - Old Navigation component commented out ✓
+  - Old tab-based views removed from routing ✓
+  - MissionControl.tsx created ✓
+  - Header has MOJOVOICE text + settings icon ✓
+  - Max-width 800px, centered, correct padding ✓
+  - Deep navy background (#0A0E1A) ✓
+  - Settings icon from Lucide React ✓
+  - No errors during compilation or runtime ✓
+  - Placeholder content replaces old views ✓
+- Layout structure matches MojoVoice Style Guide specifications
+- Ready for next iteration (giant test button implementation)
+Commit: (pending)

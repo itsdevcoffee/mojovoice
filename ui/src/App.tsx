@@ -1,17 +1,19 @@
 import { useEffect } from 'react';
 import { invoke } from './lib/ipc';
 import { useAppStore } from './stores/appStore';
-import Navigation from './components/Navigation';
-import Dashboard from './components/Dashboard';
-import DevTools from './components/DevTools';
-import Settings from './components/Settings';
-import ModelManagement from './components/ModelManagement';
-import TranscriptionHistory from './components/TranscriptionHistory';
+import MissionControl from './components/MissionControl';
+// Old components commented out - will be integrated into MissionControl in later iterations
+// import Navigation from './components/Navigation';
+// import Dashboard from './components/Dashboard';
+// import DevTools from './components/DevTools';
+// import Settings from './components/Settings';
+// import ModelManagement from './components/ModelManagement';
+// import TranscriptionHistory from './components/TranscriptionHistory';
 import './styles/globals.css';
 import { type ScalePreset, isValidPreset, clampScale } from './lib/scale';
 
 function App() {
-  const { activeView, setDaemonStatus, addLog, setUIScale } = useAppStore();
+  const { setDaemonStatus, addLog, setUIScale } = useAppStore();
 
   useEffect(() => {
     // Add initial log
@@ -78,15 +80,7 @@ function App() {
   }, [setDaemonStatus, addLog, setUIScale]);
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] grid-background p-6">
-      <Navigation />
-
-      {activeView === 'dashboard' && <Dashboard />}
-      {activeView === 'devtools' && <DevTools />}
-      {activeView === 'history' && <TranscriptionHistory />}
-      {activeView === 'models' && <ModelManagement />}
-      {activeView === 'settings' && <Settings />}
-    </div>
+    <MissionControl />
   );
 }
 
