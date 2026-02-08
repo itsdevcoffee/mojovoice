@@ -1,0 +1,63 @@
+# MojoVoice UI/UX Overhaul - Progress Log
+
+**Project:** MojoVoice v0.6.0 UI/UX Overhaul
+**Branch:** ui-overhaul-v0.6.0
+**Started:** 2026-02-08
+**Objective:** Complete redesign from tab-based navigation to single-page "Mission Control" interface with neubrutalist cyberpunk terminal aesthetic
+
+## Project Context
+
+### What We're Building
+
+Transforming MojoVoice from a basic tab-based UI into a sophisticated "Mission Control" single-page interface. The new design uses:
+- **Aesthetic:** Neubrutalism + Cyberpunk Terminal ("Hacker's Oscilloscope")
+- **Colors:** Electric Night palette (deep navy #0A0E1A + electric blue #3B82F6 + acid green #22C55E)
+- **Typography:** JetBrains Mono (technical) + Inter (UI)
+- **Layout:** Single page with drawer settings, modal history
+- **Components:** Thick borders, brutal shadows, electric glows, sharp corners
+
+### Design Philosophy
+
+MojoVoice is a **background service** with a **mission control interface**. Users interact via hotkey most of the time. The UI provides:
+1. Quick status check (is everything ready?)
+2. Recent transcription access (what did I say?)
+3. Settings configuration (occasional)
+
+The UI should be **minimal, beautiful, and get out of the way**.
+
+### Tech Stack
+
+- **Frontend:** React + TypeScript + Vite
+- **Styling:** Tailwind CSS v4
+- **Components:** React Aria Components (accessibility)
+- **Animation:** Motion (Framer Motion)
+- **Icons:** Lucide React
+- **Backend:** Tauri (Rust)
+
+### Design References
+
+- Style Guide: `docs/context/mojovoice-style-guide.md`
+- Design Spec: `docs/project/2026-02-08-settings-design-recommendations.md`
+- Visual Mockup: `docs/project/settings-design-mockup.html`
+- Brand Guide: `docs/context/dev-coffee-brand-style-guide.md`
+
+### Current State (Before Overhaul)
+
+- Tab-based navigation (Dashboard, History, Settings)
+- Basic glassmorphic design
+- Cyan/teal color scheme
+- Generic rounded components
+
+### Target State (After Overhaul)
+
+- Single-page Mission Control layout
+- Neubrutalist aesthetic (thick borders, brutal shadows, sharp corners)
+- Electric blue + acid green color scheme
+- Drawer for settings, modal for full history
+- Giant test button centerpiece
+- Recent transcriptions always visible
+- Terminal-inspired section headers
+
+## Iterations
+
+<!-- Agents append progress updates below -->
