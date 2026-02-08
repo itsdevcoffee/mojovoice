@@ -45,8 +45,7 @@ pub enum DaemonResponse {
     },
 }
 
-/// Get the daemon socket path
-/// Uses the same path as the CLI for cross-platform compatibility
+/// Get the daemon socket path (must match the path used by the CLI daemon server)
 fn get_socket_path() -> Result<PathBuf> {
     let state_dir = mojovoice::state::get_state_dir()
         .context("Failed to get state directory")?;

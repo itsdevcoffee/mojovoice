@@ -12,8 +12,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
-            // Ensure config file exists (creates default if not present)
-            // This uses the CLI's config module which handles defaults via confy
+            // Ensure config file exists (creates default via confy if not present)
             if let Err(e) = mojovoice::config::load() {
                 eprintln!("Warning: Failed to initialize config: {}", e);
             }
