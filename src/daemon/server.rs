@@ -223,6 +223,12 @@ impl DaemonServer {
     }
 
     fn handle_client(&self, mut stream: UnixStream) -> Result<()> {
+        // The listener is non-blocking (for shutdown polling), but client
+        // streams must be blocking to fully receive large payloads like
+        // TranscribeAudio (~1.4MB JSON). Without this, read_line fails
+        // with EAGAIN (os error 35) on macOS.
+        stream.set_nonblocking(false)?;
+
         let mut reader = BufReader::new(stream.try_clone()?);
         let mut line = String::new();
 
