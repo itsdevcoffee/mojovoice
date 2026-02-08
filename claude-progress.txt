@@ -527,4 +527,4 @@ Verification:
 - Smooth slide-in animation from right side
 - Backdrop blur creates depth and focus
 - Ready for next iteration (Settings drawer - Voice Recognition section, task #12)
-Commit: [pending]
+Commit: e82ec20
