@@ -210,7 +210,7 @@
       "Positioned below recent transcriptions with 48px margin",
       "Collapse state persists in local storage"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 11,

@@ -422,3 +422,55 @@ Verification:
 - Proper spacing and typography applied
 - Ready for next iteration (System Status section, task #10)
 Commit: 54bd136
+## Iteration 10 - 2026-02-08 19:15 UTC
+Task: #10 - Collapsible system status section
+Status: Complete
+Changes:
+- ui/src/components/ui/SystemStatus.tsx: Created collapsible system status component
+  - Implemented collapsible section with click-to-toggle header
+  - Added SectionHeader component with ChevronDown icon that rotates
+  - Fetches system info from get_system_info Tauri command
+  - Fetches daemon status from get_daemon_status Tauri command
+  - Displays GPU name or "CPU Only" if no GPU available
+  - Shows memory in formatted GB (e.g., "0.0 GB / 24.0 GB")
+  - Daemon status shows ✓ Running (green) or ✗ Stopped (red)
+  - Uptime formatted as "Xh Xm" or "Xm" or "Xs"
+  - Collapse animation: smooth 200ms ease-out transition
+  - Collapse state persists in localStorage (systemStatus.collapsed key)
+  - Starts expanded by default
+  - Uses JetBrains Mono (font-mono) for all values
+  - Uses Inter (font-ui) for labels
+  - Neubrutalist card styling (2px border, bg-surface)
+  - Space-y-4 for vertical spacing between rows
+- ui/src/components/MissionControl.tsx: Integrated SystemStatus component
+  - Added SystemStatus import
+  - Positioned after Recent Transcriptions section
+  - Section automatically gets mt-12 (48px margin from previous section)
+- plan.md: Updated task #10 passes field to true
+Verification:
+- Build succeeded with no errors (npm run build: ✓ built in 1.52s)
+- TypeScript compilation successful (npx tsc --noEmit: no errors)
+- All acceptance criteria verified:
+  - Section uses SectionHeader with 'SYSTEM STATUS' ✓
+  - Click header toggles collapsed/expanded state ✓
+  - ChevronDown icon rotates on collapse ✓
+  - Expanded shows GPU, memory, daemon status, uptime ✓
+  - Collapsed shows only header ✓
+  - Smooth 200ms ease-out animation ✓
+  - JetBrains Mono for all values ✓
+  - GPU shows name or "CPU Only" ✓
+  - Memory formatted as "X.X GB / X.X GB" ✓
+  - Daemon shows ✓ Running or ✗ Stopped ✓
+  - Uptime formatted as "Xh Xm" ✓
+  - Fetches data from Tauri commands ✓
+  - Positioned below recent transcriptions with mt-12 ✓
+  - Collapse state persists in localStorage ✓
+- Component structure follows React best practices
+- State management with useState + useEffect hooks
+- Async/await pattern for Tauri IPC calls
+- LocalStorage integration for persistence
+- Visual matches MojoVoice Style Guide specifications
+- Electric blue colors for icons and interactive elements
+- Neubrutalist card styling with proper spacing
+- Ready for next iteration (Slide-in settings drawer, task #11)
+Commit: [pending]

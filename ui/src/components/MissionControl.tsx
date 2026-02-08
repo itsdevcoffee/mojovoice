@@ -4,6 +4,7 @@ import { Button } from './ui/Button';
 import { StatusBar } from './ui/StatusBar';
 import SectionHeader from './ui/SectionHeader';
 import { TranscriptionCard } from './ui/TranscriptionCard';
+import { SystemStatus } from './ui/SystemStatus';
 import { invoke } from '../lib/ipc';
 import { useAppStore } from '../stores/appStore';
 
@@ -155,6 +156,9 @@ export default function MissionControl() {
             </div>
           )}
         </section>
+
+        {/* System Status Section */}
+        <SystemStatus />
       </main>
 
       {/* Footer */}
