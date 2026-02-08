@@ -16,7 +16,7 @@
       "File compiles without CSS errors",
       "npm run dev starts successfully"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 2,

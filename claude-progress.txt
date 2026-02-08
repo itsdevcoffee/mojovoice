@@ -61,3 +61,30 @@ The UI should be **minimal, beautiful, and get out of the way**.
 ## Iterations
 
 <!-- Agents append progress updates below -->
+
+## Iteration 1 - 2026-02-08 14:30 UTC
+Task: #1 - Design token system
+Status: Complete
+Changes:
+- ui/src/styles/globals.css: Replaced entire :root section with Electric Night design tokens
+- ui/src/styles/globals.css: Updated body font-family to use var(--font-ui)
+- ui/src/styles/globals.css: Added monospace element defaults (code, kbd, samp, pre)
+- ui/index.html: Added Google Fonts imports for JetBrains Mono and Inter
+- Replaced old emerald/teal color system (#14b8a6) with electric blue (#3B82F6)
+- Added complete Electric Night palette (--bg-void, --bg-surface, --bg-elevated, --accent-primary, etc.)
+- Added typography tokens (--font-mono, --font-ui, type scale from --text-xs to --text-3xl)
+- Added spacing system (--space-1 through --space-16, 4px base unit)
+- Added animation tokens (durations: instant/fast/normal/slow, easings: out/elastic/smooth)
+- Added shadow tokens (--shadow-brutal, --shadow-brutal-hover, --shadow-brutal-active)
+- Added border tokens (--border-default, --border-focus, --border-brutal)
+- Added glow effects (--glow-primary, --glow-success)
+- Maintained legacy compatibility tokens for gradual migration
+Verification:
+- Build succeeded with no CSS errors (npm run build: ✓ built in 3.04s)
+- CSS file compiles correctly with new design tokens
+- All colors from style guide implemented
+- Typography system matches MojoVoice Style Guide specifications
+- Spacing uses 4px base unit as specified
+- Animation system includes all required durations and easings
+- Sharp corners enforced (--radius: 0, neubrutalist style)
+Commit: 0c2647e
