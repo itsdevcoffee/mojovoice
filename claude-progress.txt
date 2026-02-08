@@ -901,4 +901,4 @@ Verification:
 - All transitions use 150-200ms duration for consistency
 - Modal positioned with higher z-index than drawer (layering correct)
 - Ready for next iteration (Full history - Search and filters, task #18)
-Commit: [pending]
+Commit: d3a373b
