@@ -329,4 +329,4 @@ Verification:
 - Async/await pattern for Tauri IPC calls
 - Accessible: focus states with electric blue glow, keyboard navigation
 - Visual matches MojoVoice Style Guide specifications
-Commit: [pending]
+Commit: b5e4554
