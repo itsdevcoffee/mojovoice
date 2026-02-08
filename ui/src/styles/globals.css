@@ -4,71 +4,106 @@
 
 @layer base {
   :root {
-    /* Design System Colors - Dark Navy Theme */
-    --background: 216 28% 4%;          /* #0a0e14 - dark navy */
-    --foreground: 210 40% 98%;         /* #f7fafc - white text */
+    /* ========================================================================
+       MojoVoice Design Tokens - Electric Night Palette
+       Style Guide: docs/context/mojovoice-style-guide.md
+       ======================================================================== */
 
-    --card: 215 25% 11%;               /* #151b24 - surface */
-    --card-foreground: 210 40% 98%;
-    --card-hover: 215 22% 15%;         /* #1c2430 - surface hover */
+    /* Background Layers - Deep Navy Gradient */
+    --bg-void: #0A0E1A;           /* Infinite depth (darkest) */
+    --bg-surface: #151B2E;        /* Elevated surfaces */
+    --bg-elevated: #1E293B;       /* Hover states, dropdowns */
 
-    --popover: 215 25% 11%;
-    --popover-foreground: 210 40% 98%;
+    /* Interactive - Electric Blue */
+    --accent-primary: #3B82F6;    /* Primary interactive (buttons, links) */
+    --accent-glow: #60A5FA;       /* Lighter blue for glows */
+    --accent-active: #2563EB;     /* Pressed/active state */
+    --accent-muted: #1E40AF;      /* Disabled state */
 
-    --primary: 173 58% 39%;            /* #14b8a6 - teal */
-    --primary-foreground: 216 28% 4%;
-    --primary-hover: 173 69% 32%;      /* #0d9488 */
+    /* Status Colors - Neon Cyberpunk */
+    --success: #22C55E;           /* Acid green (recording, active, success) */
+    --warning: #F59E0B;           /* Amber (warnings, requires attention) */
+    --error: #EF4444;             /* Hot red (errors, destructive actions) */
+    --info: #06B6D4;              /* Cyan (info, metadata) */
 
-    --secondary: 320 100% 50%;
-    --secondary-foreground: 216 28% 4%;
+    /* Text Hierarchy */
+    --text-primary: #F8FAFC;      /* Near white (headings, important text) */
+    --text-secondary: #CBD5E1;    /* Silver (body text, labels) */
+    --text-tertiary: #64748B;     /* Muted (metadata, descriptions) */
+    --text-disabled: #475569;     /* Disabled text */
 
-    --muted: 215 22% 15%;
-    --muted-foreground: 215 16% 57%;   /* #94a3b8 - muted gray */
-    --muted-tertiary: 215 14% 45%;     /* #64748b - very muted */
+    /* Borders & Dividers */
+    --border-default: #334155;    /* Standard borders */
+    --border-focus: #3B82F6;      /* Focused elements */
+    --border-brutal: #000000;     /* Neubrutalist thick borders */
 
-    --accent: 173 58% 39%;
-    --accent-foreground: 216 28% 4%;
+    /* Typography */
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+    --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 
-    --success: 160 84% 39%;            /* #10b981 - green */
-    --warning: 38 92% 50%;             /* #f59e0b - amber */
-    --destructive: 0 84% 60%;          /* #ef4444 - red */
-    --destructive-foreground: 210 40% 98%;
+    /* Type Scale */
+    --text-xs: 0.75rem;           /* 12px - Metadata, status badges */
+    --text-sm: 0.875rem;          /* 14px - Labels, secondary text */
+    --text-base: 1rem;            /* 16px - Body text, inputs */
+    --text-lg: 1.125rem;          /* 18px - Emphasis, card titles */
+    --text-xl: 1.25rem;           /* 20px - Section headers */
+    --text-2xl: 1.5rem;           /* 24px - Page titles */
+    --text-3xl: 1.875rem;         /* 30px - Display text */
 
-    --border: 217 19% 27%;             /* #2d3748 - subtle borders */
-    --input: 217 19% 27%;
-    --ring: 173 58% 39%;
+    /* Spacing System - 4px Base Unit */
+    --space-1: 0.25rem;           /* 4px */
+    --space-2: 0.5rem;            /* 8px */
+    --space-3: 0.75rem;           /* 12px */
+    --space-4: 1rem;              /* 16px */
+    --space-5: 1.25rem;           /* 20px */
+    --space-6: 1.5rem;            /* 24px */
+    --space-8: 2rem;              /* 32px */
+    --space-10: 2.5rem;           /* 40px */
+    --space-12: 3rem;             /* 48px */
+    --space-16: 4rem;             /* 64px */
 
-    --radius: 0.5rem;                  /* 8px base border-radius */
+    /* Animation Tokens */
+    --duration-instant: 100ms;    /* Tooltips, immediate feedback */
+    --duration-fast: 150ms;       /* Hover states, button press */
+    --duration-normal: 250ms;     /* Transitions, dropdowns */
+    --duration-slow: 400ms;       /* Context changes, modals */
 
-    /* UI Scaling System */
+    /* Easing Curves */
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);              /* Default (snappy) */
+    --ease-elastic: cubic-bezier(0.68, -0.55, 0.265, 1.55); /* Playful bounce */
+    --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);            /* Material-like */
+
+    /* Shadow Tokens - Neubrutalist */
+    --shadow-brutal: 4px 4px 0px 0px rgba(0, 0, 0, 1);
+    --shadow-brutal-hover: 6px 6px 0px 0px rgba(0, 0, 0, 1);
+    --shadow-brutal-active: 2px 2px 0px 0px rgba(0, 0, 0, 1);
+
+    /* Glow Effects */
+    --glow-primary: 0 0 20px rgba(59, 130, 246, 0.5);
+    --glow-success: 0 0 20px rgba(34, 197, 94, 0.5);
+
+    /* Legacy Compatibility (for gradual migration) */
+    --background: var(--bg-void);
+    --foreground: var(--text-primary);
+    --card: var(--bg-surface);
+    --card-foreground: var(--text-primary);
+    --card-hover: var(--bg-elevated);
+    --primary: var(--accent-primary);
+    --primary-foreground: var(--bg-void);
+    --border: var(--border-default);
+    --destructive: var(--error);
+    --destructive-foreground: var(--text-primary);
+    --muted-foreground: var(--text-secondary);
+    --ring: var(--accent-primary);
+    --radius: 0;                  /* Sharp corners (neubrutalist) */
+
+    /* UI Scaling System (preserved for existing components) */
     --ui-scale: 1.0;
-
-    /* Scaled spacing */
-    --space-1: calc(0.25rem * var(--ui-scale));
-    --space-2: calc(0.5rem * var(--ui-scale));
-    --space-3: calc(0.75rem * var(--ui-scale));
-    --space-4: calc(1rem * var(--ui-scale));
-    --space-5: calc(1.25rem * var(--ui-scale));   /* 20px - card padding */
-    --space-6: calc(1.5rem * var(--ui-scale));
-    --space-8: calc(2rem * var(--ui-scale));
-    --space-12: calc(3rem * var(--ui-scale));
-
-    /* Scaled font sizes - per spec */
-    --text-xs: calc(0.6875rem * var(--ui-scale)); /* 11px - labels */
-    --text-sm: calc(0.8125rem * var(--ui-scale)); /* 13px - metadata */
-    --text-base: calc(1rem * var(--ui-scale));    /* 16px - model names */
-    --text-lg: calc(1.125rem * var(--ui-scale));
-    --text-xl: calc(1.25rem * var(--ui-scale));
-    --text-2xl: calc(1.5rem * var(--ui-scale));
-    --text-3xl: calc(1.875rem * var(--ui-scale));
-    --text-4xl: calc(2.25rem * var(--ui-scale));
-
-    /* Scaled dimensions */
     --height-button: calc(2.5rem * var(--ui-scale));
     --height-input: calc(2.5rem * var(--ui-scale));
-    --radius-scaled: calc(var(--radius) * var(--ui-scale));
+    --radius-scaled: 0;           /* Sharp corners */
 
-    /* Card dimensions per spec */
+    /* Card dimensions (preserved for existing components) */
     --card-width: 180px;
     --card-height-installed: 168px;
     --card-padding: 24px;
@@ -83,14 +118,19 @@
   }
 
   html {
-    font-size: calc(16px * var(--ui-scale));
+    font-size: 16px;
     transition: font-size 0.2s ease;
   }
 
   body {
     @apply bg-background text-foreground;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--font-ui);
     transition: font-size 0.2s ease;
+  }
+
+  /* Monospace elements */
+  code, kbd, samp, pre {
+    font-family: var(--font-mono);
   }
 }
 
