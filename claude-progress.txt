@@ -588,4 +588,4 @@ Verification:
 - Inter font for labels
 - Smooth 150ms transitions on focus/hover
 - Ready for next iteration (Settings drawer - Recording section, task #13)
-Commit: [pending]
+Commit: 954bbab
