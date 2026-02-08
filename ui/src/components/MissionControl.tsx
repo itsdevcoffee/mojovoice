@@ -208,6 +208,11 @@ interface Config {
     audio_clips_path: string;
     device_name: string | null;
   };
+  output: {
+    display_server: string | null;
+    append_space: boolean;
+    refresh_command: string | null;
+  };
 }
 
 interface DownloadedModel {
@@ -335,6 +340,26 @@ function SettingsContent() {
       setConfig(updatedConfig);
     } catch (error) {
       console.error('Failed to update audio device:', error);
+    }
+  };
+
+  const handleAppendSpaceToggle = async () => {
+    if (!config) return;
+
+    try {
+      // Toggle append_space
+      const updatedConfig = {
+        ...config,
+        output: {
+          ...config.output,
+          append_space: !config.output.append_space,
+        },
+      };
+
+      await invoke('save_config', { config: updatedConfig });
+      setConfig(updatedConfig);
+    } catch (error) {
+      console.error('Failed to toggle append_space:', error);
     }
   };
 
@@ -504,6 +529,59 @@ function SettingsContent() {
                 </option>
               ))}
             </select>
+          </div>
+        </div>
+      </section>
+
+      {/* Behavior Section */}
+      <section className="pt-8 border-t border-[var(--border-default)]">
+        <SectionHeader title="BEHAVIOR" />
+
+        <div className="space-y-6 mt-6">
+          {/* Add trailing space toggle */}
+          <div className="flex items-center justify-between">
+            {/* Label */}
+            <div className="flex-1">
+              <label className="block text-sm font-ui font-medium text-[var(--text-primary)] cursor-pointer">
+                Add trailing space
+              </label>
+              <p className="text-xs text-[var(--text-tertiary)] font-ui mt-1">
+                Automatically add a space after transcribed text
+              </p>
+            </div>
+
+            {/* Toggle switch */}
+            <button
+              onClick={handleAppendSpaceToggle}
+              className={`
+                relative w-14 h-7 rounded-full transition-all duration-200
+                ${config.output.append_space
+                  ? 'bg-blue-500/20 border-2 border-blue-500/50 shadow-[0_0_16px_rgba(59,130,246,0.2)]'
+                  : 'bg-slate-700/50 border-2 border-slate-600/80'
+                }
+                hover:${config.output.append_space ? 'bg-blue-500/30' : 'bg-slate-700/70'}
+                focus:outline-none focus-visible:outline-2 focus-visible:outline-blue-500
+                focus-visible:outline-offset-2 focus-visible:shadow-[0_0_20px_rgba(59,130,246,0.5)]
+              `}
+              aria-label="Toggle add trailing space"
+              aria-checked={config.output.append_space}
+              role="switch"
+            >
+              {/* Thumb with liquid morph animation */}
+              <div
+                className={`
+                  absolute top-0.5 left-0.5 w-5 h-5 rounded-full
+                  transition-all duration-200
+                  ${config.output.append_space
+                    ? 'translate-x-7 bg-white shadow-[0_2px_8px_rgba(59,130,246,0.4)]'
+                    : 'translate-x-0 bg-slate-300'
+                  }
+                `}
+                style={{
+                  transitionTimingFunction: 'cubic-bezier(0.68, -0.55, 0.265, 1.55)'
+                }}
+              />
+            </button>
           </div>
         </div>
       </section>

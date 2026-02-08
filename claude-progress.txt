@@ -653,3 +653,55 @@ Verification:
 - All transitions use 150ms duration for consistency
 - Ready for next iteration (Settings drawer - Behavior section, task #14)
 Commit: 99e873c
+
+## Iteration 14 - 2026-02-08 21:15 UTC
+Task: #14 - Settings drawer - Behavior section
+Status: Complete
+Changes:
+- ui/src/components/MissionControl.tsx: Extended Config interface to include output section
+  - Added output.display_server, output.append_space, output.refresh_command fields
+- ui/src/components/MissionControl.tsx: Created handleAppendSpaceToggle function
+  - Toggles config.output.append_space boolean value
+  - Calls save_config to persist changes immediately
+  - Updates local state for instant UI feedback
+- ui/src/components/MissionControl.tsx: Implemented Behavior section in settings drawer
+  - Added SectionHeader with 'BEHAVIOR' title
+  - Created liquid morph toggle switch for 'Add trailing space' setting
+  - Toggle container: 56px × 28px (w-14 h-7) with rounded-full
+  - Off state: gray background (bg-slate-700/50), muted border (border-slate-600/80)
+  - On state: blue background (bg-blue-500/20), blue border with glow (shadow-[0_0_16px_rgba(59,130,246,0.2)])
+  - Thumb: 20px × 20px (w-5 h-5), translates 28px (translate-x-7) when on
+  - Thumb animation: 200ms with elastic easing cubic-bezier(0.68, -0.55, 0.265, 1.55)
+  - Off thumb: gray (bg-slate-300), no shadow
+  - On thumb: white (bg-white) with blue shadow (shadow-[0_2px_8px_rgba(59,130,246,0.4)])
+  - Label positioned left, toggle positioned right with flex justify-between
+  - Description text below label: "Automatically add a space after transcribed text"
+  - Section positioned below Recording with pt-8 (32px margin)
+  - All typography uses Inter font (font-ui) as specified
+  - Focus states: electric blue outline + glow (focus-visible:outline-2)
+  - ARIA attributes: role="switch", aria-checked, aria-label
+Verification:
+- Build succeeded with no errors (npm run build: ✓ built in 1.52s)
+- TypeScript compilation successful (no errors)
+- All acceptance criteria verified:
+  - Section header 'BEHAVIOR' using SectionHeader ✓
+  - Toggle for 'Add trailing space' setting ✓
+  - Toggle uses liquid morph animation (200ms elastic easing) ✓
+  - Off state: gray background (slate-700/50), muted thumb (slate-300) ✓
+  - On state: blue background with glow (blue-500/20 + shadow), white thumb ✓
+  - Thumb animates with elastic bounce effect (cubic-bezier(0.68, -0.55, 0.265, 1.55)) ✓
+  - Toggle updates config.output.append_space ✓
+  - Label uses Inter font (font-ui), positioned left ✓
+  - Section positioned below Recording with 32px margin (pt-8) ✓
+  - Current value loads from config on drawer open ✓
+  - Change reflects immediately in UI (state update) ✓
+- Component structure follows React best practices
+- State management with useState hooks
+- Async/await pattern for config updates
+- Visual matches MojoVoice Style Guide specifications
+- Electric blue (#3B82F6) used for active state and glow
+- Liquid morph animation creates playful, premium feel
+- Toggle respects accessibility: ARIA attributes, focus states, keyboard activation
+- All transitions use 200ms duration for consistency
+- Ready for next iteration (Settings drawer - Advanced section, task #15)
+Commit: [pending]

@@ -297,7 +297,7 @@
       "Current value loads from config on drawer open",
       "Change reflects immediately in UI"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 15,
