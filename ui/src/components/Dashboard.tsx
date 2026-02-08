@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Mic, Square, Zap, Cpu, Database, Loader2, Play, StopCircle, RotateCcw } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { cn } from '../lib/utils';
+import { Button } from './ui/Button';
 
 export default function Dashboard() {
   const { daemonStatus, isRecording, isProcessing, setRecording, setProcessing, refreshDaemonStatus } = useAppStore();
@@ -236,6 +237,39 @@ export default function Dashboard() {
         <QuickStat label="Sessions" value="24" />
         <QuickStat label="Total Time" value="2.4h" />
       </div>
+
+      {/* Button Component Demo */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15 }}
+        className="glass-card p-6 mt-8"
+      >
+        <h3 className="text-white font-medium mb-4">Button Component Demo</h3>
+        <div className="flex flex-wrap gap-4">
+          <Button variant="primary" size="md">
+            Primary Button
+          </Button>
+          <Button variant="secondary" size="md">
+            Secondary Button
+          </Button>
+          <Button variant="ghost" size="md">
+            Ghost Button
+          </Button>
+          <Button variant="primary" size="sm">
+            Small
+          </Button>
+          <Button variant="primary" size="lg">
+            Large Button
+          </Button>
+          <Button variant="primary" loading>
+            Loading State
+          </Button>
+          <Button variant="primary" disabled>
+            Disabled
+          </Button>
+        </div>
+      </motion.div>
     </div>
   );
 }

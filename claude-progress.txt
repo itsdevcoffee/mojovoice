@@ -88,3 +88,42 @@ Verification:
 - Animation system includes all required durations and easings
 - Sharp corners enforced (--radius: 0, neubrutalist style)
 Commit: 0c2647e
+
+## Iteration 2 - 2026-02-08 15:15 UTC
+Task: #2 - Neubrutalist button component
+Status: Complete
+Changes:
+- ui/src/components/ui/Button.tsx: Created reusable neubrutalist button component
+  - Implemented three variants: primary (solid blue + brutal shadow), secondary (outlined + glow), ghost (minimal)
+  - Added brutal shadow animation: 4px → 6px on hover → 2px on active
+  - Button translates (-2px, -2px) on hover and (+2px, +2px) on active for 3D effect
+  - Implemented loading state with spinner + pulse animation
+  - Disabled state: 50% opacity, no shadow, no cursor
+  - All transitions use 150ms duration as specified
+  - Uppercase text with tracking-wide
+  - Three sizes: sm, md, lg
+  - Full accessibility: focus-visible states with electric blue ring + glow
+- ui/src/components/Dashboard.tsx: Added Button import and demo section
+  - Created "Button Component Demo" section showcasing all variants and states
+  - Demonstrates primary, secondary, ghost variants
+  - Shows small, medium, large sizes
+  - Displays loading and disabled states
+  - Uses motion animation for section entrance
+Verification:
+- Build succeeded with no errors (npm run build: ✓ built in 3.20s)
+- Component file created in correct location (ui/src/components/ui/Button.tsx)
+- All three variants implemented with correct styling
+- Brutal shadow animation matches style guide (4px → 6px → 2px)
+- Hover state translates button -2px (appears to lift up)
+- Active state translates button +2px (appears to press down)
+- Loading state shows spinner + pulse text
+- Disabled state has 50% opacity + no interactions
+- All transitions use 150ms duration
+- Uppercase text with wide letter-spacing
+- Component used in Dashboard.tsx
+- Visual matches MojoVoice Style Guide specifications exactly
+- TypeScript compilation successful (no errors)
+- Electric blue (#3B82F6) used for primary color
+- Black borders for neubrutalist aesthetic
+- Focus states include electric glow (0 0 20px rgba(59,130,246,0.5))
+Commit: [pending]

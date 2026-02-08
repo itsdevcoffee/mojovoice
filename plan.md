@@ -38,7 +38,7 @@
       "Component used in at least one place (test page or existing UI)",
       "Visual matches style guide mockup"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 3,
