@@ -704,4 +704,4 @@ Verification:
 - Toggle respects accessibility: ARIA attributes, focus states, keyboard activation
 - All transitions use 200ms duration for consistency
 - Ready for next iteration (Settings drawer - Advanced section, task #15)
-Commit: [pending]
+Commit: e2c15c4
