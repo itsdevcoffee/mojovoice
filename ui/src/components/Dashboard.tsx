@@ -6,6 +6,7 @@ import { useAppStore } from '../stores/appStore';
 import { cn } from '../lib/utils';
 import { Button } from './ui/Button';
 import SectionHeader from './ui/SectionHeader';
+import { Card } from './ui/Card';
 
 export default function Dashboard() {
   const { daemonStatus, isRecording, isProcessing, setRecording, setProcessing, refreshDaemonStatus } = useAppStore();
@@ -269,6 +270,50 @@ export default function Dashboard() {
           <Button variant="primary" disabled>
             Disabled
           </Button>
+        </div>
+      </motion.div>
+
+      {/* Card Component Demo */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="mt-8"
+      >
+        <SectionHeader title="Card Component Demo" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+          <Card>
+            <h3 className="text-lg font-semibold text-slate-100 mb-2 font-[family-name:var(--font-mono)]">
+              Basic Card
+            </h3>
+            <p className="text-sm text-slate-400 font-[family-name:var(--font-ui)]">
+              This is a card without a badge. Hover to see the electric blue glow effect.
+            </p>
+          </Card>
+          <Card badge="[ACTIVE]">
+            <h3 className="text-lg font-semibold text-slate-100 mb-2 font-[family-name:var(--font-mono)]">
+              Large V3 Turbo
+            </h3>
+            <p className="text-sm text-slate-400 font-[family-name:var(--font-ui)]">
+              1.5 GB • English • GPU Accelerated
+            </p>
+          </Card>
+          <Card badge="[READY]">
+            <h3 className="text-lg font-semibold text-slate-100 mb-2 font-[family-name:var(--font-mono)]">
+              Recording Settings
+            </h3>
+            <p className="text-sm text-slate-400 font-[family-name:var(--font-ui)]">
+              Max Duration: 120s • Device: Default Microphone
+            </p>
+          </Card>
+          <Card>
+            <h3 className="text-lg font-semibold text-slate-100 mb-2 font-[family-name:var(--font-mono)]">
+              System Status
+            </h3>
+            <p className="text-sm text-slate-400 font-[family-name:var(--font-ui)]">
+              GPU: RTX 4090 • Memory: 2.3 GB / 24 GB
+            </p>
+          </Card>
         </div>
       </motion.div>
     </div>

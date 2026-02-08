@@ -159,3 +159,44 @@ Verification:
 - Component accepts title prop with TypeScript typing
 - Visual matches style guide mockup from section header pattern
 Commit: ca8800f
+
+## Iteration 4 - 2026-02-08 16:15 UTC
+Task: #4 - Neubrutalist card component
+Status: Complete
+Changes:
+- ui/src/components/ui/Card.tsx: Created reusable neubrutalist card component
+  - Implemented sharp corners (no border-radius) for neubrutalist aesthetic
+  - 2px solid border with default color #334155 (--border-default)
+  - Dark background #151B2E (--bg-surface)
+  - Hover state: border changes to electric blue #3B82F6 with electric glow shadow
+  - Hover shadow: box-shadow 0 0 20px rgba(59,130,246,0.5)
+  - Transition: 200ms duration for all state changes
+  - Padding: 24px (p-6 = 1.5rem)
+  - Optional badge prop for status indicators (top-right absolute positioning)
+  - Badge styling: bg-green-500/20 text-green-400 with border
+  - Badge uses monospace font and uppercase text
+  - Component accepts children and optional badge via TypeScript interface
+- ui/src/components/Dashboard.tsx: Added Card import and demo section
+  - Created "Card Component Demo" section with SectionHeader
+  - Grid layout with 4 demo cards (2 columns on md+ screens)
+  - Demonstrates card without badge and cards with [ACTIVE]/[READY] badges
+  - Cards show various use cases: model info, settings, system status
+  - Used JetBrains Mono for card titles, Inter for descriptions
+Verification:
+- Build succeeded with no errors (npm run build: ✓ built in 2.31s)
+- TypeScript compilation successful (npx tsc --noEmit: no errors)
+- Component file created in correct location (ui/src/components/ui/Card.tsx)
+- All acceptance criteria met:
+  - 2px border with #334155 ✓
+  - Sharp corners (no border-radius) ✓
+  - Dark background #151B2E ✓
+  - Hover: blue border #3B82F6 + 0 0 20px glow ✓
+  - Optional badge in top-right ✓
+  - Badge styling correct ✓
+  - 200ms transitions ✓
+  - 24px padding ✓
+  - Accepts children and badge ✓
+  - Used in Dashboard with 4 demo cards ✓
+- Visual matches MojoVoice Style Guide neubrutalist card pattern
+- Electric blue glow effect on hover creates signature cyberpunk aesthetic
+Commit: (pending)

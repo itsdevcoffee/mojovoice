@@ -79,7 +79,7 @@
       "Component accepts children and optional badge",
       "Used in at least one place"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 5,
