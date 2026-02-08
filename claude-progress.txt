@@ -377,4 +377,4 @@ Verification:
 - Delete confirmation uses red accent (#EF4444)
 - All hover states use 150-200ms transitions
 - Component ready for use in Recent Transcriptions section (task #9)
-Commit: [pending]
+Commit: 5b6eedf
