@@ -127,3 +127,35 @@ Verification:
 - Black borders for neubrutalist aesthetic
 - Focus states include electric glow (0 0 20px rgba(59,130,246,0.5))
 Commit: e5f7096
+
+## Iteration 3 - 2026-02-08 15:45 UTC
+Task: #3 - Terminal section header
+Status: Complete
+Changes:
+- ui/src/components/ui/SectionHeader.tsx: Created reusable terminal-inspired section header component
+  - Implemented animated glyph (▸) with pulse animation using motion-safe:animate-pulse
+  - Used JetBrains Mono font (font-mono class) for uppercase title text
+  - Font size: 12px (text-xs = 0.75rem)
+  - Letter-spacing: 0.12em (tracking-[0.12em])
+  - Electric blue color (#3B82F6 via text-blue-500)
+  - Horizontal gradient rule (bg-gradient-to-r from-blue-500 to-transparent)
+  - Accepts title prop via TypeScript interface
+  - Respects prefers-reduced-motion using motion-safe: prefix
+- ui/src/components/Dashboard.tsx: Imported and used SectionHeader component
+  - Replaced h3 header in Button Component Demo section
+  - Demonstrates component usage in real context
+Verification:
+- Build succeeded with no errors (npm run build: ✓ built in 2.76s)
+- TypeScript compilation successful (npx tsc --noEmit: no errors)
+- Component file created in correct location (ui/src/components/ui/SectionHeader.tsx)
+- All styling matches MojoVoice Style Guide specifications exactly:
+  - JetBrains Mono font family ✓
+  - 12px font size (0.75rem) ✓
+  - Uppercase with 0.12em letter-spacing ✓
+  - Electric blue color (#3B82F6) ✓
+  - Animated glyph (▸) with 2s pulse ✓
+  - Gradient horizontal rule ✓
+- Accessibility: motion-safe prefix ensures animation disabled for prefers-reduced-motion
+- Component accepts title prop with TypeScript typing
+- Visual matches style guide mockup from section header pattern
+Commit: [pending]

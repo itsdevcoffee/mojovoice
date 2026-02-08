@@ -5,6 +5,7 @@ import { Mic, Square, Zap, Cpu, Database, Loader2, Play, StopCircle, RotateCcw }
 import { useAppStore } from '../stores/appStore';
 import { cn } from '../lib/utils';
 import { Button } from './ui/Button';
+import SectionHeader from './ui/SectionHeader';
 
 export default function Dashboard() {
   const { daemonStatus, isRecording, isProcessing, setRecording, setProcessing, refreshDaemonStatus } = useAppStore();
@@ -245,7 +246,7 @@ export default function Dashboard() {
         transition={{ delay: 0.15 }}
         className="glass-card p-6 mt-8"
       >
-        <h3 className="text-white font-medium mb-4">Button Component Demo</h3>
+        <SectionHeader title="Button Component Demo" />
         <div className="flex flex-wrap gap-4">
           <Button variant="primary" size="md">
             Primary Button

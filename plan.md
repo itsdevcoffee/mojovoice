@@ -58,7 +58,7 @@
       "Respects prefers-reduced-motion (disables glyph animation)",
       "Used in at least one section"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 4,
