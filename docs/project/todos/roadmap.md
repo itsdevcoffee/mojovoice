@@ -1,6 +1,6 @@
 # mojovoice Project Roadmap
 
-**Status:** Active Development | **Last Updated:** 2026-02-04
+**Status:** Active Development | **Last Updated:** 2026-02-08
 
 Project roadmap and feature planning.
 
@@ -8,18 +8,52 @@ Project roadmap and feature planning.
 
 ## Version Roadmap
 
-### v0.6.0 - Platform Maturity & Polish
+### v0.6.0 - UI/UX Overhaul & Platform Maturity
 
-**Theme:** Production-ready platform support with best-in-class onboarding
+**Theme:** Production-ready design and best-in-class user experience
 
 **Priority Order:**
 
-1. **Model Setup Wizard** (Critical - Biggest UX improvement)
-   - Detect hardware (GPU type, VRAM, available disk space)
-   - Recommend optimal model based on capabilities
-   - Guide through first download with progress feedback
+1. **UI/UX Overhaul** (Critical - Comprehensive redesign)
+
+   **Settings Reorganization:**
+   - Collapse advanced options (4 primary settings visible vs current 12)
+   - Voice Recognition section (model + language dropdown)
+   - Recording section (duration + audio device selection)
+   - Behavior section (text options)
+   - Appearance section (UI scale)
+   - Advanced section (collapsed by default for power users)
+   - Smart restart notifications (only show when daemon settings change)
+
+   **Models Tab (New Navigation Item):**
+   - Separate model management from Settings
+   - Model library browser with download/cancel/delete
+   - Visual download progress with real-time stats
+   - Model cards with speed/quality indicators
+
+   **Dev Coffee Brand Consistency:**
+   - Apply bracket frames, subtle glows, technical grids across all components
+   - Typography hierarchy using JetBrains Mono for headings
+   - Purposeful emerald green accents (not decorative)
+   - Near-black backgrounds with glass layers
+   - Scanlines and retro-tech aesthetic refinements
+
+   **Dashboard Improvements:**
+   - Better visual hierarchy and information density
+   - Enhanced status visualization
+   - Recording feedback with waveform visualization
+   - Clearer daemon/GPU/model status display
+
+   **Model Setup Wizard (First-Run Experience):**
+   - Hardware detection (GPU type, VRAM, disk space)
+   - Model recommendation based on capabilities
+   - Guided download with progress feedback
    - Test recording/transcription in wizard
-   - Auto-configure based on detected environment
+   - Auto-configure environment
+
+   **Reference Documents:**
+   - `docs/project/2026-01-14-settings-ui-redesign.md`
+   - `docs/context/dev-coffee-brand-style-guide.md`
 
 2. **Linux Automated Testing** (Critical - Reliability)
    - CI testing on Ubuntu, Fedora, Arch
@@ -44,12 +78,6 @@ Project roadmap and feature planning.
    - Improve .dmg with better first-run experience
    - Handle permission prompts gracefully
    - Clear instructions for Accessibility/Microphone permissions
-
-6. **UI/UX Polish** (Medium - Incremental improvements)
-   - Recording feedback improvements (waveform visualization?)
-   - Dashboard layout refinements
-   - Settings organization improvements
-   - Better error states and messaging
 
 **Deferred to v0.6.1+:**
 - macOS signed installer with code signing/notarization (requires $99/year Apple Developer account)
