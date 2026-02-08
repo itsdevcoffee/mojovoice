@@ -232,9 +232,12 @@ interface AudioDevice {
 
 function SettingsContent() {
   const [config, setConfig] = useState<Config | null>(null);
+  const [originalConfig, setOriginalConfig] = useState<Config | null>(null);
   const [downloadedModels, setDownloadedModels] = useState<DownloadedModel[]>([]);
   const [audioDevices, setAudioDevices] = useState<AudioDevice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
   const [advancedExpanded, setAdvancedExpanded] = useState(() => {
     // Load collapsed state from localStorage (default: false/collapsed)
     const saved = localStorage.getItem('advancedSettings.collapsed');
@@ -248,6 +251,7 @@ function SettingsContent() {
         // Load config
         const cfg = await invoke<Config>('get_config');
         setConfig(cfg);
+        setOriginalConfig(JSON.parse(JSON.stringify(cfg))); // Deep copy for reset
 
         // Load downloaded models
         const models = await invoke<DownloadedModel[]>('list_downloaded_models');
@@ -469,6 +473,53 @@ function SettingsContent() {
     setAdvancedExpanded(newState);
     // Save collapsed state to localStorage
     localStorage.setItem('advancedSettings.collapsed', String(!newState));
+  };
+
+  const handleSaveChanges = async () => {
+    if (!config) return;
+
+    try {
+      setSaving(true);
+      setSaveSuccess(false);
+
+      // Save config (already saved by individual handlers, but ensure it's persisted)
+      await invoke('save_config', { config });
+
+      // Check if daemon settings changed (model, language, audio device)
+      const needsRestart = originalConfig && (
+        config.model.path !== originalConfig.model.path ||
+        config.model.language !== originalConfig.model.language ||
+        config.audio.device_name !== originalConfig.audio.device_name
+      );
+
+      // Show success state
+      setSaveSuccess(true);
+
+      // Update original config to new saved state
+      setOriginalConfig(JSON.parse(JSON.stringify(config)));
+
+      // Clear success state after 3 seconds
+      setTimeout(() => {
+        setSaveSuccess(false);
+      }, 3000);
+
+      // If daemon settings changed, show banner (future implementation)
+      if (needsRestart) {
+        console.log('Daemon settings changed - restart recommended');
+        // TODO: Show restart banner in future iteration
+      }
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReset = () => {
+    if (!originalConfig) return;
+
+    // Reset config to original values
+    setConfig(JSON.parse(JSON.stringify(originalConfig)));
   };
 
   // Helper function to format duration preview
@@ -871,6 +922,34 @@ function SettingsContent() {
           </div>
         )}
       </section>
+
+      {/* Save/Reset Actions */}
+      <div className="sticky bottom-0 pt-6 pb-6 bg-[var(--bg-surface)] border-t-2 border-[var(--border-default)] flex items-center justify-between gap-3">
+        {/* Reset button (left) */}
+        <Button
+          variant="ghost"
+          size="md"
+          onClick={handleReset}
+          disabled={saving}
+        >
+          Reset
+        </Button>
+
+        {/* Save button (right) */}
+        <Button
+          variant="primary"
+          size="md"
+          onClick={handleSaveChanges}
+          loading={saving}
+          disabled={saving}
+          className={`
+            ${saveSuccess ? 'border-green-500 bg-green-500/20 text-green-400' : ''}
+            transition-all duration-150
+          `}
+        >
+          {saveSuccess ? 'Saved!' : 'Save Changes'}
+        </Button>
+      </div>
     </div>
   );
 }

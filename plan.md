@@ -340,7 +340,7 @@
       "Buttons use gap-3 spacing between them",
       "Loading state during save (button shows spinner)"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 17,
