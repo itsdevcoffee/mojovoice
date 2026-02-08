@@ -319,7 +319,7 @@
       "Collapse state persists in local storage",
       "Values load from config on drawer open"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 16,

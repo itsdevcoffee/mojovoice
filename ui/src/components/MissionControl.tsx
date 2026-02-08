@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings as SettingsIcon } from 'lucide-react';
+import { Settings as SettingsIcon, ChevronDown } from 'lucide-react';
 import { Button } from './ui/Button';
 import { StatusBar } from './ui/StatusBar';
 import SectionHeader from './ui/SectionHeader';
@@ -200,6 +200,7 @@ interface Config {
     path: string;
     model_id: string;
     language: string;
+    prompt_biasing: string | null;
   };
   audio: {
     sample_rate: number;
@@ -234,6 +235,11 @@ function SettingsContent() {
   const [downloadedModels, setDownloadedModels] = useState<DownloadedModel[]>([]);
   const [audioDevices, setAudioDevices] = useState<AudioDevice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [advancedExpanded, setAdvancedExpanded] = useState(() => {
+    // Load collapsed state from localStorage (default: false/collapsed)
+    const saved = localStorage.getItem('advancedSettings.collapsed');
+    return saved === 'false'; // If saved is 'false', return true (expanded)
+  });
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -361,6 +367,108 @@ function SettingsContent() {
     } catch (error) {
       console.error('Failed to toggle append_space:', error);
     }
+  };
+
+  const handleModelPathOverrideChange = async (path: string) => {
+    if (!config) return;
+
+    try {
+      const updatedConfig = {
+        ...config,
+        model: {
+          ...config.model,
+          path: path.trim() || config.model.path, // Don't allow empty path
+        },
+      };
+
+      await invoke('save_config', { config: updatedConfig });
+      setConfig(updatedConfig);
+    } catch (error) {
+      console.error('Failed to update model path:', error);
+    }
+  };
+
+  const handleTechnicalVocabularyChange = async (vocabulary: string) => {
+    if (!config) return;
+
+    try {
+      const updatedConfig = {
+        ...config,
+        model: {
+          ...config.model,
+          prompt_biasing: vocabulary.trim() || null,
+        },
+      };
+
+      await invoke('save_config', { config: updatedConfig });
+      setConfig(updatedConfig);
+    } catch (error) {
+      console.error('Failed to update technical vocabulary:', error);
+    }
+  };
+
+  const handleRefreshCommandChange = async (command: string) => {
+    if (!config) return;
+
+    try {
+      const updatedConfig = {
+        ...config,
+        output: {
+          ...config.output,
+          refresh_command: command.trim() || null,
+        },
+      };
+
+      await invoke('save_config', { config: updatedConfig });
+      setConfig(updatedConfig);
+    } catch (error) {
+      console.error('Failed to update refresh command:', error);
+    }
+  };
+
+  const handleSaveAudioClipsToggle = async () => {
+    if (!config) return;
+
+    try {
+      const updatedConfig = {
+        ...config,
+        audio: {
+          ...config.audio,
+          save_audio_clips: !config.audio.save_audio_clips,
+        },
+      };
+
+      await invoke('save_config', { config: updatedConfig });
+      setConfig(updatedConfig);
+    } catch (error) {
+      console.error('Failed to toggle save audio clips:', error);
+    }
+  };
+
+  const handleAudioClipsPathChange = async (path: string) => {
+    if (!config) return;
+
+    try {
+      const updatedConfig = {
+        ...config,
+        audio: {
+          ...config.audio,
+          audio_clips_path: path.trim() || config.audio.audio_clips_path,
+        },
+      };
+
+      await invoke('save_config', { config: updatedConfig });
+      setConfig(updatedConfig);
+    } catch (error) {
+      console.error('Failed to update audio clips path:', error);
+    }
+  };
+
+  const toggleAdvancedSection = () => {
+    const newState = !advancedExpanded;
+    setAdvancedExpanded(newState);
+    // Save collapsed state to localStorage
+    localStorage.setItem('advancedSettings.collapsed', String(!newState));
   };
 
   // Helper function to format duration preview
@@ -586,12 +694,183 @@ function SettingsContent() {
         </div>
       </section>
 
-      {/* Placeholder for future sections */}
-      <div className="pt-8 border-t border-[var(--border-default)]">
-        <p className="text-xs text-[var(--text-tertiary)] font-ui text-center">
-          Additional settings sections will be implemented in upcoming tasks.
-        </p>
-      </div>
+      {/* Advanced Section */}
+      <section className="pt-8 border-t border-[var(--border-default)]">
+        {/* Collapsible header */}
+        <button
+          onClick={toggleAdvancedSection}
+          className="w-full flex items-center justify-between group focus:outline-none focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-2"
+          aria-expanded={advancedExpanded}
+        >
+          <div className="flex items-center gap-3">
+            <SectionHeader title="ADVANCED" />
+          </div>
+          <ChevronDown
+            className={`w-4 h-4 text-[var(--text-tertiary)] transition-transform duration-200 ${
+              advancedExpanded ? 'rotate-180' : ''
+            }`}
+          />
+        </button>
+
+        {/* Collapsible content with smooth animation */}
+        {advancedExpanded && (
+          <div
+            className="mt-6 space-y-6 animate-expand"
+            style={{
+              animation: 'expand-smooth 200ms ease-out'
+            }}
+          >
+            {/* Model Path Override */}
+            <div className="space-y-2">
+              <label className="block text-sm font-ui font-medium text-[var(--text-primary)]">
+                Model Path Override
+              </label>
+              <p className="text-xs text-[var(--text-tertiary)] font-ui mb-2">
+                Custom path to Whisper model file (advanced users only)
+              </p>
+              <div className="relative">
+                {/* Terminal prompt */}
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-500 font-mono text-sm pointer-events-none">
+                  &gt;
+                </span>
+                <input
+                  type="text"
+                  value={config.model.path}
+                  onChange={(e) => handleModelPathOverrideChange(e.target.value)}
+                  placeholder="~/.cache/whisper/models/..."
+                  className="w-full pl-8 pr-4 py-3 bg-[var(--bg-surface)] border-2 border-[var(--border-default)]
+                    text-[var(--text-primary)] font-mono text-sm rounded
+                    placeholder:text-[var(--text-tertiary)]
+                    focus:border-[var(--accent-primary)] focus:outline-none
+                    focus:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-150"
+                />
+              </div>
+            </div>
+
+            {/* Technical Vocabulary */}
+            <div className="space-y-2">
+              <label className="block text-sm font-ui font-medium text-[var(--text-primary)]">
+                Technical Vocabulary
+              </label>
+              <p className="text-xs text-[var(--text-tertiary)] font-ui mb-2">
+                Custom words for prompt biasing (comma-separated)
+              </p>
+              <textarea
+                value={config.model.prompt_biasing || ''}
+                onChange={(e) => handleTechnicalVocabularyChange(e.target.value)}
+                placeholder="Kubernetes, PostgreSQL, TypeScript..."
+                rows={3}
+                className="w-full px-4 py-3 bg-[var(--bg-surface)] border-2 border-[var(--border-default)]
+                  text-[var(--text-primary)] font-mono text-sm rounded
+                  placeholder:text-[var(--text-tertiary)] resize-none
+                  focus:border-[var(--accent-primary)] focus:outline-none
+                  focus:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-150"
+              />
+            </div>
+
+            {/* Status Bar Integration */}
+            <div className="space-y-2">
+              <label className="block text-sm font-ui font-medium text-[var(--text-primary)]">
+                Status Bar Integration
+              </label>
+              <p className="text-xs text-[var(--text-tertiary)] font-ui mb-2">
+                Shell command to refresh status bar after transcription
+              </p>
+              <div className="relative">
+                {/* Terminal prompt */}
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-500 font-mono text-sm pointer-events-none">
+                  $
+                </span>
+                <input
+                  type="text"
+                  value={config.output.refresh_command || ''}
+                  onChange={(e) => handleRefreshCommandChange(e.target.value)}
+                  placeholder="killall -SIGUSR1 waybar"
+                  className="w-full pl-8 pr-4 py-3 bg-[var(--bg-surface)] border-2 border-[var(--border-default)]
+                    text-[var(--text-primary)] font-mono text-sm rounded
+                    placeholder:text-[var(--text-tertiary)]
+                    focus:border-[var(--accent-primary)] focus:outline-none
+                    focus:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-150"
+                />
+              </div>
+            </div>
+
+            {/* Save Audio Clips */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                {/* Label */}
+                <div className="flex-1">
+                  <label className="block text-sm font-ui font-medium text-[var(--text-primary)] cursor-pointer">
+                    Save Audio Clips
+                  </label>
+                  <p className="text-xs text-[var(--text-tertiary)] font-ui mt-1">
+                    Save recorded audio to disk for debugging
+                  </p>
+                </div>
+
+                {/* Toggle switch */}
+                <button
+                  onClick={handleSaveAudioClipsToggle}
+                  className={`
+                    relative w-14 h-7 rounded-full transition-all duration-200
+                    ${config.audio.save_audio_clips
+                      ? 'bg-blue-500/20 border-2 border-blue-500/50 shadow-[0_0_16px_rgba(59,130,246,0.2)]'
+                      : 'bg-slate-700/50 border-2 border-slate-600/80'
+                    }
+                    hover:${config.audio.save_audio_clips ? 'bg-blue-500/30' : 'bg-slate-700/70'}
+                    focus:outline-none focus-visible:outline-2 focus-visible:outline-blue-500
+                    focus-visible:outline-offset-2 focus-visible:shadow-[0_0_20px_rgba(59,130,246,0.5)]
+                  `}
+                  aria-label="Toggle save audio clips"
+                  aria-checked={config.audio.save_audio_clips}
+                  role="switch"
+                >
+                  {/* Thumb with liquid morph animation */}
+                  <div
+                    className={`
+                      absolute top-0.5 left-0.5 w-5 h-5 rounded-full
+                      transition-all duration-200
+                      ${config.audio.save_audio_clips
+                        ? 'translate-x-7 bg-white shadow-[0_2px_8px_rgba(59,130,246,0.4)]'
+                        : 'translate-x-0 bg-slate-300'
+                      }
+                    `}
+                    style={{
+                      transitionTimingFunction: 'cubic-bezier(0.68, -0.55, 0.265, 1.55)'
+                    }}
+                  />
+                </button>
+              </div>
+
+              {/* Path input (shows when enabled) */}
+              {config.audio.save_audio_clips && (
+                <div className="space-y-2 pl-4 border-l-2 border-blue-500/30">
+                  <label className="block text-xs font-ui font-medium text-[var(--text-secondary)]">
+                    Audio Clips Path
+                  </label>
+                  <div className="relative">
+                    {/* Terminal prompt */}
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-500 font-mono text-sm pointer-events-none">
+                      &gt;
+                    </span>
+                    <input
+                      type="text"
+                      value={config.audio.audio_clips_path}
+                      onChange={(e) => handleAudioClipsPathChange(e.target.value)}
+                      placeholder="~/mojovoice/clips"
+                      className="w-full pl-8 pr-4 py-2 bg-[var(--bg-surface)] border-2 border-[var(--border-default)]
+                        text-[var(--text-primary)] font-mono text-sm rounded
+                        placeholder:text-[var(--text-tertiary)]
+                        focus:border-[var(--accent-primary)] focus:outline-none
+                        focus:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-150"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

@@ -1,0 +1,50 @@
+Perfect! Now let me create a summary of what was accomplished:
+
+## Summary
+
+I've successfully completed **Task #14: Settings drawer - Behavior section**.
+
+### What was implemented:
+
+1. **Config Interface Extension**: Added the `output` section to the TypeScript `Config` interface to include `append_space` boolean field
+
+2. **Toggle Handler**: Created `handleAppendSpaceToggle` function that:
+   - Toggles the `config.output.append_space` value
+   - Immediately saves to backend via `save_config`
+   - Updates local state for instant UI feedback
+
+3. **Behavior Section UI**: Added a new settings section with:
+   - **Section Header**: "BEHAVIOR" using the `SectionHeader` component
+   - **Liquid Morph Toggle**: Premium iOS-style toggle with elastic animation
+     - **Off state**: Gray background (`slate-700/50`), muted gray thumb (`slate-300`)
+     - **On state**: Blue background with electric glow, white thumb with shadow
+     - **Animation**: 200ms with elastic easing `cubic-bezier(0.68, -0.55, 0.265, 1.55)`
+     - Creates a playful "bounce" effect when toggling
+   - **Label & Description**: "Add trailing space" with descriptive subtitle
+   - **Layout**: Flex layout with label on left, toggle on right
+   - **Positioning**: 32px margin below Recording section (`pt-8`)
+
+### Acceptance Criteria (All Met ✓):
+- ✅ Section header uses `SectionHeader` component
+- ✅ Toggle for 'Add trailing space' setting functional
+- ✅ Liquid morph animation with 200ms elastic easing
+- ✅ Off state: gray background, muted thumb
+- ✅ On state: blue background with glow, white thumb
+- ✅ Thumb animates with elastic bounce effect
+- ✅ Toggle updates `config.output.append_space`
+- ✅ Label uses Inter font, positioned left
+- ✅ Section positioned 32px below Recording
+- ✅ Current value loads from config on drawer open
+- ✅ Changes reflect immediately in UI
+
+### Build Status:
+- ✅ TypeScript compilation: No errors
+- ✅ Vite build: **1.52s** (CSS: 57.53 KB, JS: 180.63 KB)
+
+### Commits:
+- `e2c15c4` - feat: implement behavior settings section in drawer
+- `f78ec7a` - docs: update progress log for iteration 14 (task #14 complete)
+
+The implementation follows the MojoVoice Style Guide exactly, using electric blue accents, neubrutalist styling, and the signature liquid morph animation that creates a premium, tactile feel. The toggle is fully accessible with proper ARIA attributes and keyboard support.
+
+**Next task**: #15 - Settings drawer - Advanced section (collapsible)

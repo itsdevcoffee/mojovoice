@@ -803,6 +803,17 @@
   }
 }
 
+@keyframes expand-smooth {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .animate-card-enter {
   animation: card-enter 400ms ease-out forwards;
 }

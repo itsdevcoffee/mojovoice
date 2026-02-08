@@ -705,3 +705,64 @@ Verification:
 - All transitions use 200ms duration for consistency
 - Ready for next iteration (Settings drawer - Advanced section, task #15)
 Commit: e2c15c4
+## Iteration 15 - 2026-02-08 21:45 UTC
+Task: #15 - Settings drawer - Advanced section (collapsed)
+Status: Complete
+Changes:
+- ui/src/components/MissionControl.tsx: Added ChevronDown import from lucide-react
+- ui/src/components/MissionControl.tsx: Extended Config interface to include model.prompt_biasing field
+- ui/src/components/MissionControl.tsx: Added advancedExpanded state with localStorage persistence
+  - Loads collapsed state from localStorage (default: false/collapsed)
+  - Key: 'advancedSettings.collapsed'
+- ui/src/components/MissionControl.tsx: Created handler functions for advanced settings:
+  - handleModelPathOverrideChange: Updates model.path
+  - handleTechnicalVocabularyChange: Updates model.prompt_biasing
+  - handleRefreshCommandChange: Updates output.refresh_command
+  - handleSaveAudioClipsToggle: Toggles audio.save_audio_clips
+  - handleAudioClipsPathChange: Updates audio.audio_clips_path
+  - toggleAdvancedSection: Toggles expand/collapse state and saves to localStorage
+- ui/src/components/MissionControl.tsx: Implemented Advanced section in settings drawer:
+  - Collapsible header with SectionHeader + ChevronDown icon
+  - ChevronDown rotates 180deg when expanded (transition-transform duration-200)
+  - Model Path Override: text input with terminal prompt (>) in electric blue
+  - Technical Vocabulary: textarea (3 rows) for prompt biasing with placeholder
+  - Status Bar Integration: text input with terminal prompt ($) for shell command
+  - Save Audio Clips: liquid morph toggle + conditional path input
+  - Path input shows only when toggle is enabled (conditional rendering)
+  - Path input styled with left border (border-l-2 border-blue-500/30) and padding
+  - All inputs use neubrutalist styling (electric blue focus glow)
+  - All inputs use JetBrains Mono font (font-mono)
+  - Terminal prompts positioned with absolute positioning (left-3 top-1/2)
+  - Expand animation: expand-smooth 200ms ease-out
+  - Section positioned after Behavior section with pt-8 border-t
+- ui/src/styles/globals.css: Added expand-smooth keyframe animation
+  - Animates from opacity 0 + translateY(-8px) to opacity 1 + translateY(0)
+  - Duration: 200ms ease-out
+Verification:
+- Build succeeded with no errors (npm run build: ✓ built in 1.52s)
+- TypeScript compilation successful (npx tsc --noEmit: no errors)
+- All acceptance criteria verified:
+  - Section header 'ADVANCED' with click to expand/collapse ✓
+  - Starts collapsed by default (localStorage: advancedSettings.collapsed) ✓
+  - Expand animation: smooth 200ms ease (expand-smooth keyframe) ✓
+  - Model Path Override: text input with terminal prompt (>) ✓
+  - Technical Vocabulary: textarea for prompt biasing ✓
+  - Status Bar Integration: text input for shell command ($) ✓
+  - Save Audio Clips: toggle + conditional path input ✓
+  - All inputs use neubrutalist styling (electric blue focus glow) ✓
+  - Inputs use JetBrains Mono font ✓
+  - Section positioned below Behavior with pt-8 (32px margin) ✓
+  - Collapse state persists in localStorage ✓
+  - Values load from config on drawer open ✓
+- Component structure follows React best practices
+- State management with useState hooks
+- Async/await pattern for config updates
+- LocalStorage integration for persistence
+- Visual matches MojoVoice Style Guide specifications
+- Electric blue (#3B82F6) used for terminal prompts and focus states
+- Terminal prompts create "hacker console" aesthetic
+- Conditional rendering for audio clips path input
+- Smooth expand/collapse animation with ChevronDown rotation
+- All transitions use 150-200ms duration for consistency
+- Ready for next iteration (Settings drawer - Save/Reset actions, task #16)
+Commit: [pending]
