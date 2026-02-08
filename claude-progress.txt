@@ -652,4 +652,4 @@ Verification:
 - Audio device dropdown integrates with existing Tauri backend
 - All transitions use 150ms duration for consistency
 - Ready for next iteration (Settings drawer - Behavior section, task #14)
-Commit: [pending]
+Commit: 99e873c
