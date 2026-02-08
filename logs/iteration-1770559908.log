@@ -1,0 +1,48 @@
+Perfect! Task #17 is complete. Let me provide a summary:
+
+## Iteration 17 Complete ✅
+
+**Task:** #17 - Full history modal overlay
+
+**What was implemented:**
+
+1. **Modal.tsx component** - Created a reusable modal overlay system with:
+   - Full viewport coverage with backdrop blur
+   - 900px wide content box, centered
+   - Electric blue styling matching the design system
+   - Escape key and backdrop click to close
+   - 200ms fade-in animation
+   - ARIA accessibility attributes
+   - Body scroll prevention when open
+
+2. **Modal sub-components**:
+   - `ModalHeader` - Title + close button with neubrutalist styling
+   - `ModalBody` - Scrollable content area
+   - `ModalFooter` - Action button container
+
+3. **Integration**:
+   - Connected "View All →" button to open modal
+   - Displays all transcription history entries
+   - Placeholder search input (ready for task #18)
+   - Uses existing TranscriptionCard components
+   - Proper z-index layering above settings drawer
+
+**Verification:**
+- ✅ Build successful (1.49s)
+- ✅ TypeScript compilation clean
+- ✅ All 14 acceptance criteria met
+- ✅ Follows MojoVoice Style Guide
+- ✅ Accessibility compliant (ARIA, keyboard nav)
+
+**Files changed:**
+- `ui/src/components/ui/Modal.tsx` (new)
+- `ui/src/styles/globals.css` (animation added)
+- `ui/src/components/MissionControl.tsx` (integration)
+- `plan.md` (task #17 marked complete)
+- `claude-progress.txt` (progress logged)
+
+**Commits:**
+- d3a373b - feat: implement full history modal overlay
+- cf4f47c - docs: update progress log for iteration 17
+
+The modal is now functional and ready for search/filter features in task #18! 🎉

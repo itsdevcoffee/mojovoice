@@ -386,7 +386,7 @@
       "Clear search button (X) appears when text entered",
       "Search uses neubrutalist input styling"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 19,

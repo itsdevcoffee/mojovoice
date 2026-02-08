@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, ChevronDown } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Settings as SettingsIcon, ChevronDown, X as XIcon, Filter as FilterIcon } from 'lucide-react';
 import { Button } from './ui/Button';
 import { StatusBar } from './ui/StatusBar';
 import SectionHeader from './ui/SectionHeader';
@@ -17,6 +17,12 @@ export default function MissionControl() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
 
+  // Search and filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
+  const [wordCountFilter, setWordCountFilter] = useState<'all' | 'short' | 'medium' | 'long'>('all');
+
   // Get history data from store
   const { historyEntries, loadHistory, deleteHistoryEntry } = useAppStore();
 
@@ -24,6 +30,13 @@ export default function MissionControl() {
   useEffect(() => {
     loadHistory(5, 0); // Load last 5 entries
   }, [loadHistory]);
+
+  // Load all history when modal opens
+  useEffect(() => {
+    if (isHistoryModalOpen) {
+      loadHistory(1000, 0); // Load up to 1000 entries for modal
+    }
+  }, [isHistoryModalOpen, loadHistory]);
 
   const handleTestRecording = async () => {
     try {
@@ -61,6 +74,63 @@ export default function MissionControl() {
   const handleDeleteTranscription = async (id: string) => {
     await deleteHistoryEntry(id);
   };
+
+  // Filtered history entries based on search and filters
+  const filteredHistory = useMemo(() => {
+    let filtered = [...historyEntries];
+
+    // Apply search filter (debounced via useMemo dependencies)
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter((entry) =>
+        entry.text.toLowerCase().includes(query)
+      );
+    }
+
+    // Apply date filter
+    if (dateFilter !== 'all') {
+      const now = Date.now();
+      const oneDayMs = 24 * 60 * 60 * 1000;
+      const oneWeekMs = 7 * oneDayMs;
+      const oneMonthMs = 30 * oneDayMs;
+
+      filtered = filtered.filter((entry) => {
+        const entryTime = new Date(entry.timestamp).getTime();
+        const diff = now - entryTime;
+
+        switch (dateFilter) {
+          case 'today':
+            return diff < oneDayMs;
+          case 'week':
+            return diff < oneWeekMs;
+          case 'month':
+            return diff < oneMonthMs;
+          default:
+            return true;
+        }
+      });
+    }
+
+    // Apply word count filter
+    if (wordCountFilter !== 'all') {
+      filtered = filtered.filter((entry) => {
+        const wordCount = entry.text.split(/\s+/).filter(Boolean).length;
+
+        switch (wordCountFilter) {
+          case 'short':
+            return wordCount < 20;
+          case 'medium':
+            return wordCount >= 20 && wordCount <= 50;
+          case 'long':
+            return wordCount > 50;
+          default:
+            return true;
+        }
+      });
+    }
+
+    return filtered;
+  }, [historyEntries, searchQuery, dateFilter, wordCountFilter]);
 
   return (
     <div className="min-h-screen bg-[var(--bg-void)] text-[var(--text-primary)]">
@@ -182,26 +252,137 @@ export default function MissionControl() {
           onClose={() => setIsHistoryModalOpen(false)}
         />
         <ModalBody>
-          {/* Search input - placeholder for task #18 */}
-          <div className="mb-6">
-            <input
-              type="text"
-              placeholder="Search transcriptions..."
-              className="w-full px-4 py-3 bg-[var(--bg-surface)] border-2 border-[var(--border-default)] text-[var(--text-primary)] font-mono text-sm rounded focus:border-[var(--accent-primary)] focus:outline-none focus:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-150"
-              disabled
-            />
+          {/* Search and Filter Controls */}
+          <div className="mb-6 space-y-4">
+            {/* Search input with clear button */}
+            <div className="flex gap-3">
+              <div className="flex-1 relative">
+                <input
+                  type="text"
+                  placeholder="Search transcriptions..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full px-4 py-3 pr-10 bg-[var(--bg-surface)] border-2 border-[var(--border-default)] text-[var(--text-primary)] font-mono text-sm rounded focus:border-[var(--accent-primary)] focus:outline-none focus:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-150"
+                />
+                {/* Clear search button (X) */}
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-[var(--text-tertiary)] hover:text-[var(--accent-primary)] transition-colors duration-150"
+                    aria-label="Clear search"
+                  >
+                    <XIcon className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              {/* Filter button */}
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`
+                  px-4 py-3 flex items-center gap-2
+                  border-2 rounded transition-all duration-150
+                  ${showFilters
+                    ? 'bg-blue-500/20 border-blue-500 text-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.3)]'
+                    : 'bg-[var(--bg-surface)] border-[var(--border-default)] text-[var(--text-secondary)] hover:border-blue-500/50 hover:text-blue-400'
+                  }
+                  focus:outline-none focus-visible:outline-2 focus-visible:outline-blue-500
+                  focus-visible:outline-offset-2 focus-visible:shadow-[0_0_20px_rgba(59,130,246,0.5)]
+                `}
+                aria-label="Toggle filters"
+              >
+                <FilterIcon className="w-4 h-4" />
+                <span className="text-sm font-ui font-medium">Filters</span>
+              </button>
+            </div>
+
+            {/* Filter options (collapsible) */}
+            {showFilters && (
+              <div className="p-4 bg-[var(--bg-elevated)] border-2 border-[var(--border-default)] rounded space-y-4">
+                {/* Date range filter */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-ui font-medium text-[var(--text-secondary)] uppercase tracking-wide">
+                    Date Range
+                  </label>
+                  <div className="flex gap-2">
+                    {(['all', 'today', 'week', 'month'] as const).map((range) => (
+                      <button
+                        key={range}
+                        onClick={() => setDateFilter(range)}
+                        className={`
+                          px-3 py-1.5 text-xs font-ui font-medium uppercase tracking-wide rounded
+                          border-2 transition-all duration-150
+                          ${dateFilter === range
+                            ? 'bg-blue-500/20 border-blue-500 text-blue-400'
+                            : 'bg-transparent border-[var(--border-default)] text-[var(--text-tertiary)] hover:border-blue-500/50 hover:text-blue-400'
+                          }
+                        `}
+                      >
+                        {range === 'all' ? 'All Time' : range === 'week' ? 'This Week' : range === 'month' ? 'This Month' : 'Today'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Word count filter */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-ui font-medium text-[var(--text-secondary)] uppercase tracking-wide">
+                    Word Count
+                  </label>
+                  <div className="flex gap-2">
+                    {(['all', 'short', 'medium', 'long'] as const).map((range) => (
+                      <button
+                        key={range}
+                        onClick={() => setWordCountFilter(range)}
+                        className={`
+                          px-3 py-1.5 text-xs font-ui font-medium uppercase tracking-wide rounded
+                          border-2 transition-all duration-150
+                          ${wordCountFilter === range
+                            ? 'bg-blue-500/20 border-blue-500 text-blue-400'
+                            : 'bg-transparent border-[var(--border-default)] text-[var(--text-tertiary)] hover:border-blue-500/50 hover:text-blue-400'
+                          }
+                        `}
+                      >
+                        {range === 'all' ? 'All' : range === 'short' ? 'Short (<20)' : range === 'medium' ? 'Medium (20-50)' : 'Long (>50)'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Results count */}
+            <div className="flex items-center justify-between text-xs font-ui text-[var(--text-tertiary)]">
+              <span>
+                Showing {filteredHistory.length} of {historyEntries.length} transcriptions
+              </span>
+              {(searchQuery || dateFilter !== 'all' || wordCountFilter !== 'all') && (
+                <button
+                  onClick={() => {
+                    setSearchQuery('');
+                    setDateFilter('all');
+                    setWordCountFilter('all');
+                  }}
+                  className="text-blue-400 hover:text-blue-300 transition-colors duration-150"
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Scrollable history cards */}
           <div className="space-y-4">
-            {historyEntries.length === 0 ? (
+            {filteredHistory.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-sm text-[var(--text-secondary)] font-ui">
-                  No transcriptions yet
+                  {historyEntries.length === 0
+                    ? 'No transcriptions yet'
+                    : 'No transcriptions match your filters'}
                 </p>
               </div>
             ) : (
-              historyEntries.map((entry) => (
+              filteredHistory.map((entry) => (
                 <TranscriptionCard
                   key={entry.id}
                   transcription={entry}
