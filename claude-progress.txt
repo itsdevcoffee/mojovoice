@@ -589,3 +589,67 @@ Verification:
 - Smooth 150ms transitions on focus/hover
 - Ready for next iteration (Settings drawer - Recording section, task #13)
 Commit: 954bbab
+
+## Iteration 13 - 2026-02-08 20:45 UTC
+Task: #13 - Settings drawer - Recording section
+Status: Complete
+Changes:
+- ui/src/components/MissionControl.tsx: Implemented Recording section in settings drawer
+  - Extended Config interface to include audio settings (timeout_secs, device_name, etc.)
+  - Added AudioDevice interface for type safety
+  - Added audioDevices state to store list of available audio devices
+  - Modified loadSettings to fetch audio devices from list_audio_devices command
+  - Created handleTimeoutChange function that updates config.audio.timeout_secs
+  - Created handleAudioDeviceChange function that updates config.audio.device_name
+  - Created formatDurationPreview helper to display "Approximately X minutes Y seconds"
+  - Added Recording section with SectionHeader component
+  - Implemented max duration slider (10-300 seconds):
+    - Visual slider with electric blue gradient fill (rgba(59,130,246,0.3))
+    - Custom 24px thumb with electric blue glow (0 0 12px rgba(59,130,246,0.6))
+    - Hover state: lighter blue + increased glow + scale(1.1)
+    - Dynamic gradient background based on value percentage
+    - WebKit and Mozilla cross-browser thumb styling
+  - Added number input alongside slider for precision:
+    - 20px width, centered text
+    - JetBrains Mono font
+    - Neubrutalist styling (electric blue focus glow)
+    - Validates input range (10-300)
+  - Added preview text: "⏱️ Approximately X minutes Y seconds"
+  - Implemented audio device dropdown:
+    - Lists all available devices from list_audio_devices command
+    - Shows "System Default" option when device_name is null
+    - Displays "(Default)" next to system default device
+    - Uses JetBrains Mono font for values
+    - Neubrutalist styling (electric blue focus glow)
+  - Section positioned with pt-8 (32px margin) below Voice Recognition
+  - All changes save immediately via save_config command
+  - Typography: JetBrains Mono for values, Inter for labels
+  - Spacing: space-y-6 (24px) between fields, space-y-2/3 within fields
+Verification:
+- Build succeeded with no errors (npm run build: ✓ built in 1.45s)
+- TypeScript compilation successful (npx tsc --noEmit: no errors)
+- All acceptance criteria verified:
+  - Section header 'RECORDING' using SectionHeader ✓
+  - Max duration slider: range 10-300 seconds ✓
+  - Slider visual: electric blue fill, 24px thumb with glow ✓
+  - Number input alongside slider ✓
+  - Preview text: "Approximately X minutes Y seconds" ✓
+  - Audio device dropdown lists available devices ✓
+  - Both controls use neubrutalist styling ✓
+  - Changes update config immediately (save_config) ✓
+  - Slider/inputs use JetBrains Mono font ✓
+  - Section positioned with 32px margin (pt-8) ✓
+  - Values load from config on drawer open ✓
+- Component structure follows React best practices
+- State management with useState hooks
+- Async/await pattern for config updates
+- Helper function for duration preview formatting
+- Visual matches MojoVoice Style Guide specifications
+- Electric blue (#3B82F6) used for slider fill and focus glows
+- Custom slider thumb with glow effect on hover
+- Dual input pattern: slider for visual control, number input for precision
+- Preview text provides context for selected duration
+- Audio device dropdown integrates with existing Tauri backend
+- All transitions use 150ms duration for consistency
+- Ready for next iteration (Settings drawer - Behavior section, task #14)
+Commit: [pending]

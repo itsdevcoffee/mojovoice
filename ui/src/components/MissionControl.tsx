@@ -201,6 +201,13 @@ interface Config {
     model_id: string;
     language: string;
   };
+  audio: {
+    sample_rate: number;
+    timeout_secs: number;
+    save_audio_clips: boolean;
+    audio_clips_path: string;
+    device_name: string | null;
+  };
 }
 
 interface DownloadedModel {
@@ -211,9 +218,16 @@ interface DownloadedModel {
   isActive: boolean;
 }
 
+interface AudioDevice {
+  name: string;
+  is_default: boolean;
+  internal_name: string | null;
+}
+
 function SettingsContent() {
   const [config, setConfig] = useState<Config | null>(null);
   const [downloadedModels, setDownloadedModels] = useState<DownloadedModel[]>([]);
+  const [audioDevices, setAudioDevices] = useState<AudioDevice[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -227,6 +241,10 @@ function SettingsContent() {
         // Load downloaded models
         const models = await invoke<DownloadedModel[]>('list_downloaded_models');
         setDownloadedModels(models);
+
+        // Load audio devices
+        const devices = await invoke<AudioDevice[]>('list_audio_devices');
+        setAudioDevices(devices);
       } catch (error) {
         console.error('Failed to load settings:', error);
       } finally {
@@ -280,6 +298,60 @@ function SettingsContent() {
     }
   };
 
+  const handleTimeoutChange = async (timeoutSecs: number) => {
+    if (!config) return;
+
+    try {
+      // Update config with new timeout
+      const updatedConfig = {
+        ...config,
+        audio: {
+          ...config.audio,
+          timeout_secs: timeoutSecs,
+        },
+      };
+
+      await invoke('save_config', { config: updatedConfig });
+      setConfig(updatedConfig);
+    } catch (error) {
+      console.error('Failed to update timeout:', error);
+    }
+  };
+
+  const handleAudioDeviceChange = async (deviceName: string) => {
+    if (!config) return;
+
+    try {
+      // Update config with new audio device (empty string = null/default)
+      const updatedConfig = {
+        ...config,
+        audio: {
+          ...config.audio,
+          device_name: deviceName === '' ? null : deviceName,
+        },
+      };
+
+      await invoke('save_config', { config: updatedConfig });
+      setConfig(updatedConfig);
+    } catch (error) {
+      console.error('Failed to update audio device:', error);
+    }
+  };
+
+  // Helper function to format duration preview
+  const formatDurationPreview = (seconds: number): string => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+
+    if (minutes === 0) {
+      return `${seconds} seconds`;
+    } else if (remainingSeconds === 0) {
+      return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
+    } else {
+      return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ${remainingSeconds} ${remainingSeconds === 1 ? 'second' : 'seconds'}`;
+    }
+  };
+
   if (loading || !config) {
     return (
       <div className="text-center py-12">
@@ -330,6 +402,105 @@ function SettingsContent() {
               {LANGUAGE_OPTIONS.map((lang) => (
                 <option key={lang.code} value={lang.code}>
                   {lang.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </section>
+
+      {/* Recording Section */}
+      <section className="pt-8 border-t border-[var(--border-default)]">
+        <SectionHeader title="RECORDING" />
+
+        <div className="space-y-6 mt-6">
+          {/* Max Duration Slider */}
+          <div className="space-y-3">
+            <label className="block text-sm font-ui font-medium text-[var(--text-primary)]">
+              Max Duration
+            </label>
+
+            {/* Slider and number input container */}
+            <div className="flex items-center gap-4">
+              {/* Visual slider */}
+              <input
+                type="range"
+                min="10"
+                max="300"
+                value={config.audio.timeout_secs}
+                onChange={(e) => handleTimeoutChange(parseInt(e.target.value))}
+                className="flex-1 h-2 bg-gradient-to-r from-blue-500/30 to-slate-700/50 rounded-sm appearance-none cursor-pointer
+                  [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6
+                  [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-500
+                  [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[var(--bg-void)]
+                  [&::-webkit-slider-thumb]:shadow-[0_0_12px_rgba(59,130,246,0.6)]
+                  [&::-webkit-slider-thumb]:cursor-grab [&::-webkit-slider-thumb]:transition-all
+                  [&::-webkit-slider-thumb]:duration-150
+                  [&::-webkit-slider-thumb]:hover:bg-blue-400 [&::-webkit-slider-thumb]:hover:shadow-[0_0_20px_rgba(59,130,246,0.8)]
+                  [&::-webkit-slider-thumb]:hover:scale-110
+                  [&::-webkit-slider-thumb]:active:cursor-grabbing
+                  [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:h-6 [&::-moz-range-thumb]:rounded-full
+                  [&::-moz-range-thumb]:bg-blue-500 [&::-moz-range-thumb]:border-2
+                  [&::-moz-range-thumb]:border-[var(--bg-void)] [&::-moz-range-thumb]:cursor-grab
+                  [&::-moz-range-thumb]:transition-all [&::-moz-range-thumb]:duration-150
+                  focus:outline-none"
+                style={{
+                  background: `linear-gradient(to right,
+                    rgba(59, 130, 246, 0.3) 0%,
+                    rgba(59, 130, 246, 0.3) ${((config.audio.timeout_secs - 10) / (300 - 10)) * 100}%,
+                    rgba(51, 65, 85, 0.5) ${((config.audio.timeout_secs - 10) / (300 - 10)) * 100}%,
+                    rgba(51, 65, 85, 0.5) 100%)`
+                }}
+              />
+
+              {/* Number input */}
+              <input
+                type="number"
+                min="10"
+                max="300"
+                value={config.audio.timeout_secs}
+                onChange={(e) => {
+                  const value = parseInt(e.target.value);
+                  if (!isNaN(value) && value >= 10 && value <= 300) {
+                    handleTimeoutChange(value);
+                  }
+                }}
+                className="w-20 px-3 py-2 bg-[var(--bg-surface)] border-2 border-[var(--border-default)]
+                  text-[var(--text-primary)] font-mono text-sm text-center rounded
+                  focus:border-[var(--accent-primary)] focus:outline-none
+                  focus:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-150"
+              />
+
+              {/* Unit label */}
+              <span className="text-sm font-mono text-[var(--text-secondary)] min-w-[60px]">
+                seconds
+              </span>
+            </div>
+
+            {/* Preview text */}
+            <p className="text-xs text-[var(--text-tertiary)] font-ui flex items-center gap-2">
+              <span>⏱️</span>
+              <span>Approximately {formatDurationPreview(config.audio.timeout_secs)}</span>
+            </p>
+          </div>
+
+          {/* Audio Device Dropdown */}
+          <div className="space-y-2">
+            <label className="block text-sm font-ui font-medium text-[var(--text-primary)]">
+              Audio Device
+            </label>
+            <select
+              value={config.audio.device_name || ''}
+              onChange={(e) => handleAudioDeviceChange(e.target.value)}
+              className="w-full px-4 py-3 bg-[var(--bg-surface)] border-2 border-[var(--border-default)] text-[var(--text-primary)] font-mono text-sm rounded focus:border-[var(--accent-primary)] focus:outline-none focus:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-150"
+            >
+              <option value="">System Default</option>
+              {audioDevices.map((device) => (
+                <option
+                  key={device.internal_name || device.name}
+                  value={device.internal_name || device.name}
+                >
+                  {device.name}{device.is_default ? ' (Default)' : ''}
                 </option>
               ))}
             </select>

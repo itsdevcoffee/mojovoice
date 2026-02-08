@@ -276,7 +276,7 @@
       "Section positioned below Voice Recognition with 32px margin",
       "Values load from current config on drawer open"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 14,

@@ -1,0 +1,51 @@
+Perfect! Task #12 is complete. Let me create a summary for the user:
+
+---
+
+## ✅ Task #12 Complete: Settings Drawer - Voice Recognition Section
+
+I've successfully implemented the Voice Recognition section inside the settings drawer. Here's what was accomplished:
+
+### Implementation Summary
+
+**Component Created:**
+- `SettingsContent` component inside `MissionControl.tsx` with full state management
+- Integrated with existing Settings.tsx model switching logic
+
+**Features Implemented:**
+
+1. **Section Header**
+   - Uses `SectionHeader` component with "VOICE RECOGNITION" title
+   - Terminal-inspired design with electric blue color
+
+2. **Model Dropdown**
+   - Lists all downloaded models with size display
+   - Active model marked with ✓ checkmark
+   - Neubrutalist styling: 2px border, electric blue focus glow
+   - JetBrains Mono font for model names
+   - Calls `switch_model` Tauri command on change
+
+3. **Language Dropdown**
+   - 12 language options (Auto-detect, English, Spanish, French, German, etc.)
+   - Same neubrutalist styling as model dropdown
+   - JetBrains Mono font for language names
+   - Updates config via `save_config` command
+
+4. **Design Compliance**
+   - Labels: Inter font (`font-ui`)
+   - Values: JetBrains Mono (`font-mono`)
+   - Spacing: 24px between fields
+   - Electric blue focus states (#3B82F6)
+   - Smooth 150ms transitions
+
+### Verification
+- ✅ Build succeeded with no errors
+- ✅ All 11 acceptance criteria met
+- ✅ TypeScript compilation successful
+- ✅ Visual matches MojoVoice Style Guide
+
+### Commits
+- `954bbab` - feat: implement voice recognition settings section in drawer
+- `e35acc6` - docs: update progress log for iteration 12
+
+**Next Task:** #13 - Settings drawer - Recording section (max duration slider + audio device dropdown)
