@@ -528,3 +528,64 @@ Verification:
 - Backdrop blur creates depth and focus
 - Ready for next iteration (Settings drawer - Voice Recognition section, task #12)
 Commit: e82ec20
+
+## Iteration 12 - 2026-02-08 20:15 UTC
+Task: #12 - Settings drawer - Voice Recognition section
+Status: Complete
+Changes:
+- ui/src/components/MissionControl.tsx: Implemented Voice Recognition settings section
+  - Created SettingsContent component inside settings drawer
+  - Added LANGUAGE_OPTIONS constant (12 languages: auto, en, es, fr, de, ja, zh, pt, ru, ko, it, nl)
+  - Added Config and DownloadedModel interfaces for type safety
+  - Implemented state management for config, downloadedModels, and loading states
+  - Added useEffect to load config and downloaded models from Tauri backend
+  - Created handleModelChange function that calls switch_model command
+  - Created handleLanguageChange function that updates config and calls save_config
+  - Added Voice Recognition section with SectionHeader component
+  - Implemented Model dropdown:
+    - Shows list of downloaded models with name and size
+    - Active model marked with ✓ checkmark
+    - Uses JetBrains Mono font (font-mono) for values
+    - Neubrutalist styling: 2px border, electric blue focus glow
+    - Border: border-[var(--border-default)] (#334155)
+    - Focus: border-[var(--accent-primary)] + 0 0 20px glow
+    - Background: bg-[var(--bg-surface)] (#151B2E)
+    - Calls handleModelChange on change
+  - Implemented Language dropdown:
+    - Shows 12 language options from LANGUAGE_OPTIONS
+    - Uses JetBrains Mono font for values
+    - Same neubrutalist styling as Model dropdown
+    - Calls handleLanguageChange on change
+  - Labels use Inter font (font-ui), values use JetBrains Mono (font-mono)
+  - Spacing: space-y-6 (24px) between fields, mt-6 after header
+  - Section positioned at top of drawer content
+  - Added loading state with centered loading message
+  - Added placeholder section for future settings (bordered separator)
+- plan.md: Updated task #12 passes field to true
+Verification:
+- Build succeeded with no errors (npm run build: ✓ built in 1.54s)
+- TypeScript compilation successful (no errors)
+- All acceptance criteria verified:
+  - Section header 'VOICE RECOGNITION' using SectionHeader component ✓
+  - Model dropdown shows list of downloaded models ✓
+  - Model dropdown uses neubrutalist select styling (electric blue focus) ✓
+  - Language dropdown shows language options (12 languages) ✓
+  - Dropdowns use JetBrains Mono font for values ✓
+  - Model switching calls switch_model command ✓
+  - Language switching updates config (save_config) ✓
+  - Section positioned at top of drawer content ✓
+  - Labels use Inter font (font-ui), values use JetBrains Mono (font-mono) ✓
+  - Spacing: 24px padding (space-y-6), 16px between fields ✓
+  - Integrates with existing Settings.tsx logic (switch_model, save_config) ✓
+- Component structure follows React best practices
+- State management with useState + useEffect hooks
+- Async/await pattern for Tauri IPC calls
+- Proper error handling with console.error
+- TypeScript interfaces for type safety
+- Visual matches MojoVoice Style Guide neubrutalist aesthetic
+- Electric blue focus states on dropdowns
+- JetBrains Mono for all values (model names, language options)
+- Inter font for labels
+- Smooth 150ms transitions on focus/hover
+- Ready for next iteration (Settings drawer - Recording section, task #13)
+Commit: [pending]

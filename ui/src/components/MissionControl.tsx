@@ -173,13 +173,176 @@ export default function MissionControl() {
 
       {/* Settings Drawer */}
       <Drawer isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)}>
-        <h2 id="drawer-title" className="text-xl font-mono font-bold text-[var(--text-primary)] mb-8">
-          SETTINGS
-        </h2>
-        <p className="text-sm text-[var(--text-secondary)] font-ui">
-          Settings content will be implemented in upcoming tasks.
-        </p>
+        <SettingsContent />
       </Drawer>
+    </div>
+  );
+}
+
+// Language options
+const LANGUAGE_OPTIONS = [
+  { code: 'auto', name: 'Auto-detect' },
+  { code: 'en', name: 'English' },
+  { code: 'es', name: 'Spanish' },
+  { code: 'fr', name: 'French' },
+  { code: 'de', name: 'German' },
+  { code: 'ja', name: 'Japanese' },
+  { code: 'zh', name: 'Chinese' },
+  { code: 'pt', name: 'Portuguese' },
+  { code: 'ru', name: 'Russian' },
+  { code: 'ko', name: 'Korean' },
+  { code: 'it', name: 'Italian' },
+  { code: 'nl', name: 'Dutch' },
+];
+
+interface Config {
+  model: {
+    path: string;
+    model_id: string;
+    language: string;
+  };
+}
+
+interface DownloadedModel {
+  name: string;
+  filename: string;
+  path: string;
+  sizeMb: number;
+  isActive: boolean;
+}
+
+function SettingsContent() {
+  const [config, setConfig] = useState<Config | null>(null);
+  const [downloadedModels, setDownloadedModels] = useState<DownloadedModel[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        setLoading(true);
+        // Load config
+        const cfg = await invoke<Config>('get_config');
+        setConfig(cfg);
+
+        // Load downloaded models
+        const models = await invoke<DownloadedModel[]>('list_downloaded_models');
+        setDownloadedModels(models);
+      } catch (error) {
+        console.error('Failed to load settings:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadSettings();
+  }, []);
+
+  const handleModelChange = async (path: string) => {
+    if (!config) return;
+
+    try {
+      // Extract filename from path for switch_model
+      const pathParts = path.split('/');
+      const filename = pathParts[pathParts.length - 1];
+
+      // Switch model (this updates path, model_id, saves, and restarts daemon)
+      await invoke('switch_model', { filename });
+
+      // Reload config to get the updated model_id
+      const updatedConfig = await invoke<Config>('get_config');
+      setConfig(updatedConfig);
+
+      // Reload models to update active status
+      const models = await invoke<DownloadedModel[]>('list_downloaded_models');
+      setDownloadedModels(models);
+    } catch (error) {
+      console.error('Failed to switch model:', error);
+    }
+  };
+
+  const handleLanguageChange = async (language: string) => {
+    if (!config) return;
+
+    try {
+      // Update config with new language
+      const updatedConfig = {
+        ...config,
+        model: {
+          ...config.model,
+          language,
+        },
+      };
+
+      await invoke('save_config', { config: updatedConfig });
+      setConfig(updatedConfig);
+    } catch (error) {
+      console.error('Failed to update language:', error);
+    }
+  };
+
+  if (loading || !config) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-sm text-[var(--text-secondary)] font-ui">Loading settings...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      {/* Voice Recognition Section */}
+      <section>
+        <SectionHeader title="VOICE RECOGNITION" />
+
+        <div className="space-y-6 mt-6">
+          {/* Model Dropdown */}
+          <div className="space-y-2">
+            <label className="block text-sm font-ui font-medium text-[var(--text-primary)]">
+              Model
+            </label>
+            <select
+              value={config.model.path}
+              onChange={(e) => handleModelChange(e.target.value)}
+              className="w-full px-4 py-3 bg-[var(--bg-surface)] border-2 border-[var(--border-default)] text-[var(--text-primary)] font-mono text-sm rounded focus:border-[var(--accent-primary)] focus:outline-none focus:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-150"
+            >
+              {downloadedModels.length === 0 ? (
+                <option value="" disabled>No models downloaded</option>
+              ) : (
+                downloadedModels.map((model) => (
+                  <option key={model.path} value={model.path}>
+                    {model.name} ({model.sizeMb} MB){model.isActive ? ' ✓' : ''}
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+
+          {/* Language Dropdown */}
+          <div className="space-y-2">
+            <label className="block text-sm font-ui font-medium text-[var(--text-primary)]">
+              Language
+            </label>
+            <select
+              value={config.model.language}
+              onChange={(e) => handleLanguageChange(e.target.value)}
+              className="w-full px-4 py-3 bg-[var(--bg-surface)] border-2 border-[var(--border-default)] text-[var(--text-primary)] font-mono text-sm rounded focus:border-[var(--accent-primary)] focus:outline-none focus:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-150"
+            >
+              {LANGUAGE_OPTIONS.map((lang) => (
+                <option key={lang.code} value={lang.code}>
+                  {lang.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </section>
+
+      {/* Placeholder for future sections */}
+      <div className="pt-8 border-t border-[var(--border-default)]">
+        <p className="text-xs text-[var(--text-tertiary)] font-ui text-center">
+          Additional settings sections will be implemented in upcoming tasks.
+        </p>
+      </div>
     </div>
   );
 }

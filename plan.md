@@ -255,7 +255,7 @@
       "Spacing: 24px padding, 16px between fields",
       "Integrates with existing Settings.tsx model switching logic"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 13,
