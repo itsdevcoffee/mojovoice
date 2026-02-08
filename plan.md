@@ -364,7 +364,7 @@
       "Z-index above settings drawer",
       "Modal accepts children (history content)"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 18,

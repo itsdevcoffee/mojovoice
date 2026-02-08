@@ -814,6 +814,17 @@
   }
 }
 
+@keyframes modal-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .animate-card-enter {
   animation: card-enter 400ms ease-out forwards;
 }
@@ -832,6 +843,10 @@
 
 .animate-pulse-badge {
   animation: pulse-badge 2s ease-in-out infinite;
+}
+
+.animate-modal-fade-in {
+  animation: modal-fade-in 200ms ease-out forwards;
 }
 
 /* Stagger delay utilities */

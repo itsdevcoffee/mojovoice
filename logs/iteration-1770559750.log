@@ -1,0 +1,46 @@
+Excellent! Task #16 is complete. Let me provide a summary:
+
+---
+
+## ✅ Iteration 16 Complete - Task #16: Settings Drawer Save/Reset Actions
+
+**What I implemented:**
+
+1. **State Management:**
+   - Added `originalConfig` to track initial values for reset functionality
+   - Added `saving` state for loading spinner during save operation
+   - Added `saveSuccess` state for 3-second green success indicator
+
+2. **Save Functionality (`handleSaveChanges`):**
+   - Calls `save_config` Tauri command to persist all settings
+   - Detects if daemon-critical settings changed (model path, language, audio device)
+   - Shows green "Saved!" indicator for 3 seconds
+   - Logs restart recommendation (ready for future banner implementation)
+   - Updates `originalConfig` to new saved state
+
+3. **Reset Functionality (`handleReset`):**
+   - Deep copies `originalConfig` back to `config` state
+   - Restores all form fields to their original values
+   - Disabled during save operations
+
+4. **UI Components:**
+   - **Save button** (right): Primary neubrutalist style, shows spinner when saving, changes to green "Saved!" on success
+   - **Reset button** (left): Ghost style, minimal appearance
+   - Sticky positioning at drawer bottom (always visible)
+   - 24px padding (pt-6 pb-6), gap-3 spacing
+   - Border-top separator from content
+
+**Verification:**
+- ✅ Build successful (1.57s)
+- ✅ TypeScript compilation clean
+- ✅ All 11 acceptance criteria met
+- ✅ Smart restart detection implemented
+- ✅ Visual matches MojoVoice Style Guide
+
+**Commits:**
+- `8523d3c` - feat: implement save/reset buttons in settings drawer
+- `557939a` - docs: update progress log for iteration 16
+
+**Next task:** #17 - Full history modal overlay
+
+The settings drawer is now **fully complete** with all sections (Voice Recognition, Recording, Behavior, Advanced) and save/reset functionality! 🎉

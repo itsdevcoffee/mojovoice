@@ -6,6 +6,7 @@ import SectionHeader from './ui/SectionHeader';
 import { TranscriptionCard } from './ui/TranscriptionCard';
 import { SystemStatus } from './ui/SystemStatus';
 import { Drawer } from './ui/Drawer';
+import { Modal, ModalHeader, ModalBody } from './ui/Modal';
 import { invoke } from '../lib/ipc';
 import { useAppStore } from '../stores/appStore';
 
@@ -14,6 +15,7 @@ export default function MissionControl() {
   const [transcription, setTranscription] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
 
   // Get history data from store
   const { historyEntries, loadHistory, deleteHistoryEntry } = useAppStore();
@@ -148,10 +150,7 @@ export default function MissionControl() {
               <div className="flex justify-center mt-6">
                 <button
                   className="px-4 py-2 text-sm font-ui text-[var(--accent-primary)] hover:text-[var(--accent-glow)] transition-colors duration-150"
-                  onClick={() => {
-                    // TODO: Open history modal (placeholder for task #17)
-                    console.log('View All clicked - History modal not yet implemented');
-                  }}
+                  onClick={() => setIsHistoryModalOpen(true)}
                 >
                   View All →
                 </button>
@@ -175,6 +174,45 @@ export default function MissionControl() {
       <Drawer isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)}>
         <SettingsContent />
       </Drawer>
+
+      {/* History Modal */}
+      <Modal isOpen={isHistoryModalOpen} onClose={() => setIsHistoryModalOpen(false)}>
+        <ModalHeader
+          title="TRANSCRIPTION HISTORY"
+          onClose={() => setIsHistoryModalOpen(false)}
+        />
+        <ModalBody>
+          {/* Search input - placeholder for task #18 */}
+          <div className="mb-6">
+            <input
+              type="text"
+              placeholder="Search transcriptions..."
+              className="w-full px-4 py-3 bg-[var(--bg-surface)] border-2 border-[var(--border-default)] text-[var(--text-primary)] font-mono text-sm rounded focus:border-[var(--accent-primary)] focus:outline-none focus:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-150"
+              disabled
+            />
+          </div>
+
+          {/* Scrollable history cards */}
+          <div className="space-y-4">
+            {historyEntries.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-sm text-[var(--text-secondary)] font-ui">
+                  No transcriptions yet
+                </p>
+              </div>
+            ) : (
+              historyEntries.map((entry) => (
+                <TranscriptionCard
+                  key={entry.id}
+                  transcription={entry}
+                  onCopy={handleCopyTranscription}
+                  onDelete={handleDeleteTranscription}
+                />
+              ))
+            )}
+          </div>
+        </ModalBody>
+      </Modal>
     </div>
   );
 }
