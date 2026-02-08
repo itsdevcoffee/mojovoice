@@ -473,7 +473,7 @@
       "All images have alt text (or aria-hidden if decorative)",
       "Form labels properly associated with inputs"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 23,

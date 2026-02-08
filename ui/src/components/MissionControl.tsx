@@ -304,7 +304,7 @@ export default function MissionControl() {
       </header>
 
       {/* Main content area */}
-      <main className="max-w-[800px] mx-auto px-6 pb-12">
+      <main id="main-content" className="max-w-[800px] mx-auto px-6 pb-12">
         {/* Giant test recording button */}
         <div className="flex flex-col items-center justify-center mt-16 mb-12">
           <Button
@@ -325,7 +325,7 @@ export default function MissionControl() {
 
           {/* Transcription result */}
           {transcription && (
-            <div className="mt-8 w-full max-w-[600px]">
+            <div className="mt-8 w-full max-w-[600px]" role="status" aria-live="polite" aria-atomic="true">
               <div className="p-6 bg-[var(--bg-surface)] border-2 border-[var(--border-default)] rounded">
                 <p className="text-sm text-[var(--text-tertiary)] font-ui mb-2">
                   Transcription:
@@ -339,7 +339,7 @@ export default function MissionControl() {
 
           {/* Error message */}
           {error && (
-            <div className="mt-8 w-full max-w-[600px]">
+            <div className="mt-8 w-full max-w-[600px]" role="alert" aria-live="assertive">
               <div className="p-6 bg-red-500/10 border-2 border-red-500/50 rounded">
                 <p className="text-sm text-red-400 font-ui mb-2">
                   Error:
@@ -379,8 +379,9 @@ export default function MissionControl() {
               {/* View All button */}
               <div className="flex justify-center mt-6">
                 <button
-                  className="px-4 py-2 text-sm font-ui text-[var(--accent-primary)] hover:text-[var(--accent-glow)] transition-colors duration-150"
+                  className="px-4 py-2 text-sm font-ui text-[var(--accent-primary)] hover:text-[var(--accent-glow)] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-2 focus-visible:shadow-[0_0_20px_rgba(59,130,246,0.5)]"
                   title={`View All History (${navigator.platform.toUpperCase().indexOf('MAC') >= 0 ? 'Cmd' : 'Ctrl'}+H)`}
+                  aria-label="View all transcription history"
                   onClick={() => setIsHistoryModalOpen(true)}
                 >
                   View All →
@@ -1191,6 +1192,8 @@ function SettingsContent() {
           onClick={toggleAdvancedSection}
           className="w-full flex items-center justify-between group focus:outline-none focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-2"
           aria-expanded={advancedExpanded}
+          aria-controls="advanced-settings-content"
+          aria-label={`Advanced settings section, ${advancedExpanded ? 'expanded' : 'collapsed'}. Click to ${advancedExpanded ? 'collapse' : 'expand'}.`}
         >
           <div className="flex items-center gap-3">
             <SectionHeader title="ADVANCED" />
@@ -1199,12 +1202,14 @@ function SettingsContent() {
             className={`w-4 h-4 text-[var(--text-tertiary)] transition-transform duration-200 ${
               advancedExpanded ? 'rotate-180' : ''
             }`}
+            aria-hidden="true"
           />
         </button>
 
         {/* Collapsible content with smooth animation */}
         {advancedExpanded && (
           <div
+            id="advanced-settings-content"
             className="mt-6 space-y-6 animate-expand"
             style={{
               animation: 'expand-smooth 200ms ease-out'

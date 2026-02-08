@@ -88,23 +88,29 @@ export function SystemStatus() {
   return (
     <section className="mt-12">
       {/* Header - clickable to toggle */}
-      <div
+      <button
         onClick={handleToggle}
-        className="cursor-pointer select-none flex items-center gap-3 mb-4"
+        className="cursor-pointer select-none flex items-center gap-3 mb-4 w-full text-left bg-transparent border-none p-0 focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-2 focus-visible:shadow-[0_0_20px_rgba(59,130,246,0.5)] rounded"
+        aria-expanded={isExpanded}
+        aria-controls="system-status-content"
+        aria-label={`System status section, ${isExpanded ? 'expanded' : 'collapsed'}. Click to ${isExpanded ? 'collapse' : 'expand'}.`}
       >
         <SectionHeader title="SYSTEM STATUS" />
         <ChevronDown
           className={`w-4 h-4 text-[var(--accent-primary)] transition-transform duration-200 ${
             isExpanded ? '' : 'rotate-180'
           }`}
+          aria-hidden="true"
         />
-      </div>
+      </button>
 
       {/* Content - collapsible */}
       <div
+        id="system-status-content"
         className={`overflow-hidden transition-all duration-200 ease-out ${
           isExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
         }`}
+        aria-hidden={!isExpanded}
       >
         <div className="p-6 bg-[var(--bg-surface)] border-2 border-[var(--border-default)] rounded space-y-4">
           {/* GPU */}

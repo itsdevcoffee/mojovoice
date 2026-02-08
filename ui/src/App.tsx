@@ -80,7 +80,16 @@ function App() {
   }, [setDaemonStatus, addLog, setUIScale]);
 
   return (
-    <MissionControl />
+    <>
+      {/* Skip to main content link for screen readers */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-6 focus:py-3 focus:bg-blue-600 focus:text-white focus:border-2 focus:border-black focus:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] focus:font-semibold focus:uppercase focus:tracking-wide"
+      >
+        Skip to main content
+      </a>
+      <MissionControl />
+    </>
   );
 }
 

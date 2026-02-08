@@ -1,5 +1,5 @@
 import { X } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 interface ModalProps {
   isOpen: boolean;
@@ -8,6 +8,9 @@ interface ModalProps {
 }
 
 export function Modal({ isOpen, onClose, children }: ModalProps) {
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previousActiveElement = useRef<HTMLElement | null>(null);
+
   // Handle Escape key
   useEffect(() => {
     if (!isOpen) return;
@@ -34,10 +37,66 @@ export function Modal({ isOpen, onClose, children }: ModalProps) {
     };
   }, [isOpen]);
 
+  // Focus trap implementation
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // Store previously focused element
+    previousActiveElement.current = document.activeElement as HTMLElement;
+
+    // Focus first focusable element in modal
+    const focusableElements = modalRef.current?.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+
+    if (focusableElements && focusableElements.length > 0) {
+      (focusableElements[0] as HTMLElement).focus();
+    }
+
+    // Handle Tab key to trap focus
+    const handleTab = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+
+      const focusables = modalRef.current?.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+
+      if (!focusables || focusables.length === 0) return;
+
+      const firstFocusable = focusables[0] as HTMLElement;
+      const lastFocusable = focusables[focusables.length - 1] as HTMLElement;
+
+      if (e.shiftKey) {
+        // Shift + Tab: focus last if on first
+        if (document.activeElement === firstFocusable) {
+          lastFocusable.focus();
+          e.preventDefault();
+        }
+      } else {
+        // Tab: focus first if on last
+        if (document.activeElement === lastFocusable) {
+          firstFocusable.focus();
+          e.preventDefault();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleTab);
+
+    // Restore focus when modal closes
+    return () => {
+      document.removeEventListener('keydown', handleTab);
+      if (previousActiveElement.current) {
+        previousActiveElement.current.focus();
+      }
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
     <div
+      ref={modalRef}
       className="fixed inset-0 z-50 flex items-center justify-center"
       role="dialog"
       aria-modal="true"

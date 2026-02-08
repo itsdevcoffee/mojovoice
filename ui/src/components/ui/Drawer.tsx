@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 
 interface DrawerProps {
@@ -8,6 +8,9 @@ interface DrawerProps {
 }
 
 export const Drawer: React.FC<DrawerProps> = ({ isOpen, onClose, children }) => {
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const previousActiveElement = useRef<HTMLElement | null>(null);
+
   // Handle Escape key
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -32,6 +35,61 @@ export const Drawer: React.FC<DrawerProps> = ({ isOpen, onClose, children }) => 
     };
   }, [isOpen]);
 
+  // Focus trap implementation
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // Store previously focused element
+    previousActiveElement.current = document.activeElement as HTMLElement;
+
+    // Focus first focusable element in drawer
+    const focusableElements = drawerRef.current?.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+
+    if (focusableElements && focusableElements.length > 0) {
+      (focusableElements[0] as HTMLElement).focus();
+    }
+
+    // Handle Tab key to trap focus
+    const handleTab = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+
+      const focusables = drawerRef.current?.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+
+      if (!focusables || focusables.length === 0) return;
+
+      const firstFocusable = focusables[0] as HTMLElement;
+      const lastFocusable = focusables[focusables.length - 1] as HTMLElement;
+
+      if (e.shiftKey) {
+        // Shift + Tab: focus last if on first
+        if (document.activeElement === firstFocusable) {
+          lastFocusable.focus();
+          e.preventDefault();
+        }
+      } else {
+        // Tab: focus first if on last
+        if (document.activeElement === lastFocusable) {
+          firstFocusable.focus();
+          e.preventDefault();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleTab);
+
+    // Restore focus when drawer closes
+    return () => {
+      document.removeEventListener('keydown', handleTab);
+      if (previousActiveElement.current) {
+        previousActiveElement.current.focus();
+      }
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
@@ -45,6 +103,7 @@ export const Drawer: React.FC<DrawerProps> = ({ isOpen, onClose, children }) => 
 
       {/* Drawer */}
       <div
+        ref={drawerRef}
         className="fixed top-0 right-0 h-screen w-[400px] bg-[#151B2E] border-l-2 border-[#334155] z-50 shadow-2xl overflow-y-auto"
         style={{
           animation: isOpen ? 'slideIn 300ms cubic-bezier(0.16, 1, 0.3, 1)' : 'slideOut 300ms cubic-bezier(0.16, 1, 0.3, 1)',
