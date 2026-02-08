@@ -158,4 +158,4 @@ Verification:
 - Accessibility: motion-safe prefix ensures animation disabled for prefers-reduced-motion
 - Component accepts title prop with TypeScript typing
 - Visual matches style guide mockup from section header pattern
-Commit: [pending]
+Commit: ca8800f
