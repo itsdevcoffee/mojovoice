@@ -1,0 +1,54 @@
+Perfect! Task #7 is now complete. Let me provide a summary of what was accomplished:
+
+---
+
+## ✅ Task #7 Complete: Status Bar Component
+
+**Implementation Summary:**
+
+I successfully implemented the status bar component as the centerpiece for displaying system status and quick settings. Here's what was built:
+
+### Components Created:
+- **`ui/src/components/ui/StatusBar.tsx`** - A comprehensive status bar with real-time updates
+
+### Key Features:
+
+1. **Real-Time Status Indicator**
+   - Green dot (●) + "READY" when daemon is running
+   - Red dot (●) + "OFFLINE" when daemon is not running
+   - Polls status every 5 seconds for updates
+
+2. **Interactive Model Dropdown**
+   - Shows current model name with ChevronDown icon
+   - Click to open dropdown with all downloaded models
+   - Switch models with a single click
+   - Current model highlighted in blue
+   - Backdrop closes dropdown on outside click
+
+3. **System Information Display**
+   - Current language (from config)
+   - Active microphone name (with truncation)
+   - Clean layout with labeled values
+
+4. **Neubrutalist Design**
+   - 2px borders (#334155) with electric blue hover (#3B82F6)
+   - Proper padding (16px vertical, 24px horizontal)
+   - Electric blue focus glow on dropdown
+   - Smooth 150ms transitions
+
+5. **Typography**
+   - JetBrains Mono for all values (model, language, mic)
+   - Inter for labels
+   - Proper uppercase styling for status text
+
+### Integration:
+- Positioned in MissionControl below the test button with 48px margin
+- Integrates with Tauri backend commands: `get_daemon_status`, `get_config`, `list_downloaded_models`, `switch_model`
+
+### Build Status:
+- ✅ Build succeeded (1.54s)
+- ✅ TypeScript compilation clean
+- ✅ All acceptance criteria met
+- ✅ Committed: `b5e4554`
+
+**Next Task:** Task #8 - Transcription card component

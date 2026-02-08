@@ -330,3 +330,51 @@ Verification:
 - Accessible: focus states with electric blue glow, keyboard navigation
 - Visual matches MojoVoice Style Guide specifications
 Commit: b5e4554
+## Iteration 8 - 2026-02-08 18:15 UTC
+Task: #8 - Transcription card component
+Status: Complete
+Changes:
+- ui/src/components/ui/TranscriptionCard.tsx: Created reusable transcription card component
+  - Implemented emoji icon (📝) in header with title and metadata
+  - Title: first 7 words of transcription text with ellipsis if longer
+  - Timestamp: relative time display (just now, Xm ago, Xh ago, Xd ago)
+  - Word count: displayed with bullet separator (• X words)
+  - Preview mode: line-clamp-2 truncates to 2 lines with CSS ellipsis
+  - Expanded mode: full text with whitespace-pre-wrap for proper formatting
+  - Hover state reveals action buttons (Copy + Delete)
+  - Copy button: calls onCopy callback with full transcription text
+  - Delete button: shows confirmation overlay before calling onDelete
+  - Delete confirmation: inline overlay with Confirm/Cancel buttons using neubrutalist styling
+  - Click card to toggle expansion (isExpanded state)
+  - Action buttons use backdrop blur + hover state transitions
+  - Confirmation buttons use brutal shadow animation (2px → 4px on hover)
+  - Typography: JetBrains Mono (font-mono) for title/timestamp/count, Inter (font-ui) for text
+  - Component accepts TranscriptionEntry prop from existing interface
+  - All transitions use 150ms duration for consistency
+  - Accessibility: proper ARIA labels on buttons, semantic time element
+- plan.md: Updated task #8 passes field to true
+Verification:
+- Build succeeded with no errors (npm run build: ✓ built in 1.48s)
+- TypeScript compilation successful (npx tsc --noEmit: no errors)
+- Component file created in correct location (ui/src/components/ui/TranscriptionCard.tsx)
+- All acceptance criteria verified:
+  - TranscriptionCard component created ✓
+  - Uses Card component with neubrutalist styling ✓
+  - Shows 📝 emoji icon ✓
+  - Title: first 7 words (getTitleFromText function) ✓
+  - Timestamp: relative time (formatRelativeTime: Xm ago, Xh ago, Xd ago) ✓
+  - Word count: '• X words' format ✓
+  - Preview text: line-clamp-2 for 2-line truncation ✓
+  - Hover reveals Copy/Delete buttons ✓
+  - Copy button calls onCopy callback ✓
+  - Delete button shows confirmation overlay ✓
+  - Click card toggles expansion ✓
+  - Font: JetBrains Mono for metadata, Inter for text ✓
+  - Accepts transcription prop ✓
+  - Actions functional via callbacks ✓
+- Visual matches MojoVoice Style Guide neubrutalist aesthetic
+- Buttons use electric blue hover (#3B82F6)
+- Delete confirmation uses red accent (#EF4444)
+- All hover states use 150-200ms transitions
+- Component ready for use in Recent Transcriptions section (task #9)
+Commit: [pending]

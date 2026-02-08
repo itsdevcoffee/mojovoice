@@ -166,7 +166,7 @@
       "Component accepts transcription data prop",
       "Actions functional (copy works, delete updates state)"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 9,
