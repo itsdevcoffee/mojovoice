@@ -1064,4 +1064,4 @@ Verification:
 - All shortcuts use standard keyboard conventions
 - Escape always works (accessibility requirement)
 - Ready for next iteration (Micro-interactions and polish, task #21)
-Commit: [pending]
+Commit: 1da8b22
