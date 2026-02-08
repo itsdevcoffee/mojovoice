@@ -765,4 +765,4 @@ Verification:
 - Smooth expand/collapse animation with ChevronDown rotation
 - All transitions use 150-200ms duration for consistency
 - Ready for next iteration (Settings drawer - Save/Reset actions, task #16)
-Commit: [pending]
+Commit: a4d1932
