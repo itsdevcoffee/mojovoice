@@ -48,7 +48,6 @@ export const TranscriptionCard: React.FC<TranscriptionCardProps> = ({
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const wordCount = getWordCount(transcription.text);
   const title = getTitleFromText(transcription.text);
@@ -59,20 +58,9 @@ export const TranscriptionCard: React.FC<TranscriptionCardProps> = ({
     onCopy(transcription.text);
   };
 
-  const handleDeleteClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShowDeleteConfirm(true);
-  };
-
-  const handleDeleteConfirm = (e: React.MouseEvent) => {
+  const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
     onDelete(transcription.id);
-    setShowDeleteConfirm(false);
-  };
-
-  const handleDeleteCancel = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShowDeleteConfirm(false);
   };
 
   const handleCardClick = () => {
@@ -135,8 +123,8 @@ export const TranscriptionCard: React.FC<TranscriptionCardProps> = ({
           )}
         </div>
 
-        {/* Action Buttons (shown on hover) — bottom-right, no gradient overlay */}
-        {isHovered && !showDeleteConfirm && (
+        {/* Action Buttons (shown on hover) — bottom-right */}
+        {isHovered && (
           <div className="absolute bottom-4 right-4 flex items-center gap-2 z-20">
             <button
               onClick={handleCopy}
@@ -159,7 +147,7 @@ export const TranscriptionCard: React.FC<TranscriptionCardProps> = ({
               <span>Copy</span>
             </button>
             <button
-              onClick={handleDeleteClick}
+              onClick={handleDelete}
               className="
                 px-3 py-1.5
                 bg-[var(--bg-elevated)]
@@ -177,45 +165,6 @@ export const TranscriptionCard: React.FC<TranscriptionCardProps> = ({
             >
               <Trash2 size={12} />
               <span>Delete</span>
-            </button>
-          </div>
-        )}
-
-        {/* Delete Confirmation Overlay */}
-        {showDeleteConfirm && (
-          <div className="absolute inset-0 bg-slate-900/95 backdrop-blur-sm flex items-center justify-center gap-3 p-4 z-30">
-            <p className="font-[family-name:var(--font-ui)] text-sm text-slate-300 mr-2">
-              Delete this transcription?
-            </p>
-            <button
-              onClick={handleDeleteConfirm}
-              className="
-                px-4 py-2
-                bg-red-600
-                text-white text-xs font-mono uppercase
-                border-2 border-black
-                shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]
-                hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]
-                hover:translate-x-[-2px] hover:translate-y-[-2px]
-                active:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]
-                active:translate-x-[1px] active:translate-y-[1px]
-                transition-all duration-150
-              "
-            >
-              Confirm
-            </button>
-            <button
-              onClick={handleDeleteCancel}
-              className="
-                px-4 py-2
-                bg-transparent
-                text-slate-300 text-xs font-mono uppercase
-                border-2 border-slate-600
-                hover:bg-slate-800 hover:text-white
-                transition-all duration-150
-              "
-            >
-              Cancel
             </button>
           </div>
         )}

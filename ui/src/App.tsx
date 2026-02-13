@@ -1,6 +1,7 @@
 import { useEffect, lazy, Suspense } from 'react';
 import { invoke } from './lib/ipc';
 import { useAppStore } from './stores/appStore';
+import { ToastProvider } from './components/ui/Toast';
 
 // Lazy load MissionControl for code splitting
 const MissionControl = lazy(() => import('./components/MissionControl'));
@@ -76,7 +77,7 @@ function App() {
   }, [setDaemonStatus, addLog, setUIScale]);
 
   return (
-    <>
+    <ToastProvider>
       {/* Skip to main content link for screen readers */}
       <a
         href="#main-content"
@@ -96,7 +97,7 @@ function App() {
       >
         <MissionControl />
       </Suspense>
-    </>
+    </ToastProvider>
   );
 }
 

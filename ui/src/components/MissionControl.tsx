@@ -7,6 +7,7 @@ import { SystemStatus } from './ui/SystemStatus';
 import StatusMicroIndicators from './ui/StatusMicroIndicators';
 import RecordingHero from './ui/RecordingHero';
 import { useAppStore } from '../stores/appStore';
+import { useToast } from './ui/Toast';
 
 const Drawer = lazy(() => import('./ui/Drawer').then(m => ({ default: m.Drawer })));
 const SettingsPanel = lazy(() => import('./SettingsPanel'));
@@ -19,6 +20,7 @@ export default function MissionControl() {
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
 
   const { historyEntries, loadHistory, deleteHistoryEntry } = useAppStore();
+  const { toast } = useToast();
 
   // Load recent transcriptions on mount
   useEffect(() => {
@@ -99,13 +101,46 @@ export default function MissionControl() {
   const handleCopyTranscription = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
+      toast({ message: 'Copied to clipboard', variant: 'success' });
     } catch (err) {
       console.error('Failed to copy to clipboard:', err);
+      toast({ message: 'Failed to copy', variant: 'error' });
     }
   };
 
   const handleDeleteTranscription = async (id: string) => {
-    await deleteHistoryEntry(id);
+    // Optimistically remove from UI, allow undo before actually deleting
+    const entry = historyEntries.find((e) => e.id === id);
+    if (!entry) return;
+
+    // Track whether the user undid the action
+    let undone = false;
+
+    toast({
+      message: 'Transcription deleted',
+      variant: 'undo',
+      duration: 5000,
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          undone = true;
+          // Reload to restore the entry (it hasn't been deleted yet)
+          loadHistory(5, 0);
+        },
+      },
+      onExpire: () => {
+        // Timer ran out without undo — actually delete
+        if (!undone) {
+          deleteHistoryEntry(id);
+        }
+      },
+    });
+
+    // Immediately hide from UI by removing from local state
+    // (The store's deleteHistoryEntry reloads, so we manually filter for instant feedback)
+    useAppStore.setState((state) => ({
+      historyEntries: state.historyEntries.filter((e) => e.id !== id),
+    }));
   };
 
   return (

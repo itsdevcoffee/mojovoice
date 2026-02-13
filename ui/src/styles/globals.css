@@ -745,6 +745,28 @@
   100% { transform: scale(1.5); opacity: 0; }
 }
 
+@keyframes toast-enter {
+  0% {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes toast-exit {
+  0% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
 @keyframes shimmer {
   0% {
     transform: translateX(-100%);
@@ -906,6 +928,14 @@
   animation: pulse-ring 1.5s ease-out infinite;
 }
 
+.animate-toast-enter {
+  animation: toast-enter 250ms var(--ease-out) forwards;
+}
+
+.animate-toast-exit {
+  animation: toast-exit 200ms var(--ease-out) forwards;
+}
+
 /* Stagger delay utilities */
 .stagger-1 { animation-delay: 50ms; }
 .stagger-2 { animation-delay: 100ms; }
@@ -1012,6 +1042,17 @@
   }
 
   .animate-pulse-ring {
+    animation: none;
+    opacity: 0;
+  }
+
+  .animate-toast-enter {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .animate-toast-exit {
     animation: none;
     opacity: 0;
   }
