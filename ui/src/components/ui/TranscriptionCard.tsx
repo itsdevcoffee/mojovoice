@@ -185,7 +185,7 @@ export const TranscriptionCard: React.FC<TranscriptionCardProps> = ({
 
         {/* Delete Confirmation Overlay */}
         {showDeleteConfirm && (
-          <div className="absolute inset-0 bg-slate-900/95 backdrop-blur-sm flex items-center justify-center gap-3 p-4">
+          <div className="absolute inset-0 bg-slate-900/95 backdrop-blur-sm flex items-center justify-center gap-3 p-4 z-30">
             <p className="font-[family-name:var(--font-ui)] text-sm text-slate-300 mr-2">
               Delete this transcription?
             </p>
