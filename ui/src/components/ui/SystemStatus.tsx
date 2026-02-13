@@ -312,7 +312,7 @@ function DaemonButton({ onClick, disabled, loading, label, variant = 'default', 
         border border-[var(--border-default)]
         bg-[var(--bg-void)]
         ${hoverColor}
-        disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-[var(--border-default)] disabled:hover:text-[var(--text-tertiary)]
+        disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-[var(--border-default)] disabled:hover:text-[var(--text-tertiary)]
         transition-all duration-150
       `}
     >

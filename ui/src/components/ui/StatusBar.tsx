@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Play } from 'lucide-react';
 import { invoke } from '../../lib/ipc';
 
 interface DaemonStatus {
@@ -94,6 +94,19 @@ export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
     }
   };
 
+  const [isStarting, setIsStarting] = useState(false);
+  const handleStartDaemon = async () => {
+    try {
+      setIsStarting(true);
+      await invoke('start_daemon');
+      await loadStatus();
+    } catch (error) {
+      console.error('Failed to start daemon:', error);
+    } finally {
+      setIsStarting(false);
+    }
+  };
+
   // Extract model display name from config
   const currentModelName = config?.model.modelId || 'No model loaded';
   const currentLanguage = config?.model.language || 'auto';
@@ -114,17 +127,40 @@ export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
       <div className="flex items-center gap-2">
         {daemonStatus.running ? (
           <>
-            <span className="text-green-500 text-lg">●</span>
-            <span className="text-green-400 font-mono text-sm uppercase tracking-wide">
+            <span className="text-[var(--success)] text-lg">●</span>
+            <span className="text-[var(--success)] font-mono text-sm uppercase tracking-wide">
               READY
             </span>
           </>
         ) : (
           <>
-            <span className="text-red-500 text-lg">●</span>
-            <span className="text-red-400 font-mono text-sm uppercase tracking-wide">
+            <span className="text-[var(--error)] text-lg">●</span>
+            <span className="text-[var(--error)] font-mono text-sm uppercase tracking-wide">
               OFFLINE
             </span>
+            <button
+              onClick={handleStartDaemon}
+              disabled={isStarting}
+              className="
+                ml-1 flex items-center gap-1
+                font-mono text-xs uppercase tracking-wide
+                text-[var(--accent-primary)]
+                hover:text-[var(--accent-glow)]
+                disabled:opacity-50 disabled:cursor-not-allowed
+                transition-colors duration-150
+                focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-2
+              "
+              aria-label="Start daemon"
+            >
+              {isStarting ? (
+                <span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <>
+                  <Play size={10} />
+                  <span>[START]</span>
+                </>
+              )}
+            </button>
           </>
         )}
       </div>

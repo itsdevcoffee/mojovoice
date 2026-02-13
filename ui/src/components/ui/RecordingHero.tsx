@@ -68,7 +68,7 @@ export default function RecordingHero() {
       {/* Transcription result */}
       {transcription && (
         <div className="mt-8 w-full max-w-[600px]" role="status" aria-live="polite" aria-atomic="true">
-          <div className="p-6 bg-[var(--bg-surface)] border-2 border-[var(--border-default)] rounded">
+          <div className="p-6 bg-[var(--bg-surface)] border-2 border-[var(--border-default)]">
             <p className="text-sm text-[var(--text-tertiary)] font-ui mb-2">Transcription:</p>
             <p className="text-base text-[var(--text-primary)] font-ui leading-relaxed">{transcription}</p>
           </div>
@@ -78,7 +78,7 @@ export default function RecordingHero() {
       {/* Error message */}
       {error && (
         <div className="mt-8 w-full max-w-[600px]" role="alert" aria-live="assertive">
-          <div className="p-6 bg-red-500/10 border-2 border-red-500/50 rounded">
+          <div className="p-6 bg-red-500/10 border-2 border-red-500/50">
             <p className="text-sm text-red-400 font-ui mb-2">Error:</p>
             <p className="text-base text-red-300 font-ui leading-relaxed">{error}</p>
           </div>

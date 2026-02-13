@@ -47,7 +47,6 @@ export const TranscriptionCard: React.FC<TranscriptionCardProps> = ({
   onDelete,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
 
   const wordCount = getWordCount(transcription.text);
   const title = getTitleFromText(transcription.text);
@@ -67,14 +66,25 @@ export const TranscriptionCard: React.FC<TranscriptionCardProps> = ({
     setIsExpanded(!isExpanded);
   };
 
+  const handleCardKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      setIsExpanded(!isExpanded);
+    }
+  };
+
   return (
-    <div
-      className="relative"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
+    <div className="group relative">
       <Card className="cursor-pointer transition-all duration-200 surface-texture">
-        <div onClick={handleCardClick} className="relative z-10">
+        <div
+          onClick={handleCardClick}
+          onKeyDown={handleCardKeyDown}
+          className="relative z-10"
+          role="button"
+          tabIndex={0}
+          aria-expanded={isExpanded}
+          aria-label={`Transcription: ${title}. ${isExpanded ? 'Click to collapse' : 'Click to expand'}`}
+        >
           {/* Header Row: Icon + Title + Metadata */}
           <div className="flex items-start gap-3 mb-2">
             <span className="text-2xl flex-shrink-0" aria-hidden="true">
@@ -123,9 +133,8 @@ export const TranscriptionCard: React.FC<TranscriptionCardProps> = ({
           )}
         </div>
 
-        {/* Action Buttons (shown on hover) — bottom-right */}
-        {isHovered && (
-          <div className="absolute bottom-4 right-4 flex items-center gap-2 z-20">
+        {/* Action Buttons (shown on hover or focus-within) — bottom-right */}
+        <div className="absolute bottom-4 right-4 flex items-center gap-2 z-20 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150">
             <button
               onClick={handleCopy}
               className="
@@ -167,7 +176,6 @@ export const TranscriptionCard: React.FC<TranscriptionCardProps> = ({
               <span>Delete</span>
             </button>
           </div>
-        )}
       </Card>
     </div>
   );
