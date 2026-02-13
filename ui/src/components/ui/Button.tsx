@@ -62,9 +62,9 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         will-change-transform
       `.trim().replace(/\s+/g, ' '),
       ghost: `
-        bg-transparent text-slate-400
+        bg-transparent text-[var(--text-secondary)]
         border-2 border-transparent
-        hover:bg-slate-800 hover:text-slate-100
+        hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]
         will-change-transform
       `.trim().replace(/\s+/g, ' '),
     };

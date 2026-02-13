@@ -1,14 +1,10 @@
-import { useState, useMemo, lazy, Suspense } from 'react';
+import { useState, useMemo } from 'react';
 import { X as XIcon, Filter as FilterIcon } from 'lucide-react';
 import { Button } from './ui/Button';
 import { TranscriptionCard } from './ui/TranscriptionCard';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from './ui/Modal';
 import { useAppStore } from '../stores/appStore';
-import { useToast } from './ui/Toast';
-
-const Modal = lazy(() => import('./ui/Modal').then(m => ({ default: m.Modal })));
-const ModalHeader = lazy(() => import('./ui/Modal').then(m => ({ default: m.ModalHeader })));
-const ModalBody = lazy(() => import('./ui/Modal').then(m => ({ default: m.ModalBody })));
-const ModalFooter = lazy(() => import('./ui/Modal').then(m => ({ default: m.ModalFooter })));
+import { useTranscriptionActions } from '../hooks/useTranscriptionActions';
 
 interface HistoryModalProps {
   isOpen: boolean;
@@ -26,47 +22,8 @@ export default function HistoryModal({ isOpen, onClose }: HistoryModalProps) {
   const [isClearing, setIsClearing] = useState(false);
   const [clearSuccess, setClearSuccess] = useState(false);
 
-  const { historyEntries, loadHistory, deleteHistoryEntry, clearHistory } = useAppStore();
-  const { toast } = useToast();
-
-  const handleCopyTranscription = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast({ message: 'Copied to clipboard', variant: 'success' });
-    } catch (err) {
-      console.error('Failed to copy to clipboard:', err);
-      toast({ message: 'Failed to copy', variant: 'error' });
-    }
-  };
-
-  const handleDeleteTranscription = async (id: string) => {
-    const entry = historyEntries.find((e) => e.id === id);
-    if (!entry) return;
-
-    let undone = false;
-
-    toast({
-      message: 'Transcription deleted',
-      variant: 'undo',
-      duration: 5000,
-      action: {
-        label: 'Undo',
-        onClick: () => {
-          undone = true;
-          loadHistory(1000, 0);
-        },
-      },
-      onExpire: () => {
-        if (!undone) {
-          deleteHistoryEntry(id);
-        }
-      },
-    });
-
-    useAppStore.setState((state) => ({
-      historyEntries: state.historyEntries.filter((e) => e.id !== id),
-    }));
-  };
+  const { historyEntries, clearHistory } = useAppStore();
+  const { handleCopy: handleCopyTranscription, handleDelete: handleDeleteTranscription } = useTranscriptionActions(1000);
 
   const handleExportAll = async () => {
     try {
@@ -159,11 +116,8 @@ export default function HistoryModal({ isOpen, onClose }: HistoryModalProps) {
     return filtered;
   }, [historyEntries, searchQuery, dateFilter, wordCountFilter]);
 
-  if (!isOpen) return null;
-
   return (
-    <Suspense fallback={null}>
-      <Modal isOpen={isOpen} onClose={onClose}>
+    <Modal isOpen={isOpen} onClose={onClose}>
         <ModalHeader title="TRANSCRIPTION HISTORY" onClose={onClose} />
         <ModalBody>
           <div className="mb-6 space-y-4">
@@ -326,7 +280,6 @@ export default function HistoryModal({ isOpen, onClose }: HistoryModalProps) {
             </div>
           )}
         </ModalFooter>
-      </Modal>
-    </Suspense>
+    </Modal>
   );
 }

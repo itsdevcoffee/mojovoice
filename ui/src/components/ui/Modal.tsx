@@ -1,5 +1,5 @@
 import { X } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface ModalProps {
   isOpen: boolean;
@@ -7,27 +7,46 @@ interface ModalProps {
   children: React.ReactNode;
 }
 
+const ANIMATION_MS = 200;
+
 export function Modal({ isOpen, onClose, children }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const previousActiveElement = useRef<HTMLElement | null>(null);
 
+  const [mounted, setMounted] = useState(false);
+  const [visible, setVisible] = useState(false);
+
+  // Mount/unmount lifecycle with animation buffer
+  useEffect(() => {
+    if (isOpen) {
+      setMounted(true);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setVisible(true);
+        });
+      });
+    } else if (mounted) {
+      setVisible(false);
+      const timer = setTimeout(() => setMounted(false), ANIMATION_MS);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
+
   // Handle Escape key
   useEffect(() => {
-    if (!isOpen) return;
+    if (!mounted) return;
 
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
+      if (e.key === 'Escape') onClose();
     };
 
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
-  }, [isOpen, onClose]);
+  }, [mounted, onClose]);
 
   // Prevent body scroll when modal is open
   useEffect(() => {
-    if (isOpen) {
+    if (mounted) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
@@ -35,16 +54,14 @@ export function Modal({ isOpen, onClose, children }: ModalProps) {
     return () => {
       document.body.style.overflow = '';
     };
-  }, [isOpen]);
+  }, [mounted]);
 
-  // Focus trap implementation
+  // Focus trap
   useEffect(() => {
     if (!isOpen) return;
 
-    // Store previously focused element
     previousActiveElement.current = document.activeElement as HTMLElement;
 
-    // Focus first focusable element in modal
     const focusableElements = modalRef.current?.querySelectorAll(
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
     );
@@ -53,7 +70,6 @@ export function Modal({ isOpen, onClose, children }: ModalProps) {
       (focusableElements[0] as HTMLElement).focus();
     }
 
-    // Handle Tab key to trap focus
     const handleTab = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return;
 
@@ -67,13 +83,11 @@ export function Modal({ isOpen, onClose, children }: ModalProps) {
       const lastFocusable = focusables[focusables.length - 1] as HTMLElement;
 
       if (e.shiftKey) {
-        // Shift + Tab: focus last if on first
         if (document.activeElement === firstFocusable) {
           lastFocusable.focus();
           e.preventDefault();
         }
       } else {
-        // Tab: focus first if on last
         if (document.activeElement === lastFocusable) {
           firstFocusable.focus();
           e.preventDefault();
@@ -83,7 +97,6 @@ export function Modal({ isOpen, onClose, children }: ModalProps) {
 
     document.addEventListener('keydown', handleTab);
 
-    // Restore focus when modal closes
     return () => {
       document.removeEventListener('keydown', handleTab);
       if (previousActiveElement.current) {
@@ -92,7 +105,7 @@ export function Modal({ isOpen, onClose, children }: ModalProps) {
     };
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  if (!mounted) return null;
 
   return (
     <div
@@ -102,16 +115,31 @@ export function Modal({ isOpen, onClose, children }: ModalProps) {
       aria-modal="true"
       aria-labelledby="modal-title"
     >
-      {/* Backdrop */}
+      {/* Backdrop — fades in/out */}
       <div
-        className="fixed inset-0 bg-[rgba(10,14,26,0.95)] backdrop-blur-[8px]"
+        className={`
+          fixed inset-0 bg-[rgba(10,14,26,0.95)] backdrop-blur-[8px]
+          transition-opacity duration-200 ease-out
+          ${visible ? 'opacity-100' : 'opacity-0'}
+        `}
         onClick={onClose}
         aria-hidden="true"
       />
 
-      {/* Centering wrapper — explicit viewport dimensions to avoid height bugs */}
+      {/* Centering wrapper */}
       <div className="fixed inset-0 w-[100vw] h-[100vh] flex items-center justify-center p-4 pointer-events-none">
-        <div className="w-full max-w-[900px] max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden bg-[var(--bg-surface)] border-2 border-[var(--border-default)] animate-modal-fade-in pointer-events-auto">
+        <div
+          className={`
+            w-full max-w-[900px] max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden
+            bg-[var(--bg-surface)] border-2 border-[var(--border-default)]
+            pointer-events-auto
+            transition-all duration-200 ease-out
+            ${visible
+              ? 'opacity-100 scale-100 translate-y-0'
+              : 'opacity-0 scale-[0.97] translate-y-2'
+            }
+          `}
+        >
           {children}
         </div>
       </div>
@@ -129,13 +157,13 @@ export function ModalHeader({ title, onClose }: ModalHeaderProps) {
     <div className="flex items-center justify-between p-6 border-b-2 border-[var(--border-default)]">
       <h2
         id="modal-title"
-        className="font-mono text-xs uppercase tracking-[0.12em] text-blue-500 font-semibold"
+        className="font-mono text-xs uppercase tracking-[0.12em] text-[var(--accent-primary)] font-semibold"
       >
         {title}
       </h2>
       <button
         onClick={onClose}
-        className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-all duration-150 focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-2"
+        className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] rounded transition-all duration-150 focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-2"
         aria-label="Close modal"
       >
         <X className="w-5 h-5" />

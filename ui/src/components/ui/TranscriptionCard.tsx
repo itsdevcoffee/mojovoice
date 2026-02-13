@@ -81,10 +81,10 @@ export const TranscriptionCard: React.FC<TranscriptionCardProps> = ({
               📝
             </span>
             <div className="flex-1 min-w-0">
-              <h3 className="font-mono text-base text-slate-100 mb-1 truncate pr-2">
+              <h3 className="font-mono text-base text-[var(--text-primary)] mb-1 truncate pr-2">
                 {title}
               </h3>
-              <div className="flex items-center gap-2 text-xs font-mono text-slate-500">
+              <div className="flex items-center gap-2 text-xs font-mono text-[var(--text-tertiary)]">
                 <time dateTime={new Date(transcription.timestamp).toISOString()}>
                   {relativeTime}
                 </time>
@@ -97,11 +97,11 @@ export const TranscriptionCard: React.FC<TranscriptionCardProps> = ({
           {/* Preview or Full Text */}
           <div className="mt-3">
             {isExpanded ? (
-              <p className="font-[family-name:var(--font-ui)] text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
+              <p className="font-[family-name:var(--font-ui)] text-sm text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap">
                 {transcription.text}
               </p>
             ) : (
-              <p className="font-[family-name:var(--font-ui)] text-sm text-slate-400 leading-relaxed line-clamp-2">
+              <p className="font-[family-name:var(--font-ui)] text-sm text-[var(--text-tertiary)] leading-relaxed line-clamp-2">
                 {transcription.text}
               </p>
             )}
@@ -131,7 +131,7 @@ export const TranscriptionCard: React.FC<TranscriptionCardProps> = ({
               className="
                 px-3 py-1.5
                 bg-[var(--bg-elevated)]
-                text-slate-300 text-xs font-mono uppercase
+                text-[var(--text-secondary)] text-xs font-mono uppercase
                 border-2 border-[var(--border-default)]
                 hover:bg-[var(--accent-primary)] hover:border-[var(--accent-primary)] hover:text-white
                 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]
@@ -151,7 +151,7 @@ export const TranscriptionCard: React.FC<TranscriptionCardProps> = ({
               className="
                 px-3 py-1.5
                 bg-[var(--bg-elevated)]
-                text-slate-300 text-xs font-mono uppercase
+                text-[var(--text-secondary)] text-xs font-mono uppercase
                 border-2 border-[var(--border-default)]
                 hover:bg-[var(--error)] hover:border-[var(--error)] hover:text-white
                 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]

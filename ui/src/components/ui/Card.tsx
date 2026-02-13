@@ -12,9 +12,9 @@ export const Card: React.FC<CardProps> = ({ children, badge, className = '' }) =
       className={`
         relative
         p-6
-        bg-[#151B2E]
-        border-2 border-[#334155]
-        hover:border-[#3B82F6]
+        bg-[var(--bg-surface)]
+        border-2 border-[var(--border-default)]
+        hover:border-[var(--accent-primary)]
         hover:-translate-x-[2px] hover:-translate-y-[2px]
         hover:shadow-[var(--shadow-brutal-lift)]
         transition-all duration-150

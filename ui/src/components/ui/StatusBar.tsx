@@ -101,8 +101,8 @@ export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
     <div
       className={`
         p-4 px-6
-        bg-[#151B2E]
-        border-2 border-[#334155]
+        bg-[var(--bg-surface)]
+        border-2 border-[var(--border-default)]
         flex items-center justify-between
         gap-6
         ${className}
@@ -135,10 +135,10 @@ export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
             w-full
             flex items-center justify-between gap-2
             px-3 py-2
-            bg-[#0A0E1A]
-            border border-[#334155]
-            hover:border-[#3B82F6]
-            focus:border-[#3B82F6]
+            bg-[var(--bg-void)]
+            border border-[var(--border-default)]
+            hover:border-[var(--accent-primary)]
+            focus:border-[var(--accent-primary)]
             focus:shadow-[0_0_20px_rgba(59,130,246,0.3)]
             focus:outline-none
             transition-all duration-150
@@ -167,8 +167,8 @@ export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
             <div
               className="
                 absolute top-full left-0 right-0 mt-1
-                bg-[#151B2E]
-                border-2 border-[#3B82F6]
+                bg-[var(--bg-surface)]
+                border-2 border-[var(--accent-primary)]
                 shadow-[0_0_20px_rgba(59,130,246,0.5)]
                 max-h-64 overflow-y-auto
                 z-20
@@ -184,11 +184,11 @@ export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
                       w-full text-left
                       px-3 py-2
                       font-mono text-sm
-                      hover:bg-[#1E293B]
+                      hover:bg-[var(--bg-elevated)]
                       transition-colors duration-150
                       ${
                         model.filename === config?.model.path
-                          ? 'bg-[#3B82F6]/20 text-[#3B82F6]'
+                          ? 'bg-blue-500/20 text-[var(--accent-primary)]'
                           : 'text-[var(--text-primary)]'
                       }
                     `}

@@ -127,8 +127,8 @@ export const Drawer: React.FC<DrawerProps> = ({ isOpen, onClose, children }) => 
       <div
         ref={drawerRef}
         className={`
-          fixed top-0 right-0 h-screen w-[400px] bg-[#151B2E]
-          border-l-2 border-[#334155] z-50 shadow-2xl overflow-y-auto
+          fixed top-0 right-0 h-screen w-[400px] bg-[var(--bg-surface)]
+          border-l-2 border-[var(--border-default)] z-50 shadow-2xl overflow-y-auto
           transition-transform duration-300
           ${visible ? 'translate-x-0' : 'translate-x-full'}
         `}
@@ -140,7 +140,7 @@ export const Drawer: React.FC<DrawerProps> = ({ isOpen, onClose, children }) => 
         {/* Close button */}
         <button
           onClick={onClose}
-          className="absolute top-6 right-6 p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-all duration-150 focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-2 focus-visible:shadow-[0_0_20px_rgba(59,130,246,0.5)]"
+          className="absolute top-6 right-6 p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] rounded transition-all duration-150 focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-2 focus-visible:shadow-[0_0_20px_rgba(59,130,246,0.5)]"
           aria-label="Close settings"
         >
           <X size={20} />
