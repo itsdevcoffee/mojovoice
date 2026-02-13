@@ -3,6 +3,7 @@ import { X as XIcon, Filter as FilterIcon } from 'lucide-react';
 import { Button } from './ui/Button';
 import { TranscriptionCard } from './ui/TranscriptionCard';
 import { useAppStore } from '../stores/appStore';
+import { useToast } from './ui/Toast';
 
 const Modal = lazy(() => import('./ui/Modal').then(m => ({ default: m.Modal })));
 const ModalHeader = lazy(() => import('./ui/Modal').then(m => ({ default: m.ModalHeader })));
@@ -25,18 +26,46 @@ export default function HistoryModal({ isOpen, onClose }: HistoryModalProps) {
   const [isClearing, setIsClearing] = useState(false);
   const [clearSuccess, setClearSuccess] = useState(false);
 
-  const { historyEntries, deleteHistoryEntry, clearHistory } = useAppStore();
+  const { historyEntries, loadHistory, deleteHistoryEntry, clearHistory } = useAppStore();
+  const { toast } = useToast();
 
   const handleCopyTranscription = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
+      toast({ message: 'Copied to clipboard', variant: 'success' });
     } catch (err) {
       console.error('Failed to copy to clipboard:', err);
+      toast({ message: 'Failed to copy', variant: 'error' });
     }
   };
 
   const handleDeleteTranscription = async (id: string) => {
-    await deleteHistoryEntry(id);
+    const entry = historyEntries.find((e) => e.id === id);
+    if (!entry) return;
+
+    let undone = false;
+
+    toast({
+      message: 'Transcription deleted',
+      variant: 'undo',
+      duration: 5000,
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          undone = true;
+          loadHistory(1000, 0);
+        },
+      },
+      onExpire: () => {
+        if (!undone) {
+          deleteHistoryEntry(id);
+        }
+      },
+    });
+
+    useAppStore.setState((state) => ({
+      historyEntries: state.historyEntries.filter((e) => e.id !== id),
+    }));
   };
 
   const handleExportAll = async () => {
