@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import SectionHeader from './SectionHeader';
 import { invoke } from '../../lib/ipc';
 
 interface SystemInfo {
@@ -80,34 +81,11 @@ export function SystemStatus() {
 
   return (
     <section className="mt-12">
-      {/* Toggle header — single clickable row, single rotating glyph */}
-      <button
-        onClick={handleToggle}
-        className="
-          group flex items-center gap-2 w-full text-left
-          bg-transparent border-none p-0 cursor-pointer select-none
-          focus-visible:outline-2 focus-visible:outline-blue-500
-          focus-visible:outline-offset-2
-        "
-        aria-expanded={isExpanded}
-        aria-controls="system-status-content"
-        aria-label={`System status, ${isExpanded ? 'expanded' : 'collapsed'}. Click to ${isExpanded ? 'collapse' : 'expand'}.`}
-      >
-        <span
-          className={`
-            text-[var(--accent-primary)] text-sm
-            transition-transform duration-200
-            ${isExpanded ? 'rotate-90' : ''}
-          `}
-          aria-hidden="true"
-        >
-          ▸
-        </span>
-        <h2 className="font-mono text-xs uppercase tracking-[0.12em] text-[var(--accent-primary)] font-semibold">
-          SYSTEM STATUS
-        </h2>
-        <div className="flex-1 h-px bg-gradient-to-r from-[var(--accent-primary)] to-transparent" />
-      </button>
+      <SectionHeader
+        title="SYSTEM STATUS"
+        isExpanded={isExpanded}
+        onToggle={handleToggle}
+      />
 
       {/* Collapsible content */}
       <div

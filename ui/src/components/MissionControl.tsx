@@ -18,6 +18,7 @@ export default function MissionControl() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isTranscriptionsExpanded, setIsTranscriptionsExpanded] = useState(true);
 
   const { historyEntries, loadHistory, deleteHistoryEntry } = useAppStore();
   const { toast } = useToast();
@@ -172,34 +173,46 @@ export default function MissionControl() {
 
         {/* Recent Transcriptions Section */}
         <section className="mt-12">
-          <SectionHeader title="RECENT TRANSCRIPTIONS" />
+          <SectionHeader
+            title="RECENT TRANSCRIPTIONS"
+            isExpanded={isTranscriptionsExpanded}
+            onToggle={() => setIsTranscriptionsExpanded((prev) => !prev)}
+          />
 
-          {historyEntries.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-sm text-[var(--text-tertiary)] font-ui">No transcriptions yet</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {historyEntries.slice(0, 5).map((entry) => (
-                <TranscriptionCard
-                  key={entry.id}
-                  transcription={entry}
-                  onCopy={handleCopyTranscription}
-                  onDelete={handleDeleteTranscription}
-                />
-              ))}
-              <div className="flex justify-center mt-6">
-                <button
-                  className="px-4 py-2 text-sm font-ui text-[var(--accent-primary)] hover:text-[var(--accent-glow)] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-2 focus-visible:shadow-[0_0_20px_rgba(59,130,246,0.5)]"
-                  title={`View All History (${navigator.platform.toUpperCase().indexOf('MAC') >= 0 ? 'Cmd' : 'Ctrl'}+H)`}
-                  aria-label="View all transcription history"
-                  onClick={() => setIsHistoryModalOpen(true)}
-                >
-                  View All →
-                </button>
+          <div
+            className={`
+              overflow-hidden transition-all duration-200
+              ${isTranscriptionsExpanded ? 'max-h-[2000px] opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}
+            `}
+            style={{ transitionTimingFunction: 'var(--ease-out)' }}
+          >
+            {historyEntries.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-sm text-[var(--text-tertiary)] font-ui">No transcriptions yet</p>
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="space-y-4">
+                {historyEntries.slice(0, 5).map((entry) => (
+                  <TranscriptionCard
+                    key={entry.id}
+                    transcription={entry}
+                    onCopy={handleCopyTranscription}
+                    onDelete={handleDeleteTranscription}
+                  />
+                ))}
+                <div className="flex justify-center mt-6">
+                  <button
+                    className="px-4 py-2 text-sm font-ui text-[var(--accent-primary)] hover:text-[var(--accent-glow)] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-2 focus-visible:shadow-[0_0_20px_rgba(59,130,246,0.5)]"
+                    title={`View All History (${navigator.platform.toUpperCase().indexOf('MAC') >= 0 ? 'Cmd' : 'Ctrl'}+H)`}
+                    aria-label="View all transcription history"
+                    onClick={() => setIsHistoryModalOpen(true)}
+                  >
+                    View All →
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </section>
 
         <SystemStatus />
