@@ -10,16 +10,18 @@ export default function SectionHeader({ title, isExpanded, onToggle }: SectionHe
 
   const content = (
     <>
-      <span
-        className={`
-          text-[var(--accent-primary)] text-xs leading-none
-          transition-transform duration-200
-          ${isToggleable && isExpanded ? 'rotate-90' : ''}
-        `}
-        aria-hidden="true"
-      >
-        ▸
-      </span>
+      {isToggleable && (
+        <span
+          className={`
+            text-[var(--accent-primary)] text-xs leading-none
+            transition-transform duration-200
+            ${isExpanded ? 'rotate-90' : ''}
+          `}
+          aria-hidden="true"
+        >
+          ▸
+        </span>
+      )}
       <h2 className="font-mono text-xs uppercase tracking-[0.12em] text-[var(--accent-primary)] font-semibold leading-none">
         {title}
       </h2>
