@@ -226,13 +226,11 @@ export default function MissionControl() {
       </footer>
 
       {/* Settings Drawer */}
-      {isSettingsOpen && (
-        <Suspense fallback={null}>
-          <Drawer isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)}>
-            <SettingsPanel />
-          </Drawer>
-        </Suspense>
-      )}
+      <Suspense fallback={null}>
+        <Drawer isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)}>
+          <SettingsPanel />
+        </Drawer>
+      </Suspense>
 
       {/* History Modal */}
       <Suspense fallback={null}>

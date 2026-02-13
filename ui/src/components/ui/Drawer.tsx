@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 
 interface DrawerProps {
@@ -7,25 +7,49 @@ interface DrawerProps {
   children: React.ReactNode;
 }
 
+const ANIMATION_MS = 300;
+
 export const Drawer: React.FC<DrawerProps> = ({ isOpen, onClose, children }) => {
   const drawerRef = useRef<HTMLDivElement>(null);
   const previousActiveElement = useRef<HTMLElement | null>(null);
 
+  // Internal state: keep the component mounted while the exit animation plays
+  const [mounted, setMounted] = useState(false);
+  const [visible, setVisible] = useState(false);
+
+  // Opening: mount first, then trigger the visible state on next frame
+  useEffect(() => {
+    if (isOpen) {
+      setMounted(true);
+      // Allow one frame for the DOM to paint at initial (hidden) state
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setVisible(true);
+        });
+      });
+    } else if (mounted) {
+      // Closing: start exit animation, then unmount after it finishes
+      setVisible(false);
+      const timer = setTimeout(() => setMounted(false), ANIMATION_MS);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
+
   // Handle Escape key
   useEffect(() => {
+    if (!mounted) return;
+
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
+      if (e.key === 'Escape') onClose();
     };
 
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [isOpen, onClose]);
+  }, [mounted, onClose]);
 
   // Prevent scroll when drawer is open
   useEffect(() => {
-    if (isOpen) {
+    if (mounted) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
@@ -33,16 +57,14 @@ export const Drawer: React.FC<DrawerProps> = ({ isOpen, onClose, children }) => 
     return () => {
       document.body.style.overflow = '';
     };
-  }, [isOpen]);
+  }, [mounted]);
 
-  // Focus trap implementation
+  // Focus trap
   useEffect(() => {
     if (!isOpen) return;
 
-    // Store previously focused element
     previousActiveElement.current = document.activeElement as HTMLElement;
 
-    // Focus first focusable element in drawer
     const focusableElements = drawerRef.current?.querySelectorAll(
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
     );
@@ -51,7 +73,6 @@ export const Drawer: React.FC<DrawerProps> = ({ isOpen, onClose, children }) => 
       (focusableElements[0] as HTMLElement).focus();
     }
 
-    // Handle Tab key to trap focus
     const handleTab = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return;
 
@@ -65,13 +86,11 @@ export const Drawer: React.FC<DrawerProps> = ({ isOpen, onClose, children }) => 
       const lastFocusable = focusables[focusables.length - 1] as HTMLElement;
 
       if (e.shiftKey) {
-        // Shift + Tab: focus last if on first
         if (document.activeElement === firstFocusable) {
           lastFocusable.focus();
           e.preventDefault();
         }
       } else {
-        // Tab: focus first if on last
         if (document.activeElement === lastFocusable) {
           firstFocusable.focus();
           e.preventDefault();
@@ -81,7 +100,6 @@ export const Drawer: React.FC<DrawerProps> = ({ isOpen, onClose, children }) => 
 
     document.addEventListener('keydown', handleTab);
 
-    // Restore focus when drawer closes
     return () => {
       document.removeEventListener('keydown', handleTab);
       if (previousActiveElement.current) {
@@ -90,24 +108,31 @@ export const Drawer: React.FC<DrawerProps> = ({ isOpen, onClose, children }) => 
     };
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  if (!mounted) return null;
 
   return (
     <>
-      {/* Backdrop */}
+      {/* Backdrop — fades in/out via opacity transition */}
       <div
-        className="fixed inset-0 bg-[rgba(10,14,26,0.95)] backdrop-blur-[8px] z-40 transition-opacity duration-300"
+        className={`
+          fixed inset-0 bg-[rgba(10,14,26,0.95)] backdrop-blur-[8px] z-40
+          transition-opacity duration-300 ease-out
+          ${visible ? 'opacity-100' : 'opacity-0'}
+        `}
         onClick={onClose}
         aria-hidden="true"
       />
 
-      {/* Drawer */}
+      {/* Drawer panel — slides in/out via transform transition */}
       <div
         ref={drawerRef}
-        className="fixed top-0 right-0 h-screen w-[400px] bg-[#151B2E] border-l-2 border-[#334155] z-50 shadow-2xl overflow-y-auto"
-        style={{
-          animation: isOpen ? 'slideIn 300ms cubic-bezier(0.16, 1, 0.3, 1)' : 'slideOut 300ms cubic-bezier(0.16, 1, 0.3, 1)',
-        }}
+        className={`
+          fixed top-0 right-0 h-screen w-[400px] bg-[#151B2E]
+          border-l-2 border-[#334155] z-50 shadow-2xl overflow-y-auto
+          transition-transform duration-300
+          ${visible ? 'translate-x-0' : 'translate-x-full'}
+        `}
+        style={{ transitionTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)' }}
         role="dialog"
         aria-modal="true"
         aria-labelledby="drawer-title"
@@ -126,26 +151,6 @@ export const Drawer: React.FC<DrawerProps> = ({ isOpen, onClose, children }) => 
           {children}
         </div>
       </div>
-
-      <style>{`
-        @keyframes slideIn {
-          from {
-            transform: translateX(100%);
-          }
-          to {
-            transform: translateX(0);
-          }
-        }
-
-        @keyframes slideOut {
-          from {
-            transform: translateX(0);
-          }
-          to {
-            transform: translateX(100%);
-          }
-        }
-      `}</style>
     </>
   );
 };
