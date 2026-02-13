@@ -135,51 +135,49 @@ export const TranscriptionCard: React.FC<TranscriptionCardProps> = ({
           )}
         </div>
 
-        {/* Action Buttons (shown on hover) — gradient backdrop prevents text collision */}
+        {/* Action Buttons (shown on hover) — bottom-right, no gradient overlay */}
         {isHovered && !showDeleteConfirm && (
-          <div className="absolute top-0 right-0 bottom-0 flex items-start pt-4 pr-4 pl-12 bg-gradient-to-l from-[#151B2E] from-60% to-transparent z-20">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleCopy}
-                className="
-                  px-3 py-1.5
-                  bg-[var(--bg-elevated)]
-                  text-slate-300 text-xs font-mono uppercase
-                  border-2 border-[var(--border-default)]
-                  hover:bg-[var(--accent-primary)] hover:border-[var(--accent-primary)] hover:text-white
-                  shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]
-                  hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]
-                  active:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]
-                  active:translate-x-[1px] active:translate-y-[1px]
-                  transition-all duration-150
-                  flex items-center gap-1.5
-                "
-                aria-label="Copy transcription"
-              >
-                <Copy size={12} />
-                <span>Copy</span>
-              </button>
-              <button
-                onClick={handleDeleteClick}
-                className="
-                  px-3 py-1.5
-                  bg-[var(--bg-elevated)]
-                  text-slate-300 text-xs font-mono uppercase
-                  border-2 border-[var(--border-default)]
-                  hover:bg-[var(--error)] hover:border-[var(--error)] hover:text-white
-                  shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]
-                  hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]
-                  active:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]
-                  active:translate-x-[1px] active:translate-y-[1px]
-                  transition-all duration-150
-                  flex items-center gap-1.5
-                "
-                aria-label="Delete transcription"
-              >
-                <Trash2 size={12} />
-                <span>Delete</span>
-              </button>
-            </div>
+          <div className="absolute bottom-4 right-4 flex items-center gap-2 z-20">
+            <button
+              onClick={handleCopy}
+              className="
+                px-3 py-1.5
+                bg-[var(--bg-elevated)]
+                text-slate-300 text-xs font-mono uppercase
+                border-2 border-[var(--border-default)]
+                hover:bg-[var(--accent-primary)] hover:border-[var(--accent-primary)] hover:text-white
+                shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]
+                hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]
+                active:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]
+                active:translate-x-[1px] active:translate-y-[1px]
+                transition-all duration-150
+                flex items-center gap-1.5
+              "
+              aria-label="Copy transcription"
+            >
+              <Copy size={12} />
+              <span>Copy</span>
+            </button>
+            <button
+              onClick={handleDeleteClick}
+              className="
+                px-3 py-1.5
+                bg-[var(--bg-elevated)]
+                text-slate-300 text-xs font-mono uppercase
+                border-2 border-[var(--border-default)]
+                hover:bg-[var(--error)] hover:border-[var(--error)] hover:text-white
+                shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]
+                hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]
+                active:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]
+                active:translate-x-[1px] active:translate-y-[1px]
+                transition-all duration-150
+                flex items-center gap-1.5
+              "
+              aria-label="Delete transcription"
+            >
+              <Trash2 size={12} />
+              <span>Delete</span>
+            </button>
           </div>
         )}
 
