@@ -116,6 +116,25 @@ Expected assets:
 
 **Note:** Intel macOS builds removed from CI (macos-12/13 runners deprecated). ARM binaries run on Intel Macs via Rosetta 2.
 
+## UI Development (Browser Mode)
+
+**Dev server:** `cd ui && npm run dev` (runs at http://localhost:1420)
+
+The UI supports browser-only development with mock data (`ui/src/lib/ipc.ts`). When `window.__TAURI__` is absent, all Tauri API calls return mock data. This allows:
+- Rapid UI iteration with Vite HMR
+- Playwright MCP testing without the Rust backend
+- Visual validation of all components
+
+**Playwright MCP Screenshots:**
+- **Always** save screenshots to `docs/tmp/` (e.g., `docs/tmp/settings-debug.png`)
+- **Never** save screenshots to the repo root or any tracked directory
+- Use descriptive filenames: `docs/tmp/<component>-<state>.png`
+- `docs/tmp/` is gitignored, so screenshots won't pollute the repo
+
+**Playwright MCP Artifacts:**
+- The `.playwright-mcp/` directory is gitignored
+- Console logs and network traces are ephemeral - don't commit them
+
 ## Project-Specific Notes
 
 **Mojo-Audio FFI Integration:**

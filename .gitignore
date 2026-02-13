@@ -28,3 +28,13 @@ artifacts/
 
 # Benchmark output (machine-specific results)
 benchmarks/
+
+# Ralph Loop iteration logs
+logs/
+
+# Playwright MCP artifacts
+.playwright-mcp/
+
+# Stray screenshots (should go in docs/tmp/)
+/*.png
+/*.jpeg
