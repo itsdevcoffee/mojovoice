@@ -9,6 +9,8 @@ interface TranscriptionEntry {
   durationMs: number;
   model: string;
   audioPath?: string;
+  latencyMs?: number;
+  confidenceScore?: number;
 }
 
 interface TranscriptionCardProps {
@@ -83,15 +85,15 @@ export const TranscriptionCard: React.FC<TranscriptionCardProps> = ({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <Card className="cursor-pointer transition-all duration-200">
-        <div onClick={handleCardClick}>
+      <Card className="cursor-pointer transition-all duration-200 surface-texture">
+        <div onClick={handleCardClick} className="relative z-10">
           {/* Header Row: Icon + Title + Metadata */}
           <div className="flex items-start gap-3 mb-2">
-            <span className="text-2xl" aria-hidden="true">
+            <span className="text-2xl flex-shrink-0" aria-hidden="true">
               📝
             </span>
             <div className="flex-1 min-w-0">
-              <h3 className="font-mono text-base text-slate-100 mb-1">
+              <h3 className="font-mono text-base text-slate-100 mb-1 truncate pr-2">
                 {title}
               </h3>
               <div className="flex items-center gap-2 text-xs font-mono text-slate-500">
@@ -116,43 +118,68 @@ export const TranscriptionCard: React.FC<TranscriptionCardProps> = ({
               </p>
             )}
           </div>
+
+          {/* Metadata Footer */}
+          {(transcription.latencyMs !== undefined || transcription.confidenceScore !== undefined || transcription.model) && (
+            <div className="mt-3 pt-3 border-t border-[var(--border-default)] flex items-center gap-3 text-[11px] font-mono text-[var(--text-tertiary)]">
+              {transcription.latencyMs !== undefined && (
+                <span title="Inference latency">⚡ {transcription.latencyMs}ms</span>
+              )}
+              {transcription.confidenceScore !== undefined && (
+                <span title="Confidence score">✓ {transcription.confidenceScore.toFixed(1)}%</span>
+              )}
+              {transcription.model && (
+                <span title="Model used">{transcription.model}</span>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Action Buttons (shown on hover) */}
+        {/* Action Buttons (shown on hover) — gradient backdrop prevents text collision */}
         {isHovered && !showDeleteConfirm && (
-          <div className="absolute top-4 right-4 flex items-center gap-2">
-            <button
-              onClick={handleCopy}
-              className="
-                px-3 py-1.5
-                bg-slate-800/80 backdrop-blur-sm
-                text-slate-300 text-xs font-mono uppercase
-                border border-slate-600
-                hover:bg-blue-600 hover:border-blue-500 hover:text-white
-                transition-all duration-150
-                flex items-center gap-1.5
-              "
-              aria-label="Copy transcription"
-            >
-              <Copy size={12} />
-              <span>Copy</span>
-            </button>
-            <button
-              onClick={handleDeleteClick}
-              className="
-                px-3 py-1.5
-                bg-slate-800/80 backdrop-blur-sm
-                text-slate-300 text-xs font-mono uppercase
-                border border-slate-600
-                hover:bg-red-600 hover:border-red-500 hover:text-white
-                transition-all duration-150
-                flex items-center gap-1.5
-              "
-              aria-label="Delete transcription"
-            >
-              <Trash2 size={12} />
-              <span>Delete</span>
-            </button>
+          <div className="absolute top-0 right-0 bottom-0 flex items-start pt-4 pr-4 pl-12 bg-gradient-to-l from-[#151B2E] from-60% to-transparent z-20">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCopy}
+                className="
+                  px-3 py-1.5
+                  bg-[var(--bg-elevated)]
+                  text-slate-300 text-xs font-mono uppercase
+                  border-2 border-[var(--border-default)]
+                  hover:bg-[var(--accent-primary)] hover:border-[var(--accent-primary)] hover:text-white
+                  shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]
+                  hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]
+                  active:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]
+                  active:translate-x-[1px] active:translate-y-[1px]
+                  transition-all duration-150
+                  flex items-center gap-1.5
+                "
+                aria-label="Copy transcription"
+              >
+                <Copy size={12} />
+                <span>Copy</span>
+              </button>
+              <button
+                onClick={handleDeleteClick}
+                className="
+                  px-3 py-1.5
+                  bg-[var(--bg-elevated)]
+                  text-slate-300 text-xs font-mono uppercase
+                  border-2 border-[var(--border-default)]
+                  hover:bg-[var(--error)] hover:border-[var(--error)] hover:text-white
+                  shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]
+                  hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]
+                  active:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]
+                  active:translate-x-[1px] active:translate-y-[1px]
+                  transition-all duration-150
+                  flex items-center gap-1.5
+                "
+                aria-label="Delete transcription"
+              >
+                <Trash2 size={12} />
+                <span>Delete</span>
+              </button>
+            </div>
           </div>
         )}
 

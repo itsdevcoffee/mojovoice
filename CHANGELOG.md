@@ -8,15 +8,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Command Palette (Cmd+K):** Global command bar using cmdk library for model switching, history search, export, clear, and settings access
+- **TranscriptionCard metadata footer:** Displays inference latency, confidence score, and model name below each transcription
+- **StatusMicroIndicators:** Colored SYS/GPU pips in the header with tooltip details and screen reader support
+- **RecordingHero component:** Dedicated recording button with acid green pulsing ring animation during recording
+- **Card hover lift effect:** Neubrutalist lift on hover with increased shadow offset
+- **Surface texture overlay:** CSS scan-line texture class for industrial hardware aesthetic on card surfaces
 - **macOS support:** Platform-specific library loading for mojo-audio v0.2.0 (`.dylib` for macOS, `.so` for Linux)
 - **Cross-platform paths:** Config and daemon socket paths now use platform-appropriate locations on macOS
 - **macOS Tauri schema:** Added macOS-specific schema for desktop app bundling
 - **SECURITY.md:** Added security policy for responsible vulnerability disclosure
 
 ### Changed
+- **UI decomposition:** Broke down MissionControl.tsx monolith (1413 lines) into 6 focused components with lazy loading (~205 lines)
+- **Cmd+K reassigned:** Previously opened history search, now opens command palette (history search available as palette action)
+- **SystemStatus simplified:** Removed GPU/Daemon rows (now in header pips), shows only Memory and Uptime
 - **mojo-audio v0.2.0:** Updated to latest mojo-audio release with macOS arm64 support and Mojo 0.26.2+ API compatibility
 
+### Removed
+- 8 dead component files (Dashboard, Settings, Navigation, TranscriptionHistory, RestartBanner, ModelManagement, DevTools, PathInput)
+
 ### Documentation
+- **Style guide v1.1.0:** Updated with new components, architecture, tokens, and keyboard shortcuts
 - **Roadmap restructure:** Updated roadmap with v0.6.0-v0.8.0 version structure and priorities
 - **Build handoff guide:** Added mojo-audio v0.2.0 Linux build handoff documentation
 

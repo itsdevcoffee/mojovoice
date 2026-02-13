@@ -4,13 +4,7 @@ import { useAppStore } from './stores/appStore';
 
 // Lazy load MissionControl for code splitting
 const MissionControl = lazy(() => import('./components/MissionControl'));
-// Old components commented out - will be integrated into MissionControl in later iterations
-// import Navigation from './components/Navigation';
-// import Dashboard from './components/Dashboard';
-// import DevTools from './components/DevTools';
-// import Settings from './components/Settings';
-// import ModelManagement from './components/ModelManagement';
-// import TranscriptionHistory from './components/TranscriptionHistory';
+
 import './styles/globals.css';
 import { type ScalePreset, isValidPreset, clampScale } from './lib/scale';
 

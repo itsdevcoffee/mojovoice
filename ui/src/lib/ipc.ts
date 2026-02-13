@@ -5,7 +5,7 @@ import { useAppStore } from '../stores/appStore';
 const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
 
 // Mock data for browser development mode
-const getMockData = (command: string): any => {
+const getMockData = (command: string, args?: Record<string, unknown>): any => {
   switch (command) {
     case 'get_daemon_status':
       return {
@@ -52,15 +52,53 @@ const getMockData = (command: string): any => {
     case 'list_models':
     case 'list_downloaded_models':
       return [
-        { id: 'mock-model', name: 'Mock Model (Browser Mode)', size: '0 MB' }
+        { name: 'Whisper Large V3 Turbo', filename: 'large-v3-turbo.bin', path: '/mock/models/large-v3-turbo.bin', sizeMb: 1550, isActive: true },
+        { name: 'Whisper Medium', filename: 'medium.bin', path: '/mock/models/medium.bin', sizeMb: 1540, isActive: false },
       ];
     case 'get_history':
     case 'get_transcription_history':
       return {
-        entries: [],
-        total: 0,
+        entries: [
+          {
+            id: 'mock-1',
+            text: 'The quick brown fox jumps over the lazy dog. This is a test transcription generated in browser development mode to verify the UI rendering.',
+            timestamp: Date.now() - 120000,
+            durationMs: 5000,
+            model: 'large-v3-turbo',
+            latencyMs: 1250,
+            confidenceScore: 94.5,
+          },
+          {
+            id: 'mock-2',
+            text: 'Kubernetes cluster deployment requires careful consideration of pod scheduling, resource limits, and network policies.',
+            timestamp: Date.now() - 3600000,
+            durationMs: 4200,
+            model: 'large-v3-turbo',
+            latencyMs: 980,
+            confidenceScore: 88.2,
+          },
+          {
+            id: 'mock-3',
+            text: 'Hey, can you review the pull request I sent earlier? I think the TypeScript types need some work.',
+            timestamp: Date.now() - 86400000,
+            durationMs: 3800,
+            model: 'large-v3-turbo',
+            latencyMs: 1100,
+            confidenceScore: 91.0,
+          },
+          {
+            id: 'mock-4',
+            text: 'Meeting notes: discussed Q3 roadmap, agreed on prioritizing performance improvements and accessibility audit.',
+            timestamp: Date.now() - 172800000,
+            durationMs: 6500,
+            model: 'medium',
+            latencyMs: 2400,
+            confidenceScore: 76.8,
+          },
+        ],
+        total: 4,
         hasMore: false,
-        models: []
+        models: ['large-v3-turbo', 'medium'],
       };
     case 'list_audio_devices':
       return [
@@ -116,7 +154,7 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     } else {
       // Browser mode - use mock data
       await new Promise(resolve => setTimeout(resolve, 50)); // Simulate network delay
-      result = getMockData(command) as T;
+      result = getMockData(command, args) as T;
     }
 
     const durationMs = Date.now() - startTime;

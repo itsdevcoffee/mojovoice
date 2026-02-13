@@ -880,11 +880,91 @@ See `/docs/project/settings-design-mockup.html` for live interactive examples.
 
 ## Version History
 
+**v1.1.0 (2026-02-13):**
+- Added RecordingHero component (pulsing ring animation, aria-live region)
+- Added StatusMicroIndicators component (header status pips with tooltips)
+- Added CommandPalette component (cmdk-based, Cmd+K)
+- Added TranscriptionCard metadata footer (latency, confidence, model)
+- Added Card hover lift effect (brutal shadow shift)
+- Added surface-texture scan-line overlay class
+- Added pulse-ring CSS keyframe animation
+- Added --glow-inner-blue and --shadow-brutal-lift tokens
+- Updated SystemStatus to minimal (Memory + Uptime only)
+- Documented component decomposition architecture
+
 **v1.0.0 (2026-02-08):**
 - Initial style guide
 - Cyberpunk Terminal concept defined
 - Complete design system established
 - All component patterns documented
+
+---
+
+## Component Architecture (v0.6.0+)
+
+### Decomposed Layout
+
+MissionControl.tsx is the thin orchestrator (~205 lines). All features are extracted into focused components with lazy loading:
+
+```
+MissionControl.tsx (orchestrator)
+├── RecordingHero          ← Recording button + pulsing ring animation
+├── StatusBar              ← Daemon status, model, language, mic
+├── StatusMicroIndicators  ← Header SYS/GPU colored pips
+├── TranscriptionCard[]    ← Recent transcriptions with metadata footer
+├── SystemStatus           ← Collapsible Memory + Uptime panel
+├── SettingsPanel (lazy)   ← Full settings form in slide-out Drawer
+├── HistoryModal (lazy)    ← Searchable/filterable history with export/clear
+└── CommandPalette (lazy)  ← Cmd+K command bar (cmdk library)
+```
+
+### New CSS Classes
+
+**`.surface-texture`** — Adds subtle scan-line overlay via `::before` pseudo-element:
+```css
+.surface-texture::before {
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 2px,
+    rgba(59, 130, 246, 0.03) 2px, rgba(59, 130, 246, 0.03) 3px
+  );
+}
+```
+
+**`.animate-pulse-ring`** — Pulsing ring animation for recording state:
+```css
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+```
+
+### New Design Tokens
+
+```css
+--glow-inner-blue: inset 0 0 12px rgba(59, 130, 246, 0.1);
+--shadow-brutal-lift: 8px 8px 0px 0px rgba(0, 0, 0, 1);
+```
+
+### Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| Space | Start/stop recording |
+| Cmd/Ctrl+K | Open command palette |
+| Cmd/Ctrl+H | Open history modal |
+| Cmd/Ctrl+, | Open settings drawer |
+| Cmd/Ctrl+C | Copy last transcription (when not in input) |
+| Escape | Close topmost overlay |
+
+### TranscriptionCard Metadata Footer
+
+Cards display optional inference metadata below the text:
+```
+⚡ 1250ms  ✓ 94.5%  large-v3-turbo
+```
+- Monospace font, `var(--text-tertiary)` color
+- `border-t-2 border-[var(--border-default)]` separator
+- Fields only render when present (graceful degradation)
 
 ---
 

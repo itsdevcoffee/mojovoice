@@ -16,6 +16,8 @@ interface TranscriptionEntry {
   durationMs: number;
   model: string;
   audioPath?: string;
+  latencyMs?: number;
+  confidenceScore?: number;
 }
 
 interface HistoryResponse {

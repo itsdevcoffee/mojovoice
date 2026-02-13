@@ -15,11 +15,13 @@ export const Card: React.FC<CardProps> = ({ children, badge, className = '' }) =
         bg-[#151B2E]
         border-2 border-[#334155]
         hover:border-[#3B82F6]
-        hover:shadow-[0_0_20px_rgba(59,130,246,0.5)]
-        transition-all duration-200
+        hover:-translate-x-[2px] hover:-translate-y-[2px]
+        hover:shadow-[var(--shadow-brutal-lift)]
+        transition-all duration-150
         will-change-auto
         ${className}
       `.trim()}
+      style={{ transitionTimingFunction: 'var(--ease-out)' }}
     >
       {badge && (
         <div

@@ -97,21 +97,23 @@ export function Modal({ isOpen, onClose, children }: ModalProps) {
   return (
     <div
       ref={modalRef}
-      className="fixed inset-0 z-50 flex items-center justify-center"
+      className="fixed inset-0 z-50"
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"
     >
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-[rgba(10,14,26,0.95)] backdrop-blur-[8px]"
+        className="fixed inset-0 bg-[rgba(10,14,26,0.95)] backdrop-blur-[8px]"
         onClick={onClose}
         aria-hidden="true"
       />
 
-      {/* Content */}
-      <div className="relative w-full max-w-[900px] max-h-[80vh] mx-4 flex flex-col bg-[var(--bg-surface)] border-2 border-[var(--border-default)] animate-modal-fade-in">
-        {children}
+      {/* Centering wrapper — explicit viewport dimensions to avoid height bugs */}
+      <div className="fixed inset-0 w-[100vw] h-[100vh] flex items-center justify-center p-4 pointer-events-none">
+        <div className="w-full max-w-[900px] max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden bg-[var(--bg-surface)] border-2 border-[var(--border-default)] animate-modal-fade-in pointer-events-auto">
+          {children}
+        </div>
       </div>
     </div>
   );
