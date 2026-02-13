@@ -1,6 +1,4 @@
 import { useState, useEffect } from 'react';
-import { ChevronDown } from 'lucide-react';
-import SectionHeader from './SectionHeader';
 import { invoke } from '../../lib/ipc';
 
 interface SystemInfo {
@@ -62,7 +60,7 @@ export function SystemStatus() {
   };
 
   const formatUptime = (seconds: number | null): string => {
-    if (seconds === null) return '0s';
+    if (seconds === null || seconds === 0) return '—';
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     if (hours > 0) return `${hours}h ${minutes}m`;
@@ -70,49 +68,135 @@ export function SystemStatus() {
     return `${seconds}s`;
   };
 
-  const formatMemory = (usedGb: number, totalGb: number): string => {
-    return `${usedGb.toFixed(1)} GB / ${totalGb.toFixed(1)} GB`;
+  const formatVram = (mb: number | null): string => {
+    if (mb === null) return '—';
+    if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
+    return `${mb} MB`;
   };
+
+  const ramUsedGb = 0; // TODO: wire to real usage when available
+  const ramTotalGb = systemInfo?.total_ram_gb ?? 0;
+  const ramPercent = ramTotalGb > 0 ? (ramUsedGb / ramTotalGb) * 100 : 0;
 
   return (
     <section className="mt-12">
+      {/* Toggle header — single clickable row, single rotating glyph */}
       <button
         onClick={handleToggle}
-        className="cursor-pointer select-none flex items-center gap-3 mb-4 w-full text-left bg-transparent border-none p-0 focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-2 focus-visible:shadow-[0_0_20px_rgba(59,130,246,0.5)] rounded"
+        className="
+          group flex items-center gap-2 w-full text-left
+          bg-transparent border-none p-0 cursor-pointer select-none
+          focus-visible:outline-2 focus-visible:outline-blue-500
+          focus-visible:outline-offset-2
+        "
         aria-expanded={isExpanded}
         aria-controls="system-status-content"
-        aria-label={`System status section, ${isExpanded ? 'expanded' : 'collapsed'}. Click to ${isExpanded ? 'collapse' : 'expand'}.`}
+        aria-label={`System status, ${isExpanded ? 'expanded' : 'collapsed'}. Click to ${isExpanded ? 'collapse' : 'expand'}.`}
       >
-        <SectionHeader title="SYSTEM STATUS" />
-        <ChevronDown
-          className={`w-4 h-4 text-[var(--accent-primary)] transition-transform duration-200 ${isExpanded ? '' : 'rotate-180'}`}
+        <span
+          className={`
+            text-[var(--accent-primary)] text-sm
+            transition-transform duration-200
+            ${isExpanded ? 'rotate-90' : ''}
+          `}
           aria-hidden="true"
-        />
+        >
+          ▸
+        </span>
+        <h2 className="font-mono text-xs uppercase tracking-[0.12em] text-[var(--accent-primary)] font-semibold">
+          SYSTEM STATUS
+        </h2>
+        <div className="flex-1 h-px bg-gradient-to-r from-[var(--accent-primary)] to-transparent" />
       </button>
 
+      {/* Collapsible content */}
       <div
         id="system-status-content"
-        className={`overflow-hidden transition-all duration-200 ease-out ${isExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}
+        className={`
+          overflow-hidden transition-all duration-200
+          ${isExpanded ? 'max-h-[300px] opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}
+        `}
+        style={{ transitionTimingFunction: 'var(--ease-out)' }}
         aria-hidden={!isExpanded}
       >
-        <div className="p-6 bg-[var(--bg-surface)] border-2 border-[var(--border-default)] rounded space-y-4 surface-texture">
-          {/* Memory */}
-          <div className="flex justify-between items-center relative z-10">
-            <span className="text-sm text-[var(--text-secondary)] font-ui">Memory</span>
-            <span className="text-sm text-[var(--text-primary)] font-mono">
-              {systemInfo ? formatMemory(0, systemInfo.total_ram_gb) : '...'}
+        <div className="grid grid-cols-3 gap-px bg-[var(--border-default)] border-2 border-[var(--border-default)]">
+          {/* CPU */}
+          <ReadoutCell
+            label="CPU"
+            value={systemInfo ? `${systemInfo.cpu_cores} cores` : '…'}
+          />
+
+          {/* Memory — with progress bar */}
+          <div className="bg-[var(--bg-surface)] p-3 space-y-1.5">
+            <span className="block font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-tertiary)]">
+              Memory
             </span>
+            <span className="block font-mono text-xs text-[var(--text-primary)]">
+              {systemInfo
+                ? `${ramUsedGb.toFixed(1)} / ${ramTotalGb.toFixed(1)} GB`
+                : '…'}
+            </span>
+            {/* Thin bar */}
+            <div className="h-[3px] bg-[var(--bg-elevated)] w-full">
+              <div
+                className="h-full transition-all duration-300"
+                style={{
+                  width: `${Math.max(ramPercent, 2)}%`,
+                  backgroundColor:
+                    ramPercent > 90
+                      ? 'var(--error)'
+                      : ramPercent > 70
+                        ? 'var(--warning)'
+                        : 'var(--accent-primary)',
+                }}
+              />
+            </div>
           </div>
 
+          {/* GPU */}
+          <ReadoutCell
+            label="GPU"
+            value={
+              systemInfo?.gpu_name
+                ?? (daemonStatus?.gpu_name
+                  ?? (systemInfo?.gpu_available ? 'Available' : 'None'))
+            }
+          />
+
+          {/* VRAM */}
+          <ReadoutCell
+            label="VRAM"
+            value={formatVram(systemInfo?.gpu_vram_mb ?? null)}
+          />
+
+          {/* Platform */}
+          <ReadoutCell
+            label="Platform"
+            value={systemInfo?.platform ?? '…'}
+          />
+
           {/* Uptime */}
-          <div className="flex justify-between items-center relative z-10">
-            <span className="text-sm text-[var(--text-secondary)] font-ui">Uptime</span>
-            <span className="text-sm text-[var(--text-primary)] font-mono">
-              {daemonStatus ? formatUptime(daemonStatus.uptime_secs) : '...'}
-            </span>
-          </div>
+          <ReadoutCell
+            label="Uptime"
+            value={formatUptime(daemonStatus?.uptime_secs ?? null)}
+          />
         </div>
       </div>
     </section>
+  );
+}
+
+/* ── Readout Cell ─────────────────────────────────────────────────────── */
+
+function ReadoutCell({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-[var(--bg-surface)] p-3 space-y-1">
+      <span className="block font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-tertiary)]">
+        {label}
+      </span>
+      <span className="block font-mono text-xs text-[var(--text-primary)] truncate" title={value}>
+        {value}
+      </span>
+    </div>
   );
 }
