@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { ChevronDown } from 'lucide-react';
 import { Button } from './ui/Button';
 import SectionHeader from './ui/SectionHeader';
 import { invoke } from '../lib/ipc';
@@ -428,28 +427,22 @@ export default function SettingsPanel() {
 
       {/* Advanced Section */}
       <section className="pt-8 border-t border-[var(--border-default)]">
-        <button
-          onClick={toggleAdvancedSection}
-          className="w-full flex items-center justify-between group focus:outline-none focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-2"
-          aria-expanded={advancedExpanded}
-          aria-controls="advanced-settings-content"
-          aria-label={`Advanced settings section, ${advancedExpanded ? 'expanded' : 'collapsed'}. Click to ${advancedExpanded ? 'collapse' : 'expand'}.`}
-        >
-          <div className="flex items-center gap-3">
-            <SectionHeader title="ADVANCED" />
-          </div>
-          <ChevronDown
-            className={`w-4 h-4 text-[var(--text-tertiary)] transition-transform duration-200 ${advancedExpanded ? 'rotate-180' : ''}`}
-            aria-hidden="true"
-          />
-        </button>
+        <SectionHeader
+          title="ADVANCED"
+          isExpanded={advancedExpanded}
+          onToggle={toggleAdvancedSection}
+        />
 
-        {advancedExpanded && (
-          <div
-            id="advanced-settings-content"
-            className="mt-6 space-y-6 animate-expand"
-            style={{ animation: 'expand-smooth 200ms ease-out' }}
-          >
+        <div
+          id="advanced-settings-content"
+          className={`
+            overflow-hidden transition-all duration-200
+            ${advancedExpanded ? 'max-h-[1000px] opacity-100 mt-6' : 'max-h-0 opacity-0 mt-0'}
+          `}
+          style={{ transitionTimingFunction: 'var(--ease-out)' }}
+          aria-hidden={!advancedExpanded}
+        >
+          <div className="space-y-6">
             <div className="space-y-2">
               <label className="block text-sm font-ui font-medium text-[var(--text-primary)]">Model Path Override</label>
               <p className="text-xs text-[var(--text-tertiary)] font-ui mb-2">Custom path to Whisper model file (advanced users only)</p>
@@ -551,7 +544,7 @@ export default function SettingsPanel() {
               )}
             </div>
           </div>
-        )}
+        </div>
       </section>
 
       {/* Save/Reset Actions */}
