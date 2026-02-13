@@ -162,12 +162,14 @@ export default function HistoryModal({ isOpen, onClose }: HistoryModalProps) {
             {showFilters && (
               <div className="p-4 bg-[var(--bg-elevated)] border-2 border-[var(--border-default)] rounded space-y-4">
                 <div className="space-y-2">
-                  <label className="block text-xs font-ui font-medium text-[var(--text-secondary)] uppercase tracking-wide">Date Range</label>
-                  <div className="flex gap-2">
+                  <label id="date-filter-label" className="block text-xs font-ui font-medium text-[var(--text-secondary)] uppercase tracking-wide">Date Range</label>
+                  <div className="flex gap-2" role="radiogroup" aria-labelledby="date-filter-label">
                     {(['all', 'today', 'week', 'month'] as const).map((range) => (
                       <button
                         key={range}
                         onClick={() => setDateFilter(range)}
+                        role="radio"
+                        aria-checked={dateFilter === range}
                         className={`
                           px-3 py-1.5 text-xs font-ui font-medium uppercase tracking-wide rounded border-2 transition-all duration-150
                           ${dateFilter === range
@@ -182,12 +184,14 @@ export default function HistoryModal({ isOpen, onClose }: HistoryModalProps) {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <label className="block text-xs font-ui font-medium text-[var(--text-secondary)] uppercase tracking-wide">Word Count</label>
-                  <div className="flex gap-2">
+                  <label id="wordcount-filter-label" className="block text-xs font-ui font-medium text-[var(--text-secondary)] uppercase tracking-wide">Word Count</label>
+                  <div className="flex gap-2" role="radiogroup" aria-labelledby="wordcount-filter-label">
                     {(['all', 'short', 'medium', 'long'] as const).map((range) => (
                       <button
                         key={range}
                         onClick={() => setWordCountFilter(range)}
+                        role="radio"
+                        aria-checked={wordCountFilter === range}
                         className={`
                           px-3 py-1.5 text-xs font-ui font-medium uppercase tracking-wide rounded border-2 transition-all duration-150
                           ${wordCountFilter === range

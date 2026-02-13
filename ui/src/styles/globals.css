@@ -861,17 +861,6 @@
   }
 }
 
-@keyframes modal-fade-in {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
 @keyframes scan {
   0% {
     transform: translateX(-100%);
@@ -910,10 +899,6 @@
 
 .animate-pulse-badge {
   animation: pulse-badge 2s ease-in-out infinite;
-}
-
-.animate-modal-fade-in {
-  animation: modal-fade-in 200ms ease-out forwards;
 }
 
 .animate-scan {
@@ -1030,12 +1015,6 @@
   }
 
   .animate-dropdown-slide {
-    animation: none;
-    opacity: 1;
-    transform: none;
-  }
-
-  .animate-modal-fade-in {
     animation: none;
     opacity: 1;
     transform: none;

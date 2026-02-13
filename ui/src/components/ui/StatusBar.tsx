@@ -22,9 +22,11 @@ interface AppConfig {
 }
 
 interface DownloadedModel {
+  name: string;
   filename: string;
-  displayName: string;
-  size: number;
+  path: string;
+  sizeMb: number;
+  isActive: boolean;
 }
 
 interface StatusBarProps {
@@ -193,7 +195,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
                       }
                     `}
                   >
-                    {model.displayName}
+                    {model.name}
                   </button>
                 ))
               ) : (
