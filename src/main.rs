@@ -983,8 +983,11 @@ fn cmd_vocab(command: VocabCommands) -> Result<()> {
             }
         },
         VocabCommands::Remove { term } => {
-            store.remove_term(&term)?;
-            println!("Removed '{}' from vocabulary.", term);
+            if store.remove_term(&term)? {
+                println!("Removed {} from vocabulary.", term);
+            } else {
+                println!("Term {} not found in vocabulary.", term);
+            }
         },
         VocabCommands::Correct { wrong: _, right } => {
             store.add_term(&right, "auto")?;

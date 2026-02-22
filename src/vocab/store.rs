@@ -65,12 +65,12 @@ impl VocabStore {
         Ok(())
     }
 
-    /// Remove a term from the vocabulary.
-    pub fn remove_term(&self, term: &str) -> Result<()> {
-        self.conn
+    /// Remove a term from the vocabulary. Returns true if deleted, false if not found.
+    pub fn remove_term(&self, term: &str) -> Result<bool> {
+        let rows_affected = self.conn
             .execute("DELETE FROM vocabulary WHERE term = ?1", params![term])
             .context("Failed to remove term")?;
-        Ok(())
+        Ok(rows_affected > 0)
     }
 
     /// Return all vocabulary entries sorted by use_count DESC, then term ASC.
@@ -173,11 +173,20 @@ mod tests {
 
         store.add_term("Claude", "manual").unwrap();
         store.add_term("Maximus", "manual").unwrap();
-        store.remove_term("Claude").unwrap();
+        let deleted = store.remove_term("Claude").unwrap();
+        assert!(deleted);
 
         let terms = store.list_terms().unwrap();
         assert_eq!(terms.len(), 1);
         assert_eq!(terms[0].term, "Maximus");
+    }
+
+    #[test]
+    fn test_remove_term_not_found_returns_false() {
+        let (store, _dir) = temp_store();
+
+        let deleted = store.remove_term("NonExistentTerm").unwrap();
+        assert!(!deleted);
     }
 
     #[test]
