@@ -162,6 +162,39 @@ enum Commands {
         #[arg(long)]
         report: bool,
     },
+
+    /// Manage vocabulary terms used to bias transcription
+    Vocab {
+        #[command(subcommand)]
+        command: VocabCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum VocabCommands {
+    /// Add a term to the vocabulary
+    Add {
+        /// Term to add
+        term: String,
+    },
+
+    /// List all vocabulary terms
+    List,
+
+    /// Remove a term from the vocabulary
+    Remove {
+        /// Term to remove
+        term: String,
+    },
+
+    /// Record a correction (adds the correct term with source='auto')
+    Correct {
+        /// The incorrect transcription
+        wrong: String,
+
+        /// The correct term to add
+        right: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -232,6 +265,7 @@ fn main() -> Result<()> {
             stdout_only,
             report,
         } => cmd_benchmark(samples_dir, output_dir, stdout_only, report)?,
+        Commands::Vocab { command } => cmd_vocab(command)?,
     }
 
     Ok(())
@@ -374,6 +408,10 @@ fn cmd_start_fixed(model_override: Option<String>, duration: u32, clipboard: boo
     let output_mode = output_mode_from_clipboard(clipboard);
     info!("Output mode: {:?}", output_mode);
 
+    let vocab_prompt = vocab::VocabStore::open()
+        .and_then(|s| s.get_prompt_string(200))
+        .unwrap_or(None);
+
     info!("Loading whisper model...");
     let mut transcriber = transcribe::candle_engine::CandleEngine::with_options(
         cfg.model
@@ -381,7 +419,7 @@ fn cmd_start_fixed(model_override: Option<String>, duration: u32, clipboard: boo
             .to_str()
             .ok_or_else(|| anyhow::anyhow!("Invalid model path"))?,
         &cfg.model.language,
-        cfg.model.prompt.clone(),
+        vocab_prompt,
     )?;
     info!("Model loaded successfully");
 
@@ -915,6 +953,40 @@ fn cmd_benchmark(
     }
 
     benchmark::run_benchmark(&samples_dir, &output_dir, stdout_only)
+}
+
+/// Manage vocabulary terms
+fn cmd_vocab(command: VocabCommands) -> Result<()> {
+    let store = vocab::VocabStore::open()?;
+
+    match command {
+        VocabCommands::Add { term } => {
+            store.add_term(&term, "manual")?;
+            println!("Added '{}' to vocabulary.", term);
+        },
+        VocabCommands::List => {
+            let terms: Vec<vocab::VocabEntry> = store.list_terms()?;
+            if terms.is_empty() {
+                println!("No vocabulary terms yet.");
+            } else {
+                println!("{:<30} {:<8} {}", "Term", "Uses", "Source");
+                println!("{}", "-".repeat(50));
+                for entry in &terms {
+                    println!("{:<30} {:<8} {}", entry.term, entry.use_count, entry.source);
+                }
+            }
+        },
+        VocabCommands::Remove { term } => {
+            store.remove_term(&term)?;
+            println!("Removed '{}' from vocabulary.", term);
+        },
+        VocabCommands::Correct { wrong: _, right } => {
+            store.add_term(&right, "auto")?;
+            println!("Added correction: '{}' added to vocabulary.", right);
+        },
+    }
+
+    Ok(())
 }
 
 /// Transcribe a WAV file via daemon (for testing/debugging)

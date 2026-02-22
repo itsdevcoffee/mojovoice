@@ -4,8 +4,10 @@ use std::path::Path;
 
 #[derive(Debug, Clone)]
 pub struct VocabEntry {
+    #[allow(dead_code)]
     pub id: i64,
     pub term: String,
+    #[allow(dead_code)]
     pub added_at: i64,
     pub use_count: i64,
     pub source: String,
@@ -96,6 +98,7 @@ impl VocabStore {
     }
 
     /// Increment the use_count for the given term. No-op if the term doesn't exist.
+    #[allow(dead_code)]
     pub fn increment_use_count(&self, term: &str) -> Result<()> {
         self.conn
             .execute(
