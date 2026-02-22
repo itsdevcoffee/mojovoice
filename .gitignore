@@ -38,3 +38,10 @@ logs/
 # Stray screenshots (should go in docs/tmp/)
 /*.png
 /*.jpeg
+
+# Maximus Loop artifacts
+.maximus/.heartbeat
+.maximus/.stop
+.maximus/.pause
+.maximus/.completed-tasks.json
+.maximus/logs/
