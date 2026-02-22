@@ -437,39 +437,9 @@ impl CandleEngine {
             audio_features.dim(2)?
         );
 
-        // Build initial token sequence using correct Whisper prompt format:
-        // - With prompt, multilingual: <|startofprev|>[prompt]<|sot|><|lang|><|transcribe|><|notimestamps|>
-        // - With prompt, english-only: <|startofprev|>[prompt]<|sot|><|notimestamps|>
-        // - Without prompt, multilingual: <|sot|><|lang|><|transcribe|><|notimestamps|>
-        // - Without prompt, english-only: <|sot|><|notimestamps|>
-        let current_tokens = if !prompt_tokens.is_empty() {
-            let mut tokens = vec![special_tokens.sot_prev_token];
-            tokens.extend_from_slice(&prompt_tokens);
-            if self.is_english_only {
-                tokens.extend_from_slice(&[
-                    special_tokens.sot_token,
-                    special_tokens.no_timestamps_token,
-                ]);
-            } else {
-                tokens.extend_from_slice(&[
-                    special_tokens.sot_token,
-                    special_tokens.language_token,
-                    special_tokens.transcribe_token,
-                    special_tokens.no_timestamps_token,
-                ]);
-            }
-            tokens
-        } else if self.is_english_only {
-            vec![special_tokens.sot_token, special_tokens.no_timestamps_token]
-        } else {
-            vec![
-                special_tokens.sot_token,
-                special_tokens.language_token,
-                special_tokens.transcribe_token,
-                special_tokens.no_timestamps_token,
-            ]
-        };
-        let mut current_tokens = current_tokens;
+        // Build initial token sequence using correct Whisper prompt format.
+        let mut current_tokens =
+            build_decoder_prefix(&prompt_tokens, &special_tokens, self.is_english_only);
         debug!(
             "Initial tokens: {} total (english_only={}, has_prompt={})",
             current_tokens.len(),
@@ -725,8 +695,117 @@ struct SpecialTokens {
     language_token: u32,
 }
 
+/// Build the decoder prefix token sequence for Whisper decoding.
+///
+/// Constructs the initial token sequence according to the Whisper prompt format:
+/// - With prompt, multilingual: `<sot_prev>[prompt]<sot><lang><transcribe><notimestamps>`
+/// - With prompt, english-only: `<sot_prev>[prompt]<sot><notimestamps>`
+/// - Without prompt, multilingual: `<sot><lang><transcribe><notimestamps>`
+/// - Without prompt, english-only: `<sot><notimestamps>`
+fn build_decoder_prefix(
+    prompt_tokens: &[u32],
+    special: &SpecialTokens,
+    is_english_only: bool,
+) -> Vec<u32> {
+    if !prompt_tokens.is_empty() {
+        let mut tokens = vec![special.sot_prev_token];
+        tokens.extend_from_slice(prompt_tokens);
+        if is_english_only {
+            tokens.extend_from_slice(&[special.sot_token, special.no_timestamps_token]);
+        } else {
+            tokens.extend_from_slice(&[
+                special.sot_token,
+                special.language_token,
+                special.transcribe_token,
+                special.no_timestamps_token,
+            ]);
+        }
+        tokens
+    } else if is_english_only {
+        vec![special.sot_token, special.no_timestamps_token]
+    } else {
+        vec![
+            special.sot_token,
+            special.language_token,
+            special.transcribe_token,
+            special.no_timestamps_token,
+        ]
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use super::{build_decoder_prefix, SpecialTokens};
+
+    fn make_special_tokens() -> SpecialTokens {
+        SpecialTokens {
+            sot_prev_token: 50360,
+            sot_token: 50258,
+            eot_token: 50257,
+            transcribe_token: 50359,
+            no_timestamps_token: 50363,
+            language_token: 50259,
+        }
+    }
+
+    #[test]
+    fn test_with_prompt_tokens_starts_with_sot_prev_then_prompt_then_sot() {
+        let special = make_special_tokens();
+        let prompt_tokens = vec![100u32, 200, 300];
+        let result = build_decoder_prefix(&prompt_tokens, &special, false);
+
+        assert_eq!(result[0], special.sot_prev_token, "Should start with sot_prev_token");
+        assert_eq!(result[1], 100, "Second token should be first prompt token");
+        assert_eq!(result[2], 200, "Third token should be second prompt token");
+        assert_eq!(result[3], 300, "Fourth token should be third prompt token");
+        assert_eq!(result[4], special.sot_token, "SOT should come after prompt tokens");
+    }
+
+    #[test]
+    fn test_empty_prompt_starts_with_sot_no_sot_prev() {
+        let special = make_special_tokens();
+        let prompt_tokens: Vec<u32> = vec![];
+        let result = build_decoder_prefix(&prompt_tokens, &special, false);
+
+        assert_eq!(result[0], special.sot_token, "Should start with sot_token when no prompt");
+        assert!(
+            !result.contains(&special.sot_prev_token),
+            "sot_prev_token should not appear with empty prompt"
+        );
+    }
+
+    #[test]
+    fn test_multilingual_path_includes_lang_and_transcribe_tokens() {
+        let special = make_special_tokens();
+        let prompt_tokens: Vec<u32> = vec![];
+        let result = build_decoder_prefix(&prompt_tokens, &special, false);
+
+        assert!(
+            result.contains(&special.language_token),
+            "Multilingual path should include language_token"
+        );
+        assert!(
+            result.contains(&special.transcribe_token),
+            "Multilingual path should include transcribe_token"
+        );
+    }
+
+    #[test]
+    fn test_english_only_omits_lang_and_transcribe_tokens() {
+        let special = make_special_tokens();
+        let prompt_tokens: Vec<u32> = vec![];
+        let result = build_decoder_prefix(&prompt_tokens, &special, true);
+
+        assert!(
+            !result.contains(&special.language_token),
+            "English-only path should not include language_token"
+        );
+        assert!(
+            !result.contains(&special.transcribe_token),
+            "English-only path should not include transcribe_token"
+        );
+    }
+
     #[test]
     fn test_empty_audio() {
         let empty_audio: Vec<f32> = vec![];
