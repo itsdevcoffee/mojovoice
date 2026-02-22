@@ -16,6 +16,7 @@ mod model;
 mod output;
 mod state;
 mod transcribe;
+mod vocab;
 
 /// Validate that the model file exists, returning a helpful error if not
 fn validate_model_path(cfg: &config::Config) -> Result<()> {

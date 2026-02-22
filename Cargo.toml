@@ -59,6 +59,9 @@ uuid = { version = "1", features = ["v4"] }
 # File locking for history concurrent access
 fs2 = "0.4"
 
+# SQLite for vocabulary store
+rusqlite = { version = "0.31", features = ["bundled"] }
+
 # Clipboard - always available
 arboard = "3.6"
 
