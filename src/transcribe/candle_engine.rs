@@ -354,6 +354,7 @@ impl CandleEngine {
                 .ok_or_else(|| anyhow::anyhow!("Token not found: {}", token))
         };
 
+        let sot_prev_token = token_id("<|startofprev|>")?;
         let sot_token = token_id("<|startoftranscript|>")?;
         let eot_token = token_id("<|endoftext|>")?;
         let transcribe_token = token_id("<|transcribe|>")?;
@@ -361,6 +362,7 @@ impl CandleEngine {
         let language_token = token_id(&format!("<|{}|>", self.language))?;
 
         Ok(SpecialTokens {
+            sot_prev_token,
             sot_token,
             eot_token,
             transcribe_token,
@@ -379,9 +381,8 @@ impl CandleEngine {
 
             let tokens = encoding.get_ids().to_vec();
 
-            // CRITICAL: Whisper expects short prompts (<50 tokens)
-            // Long prompts cause decoder to get stuck in infinite loops
-            const MAX_PROMPT_TOKENS: usize = 50;
+            // Whisper's actual limit is 224 prompt tokens (half the decoder context of 448)
+            const MAX_PROMPT_TOKENS: usize = 224;
             if tokens.len() > MAX_PROMPT_TOKENS {
                 warn!(
                     "Initial prompt has {} tokens, truncating to {} (prompt length: {} chars)",
@@ -436,14 +437,31 @@ impl CandleEngine {
             audio_features.dim(2)?
         );
 
-        // Build initial token sequence based on model type:
-        // - Multilingual: <|sot|><|lang|><|transcribe|><|notimestamps|>[prompt]
-        // - English-only: <|sot|><|notimestamps|>[prompt]
-        let mut current_tokens = if self.is_english_only {
-            // English-only models expect simplified sequence (no language/task tokens)
+        // Build initial token sequence using correct Whisper prompt format:
+        // - With prompt, multilingual: <|startofprev|>[prompt]<|sot|><|lang|><|transcribe|><|notimestamps|>
+        // - With prompt, english-only: <|startofprev|>[prompt]<|sot|><|notimestamps|>
+        // - Without prompt, multilingual: <|sot|><|lang|><|transcribe|><|notimestamps|>
+        // - Without prompt, english-only: <|sot|><|notimestamps|>
+        let current_tokens = if !prompt_tokens.is_empty() {
+            let mut tokens = vec![special_tokens.sot_prev_token];
+            tokens.extend_from_slice(&prompt_tokens);
+            if self.is_english_only {
+                tokens.extend_from_slice(&[
+                    special_tokens.sot_token,
+                    special_tokens.no_timestamps_token,
+                ]);
+            } else {
+                tokens.extend_from_slice(&[
+                    special_tokens.sot_token,
+                    special_tokens.language_token,
+                    special_tokens.transcribe_token,
+                    special_tokens.no_timestamps_token,
+                ]);
+            }
+            tokens
+        } else if self.is_english_only {
             vec![special_tokens.sot_token, special_tokens.no_timestamps_token]
         } else {
-            // Multilingual models need full sequence
             vec![
                 special_tokens.sot_token,
                 special_tokens.language_token,
@@ -451,14 +469,12 @@ impl CandleEngine {
                 special_tokens.no_timestamps_token,
             ]
         };
-        let num_special = current_tokens.len();
-        current_tokens.extend_from_slice(&prompt_tokens);
+        let mut current_tokens = current_tokens;
         debug!(
-            "Initial tokens: {} special + {} prompt = {} total (english_only={})",
-            num_special,
-            prompt_tokens.len(),
+            "Initial tokens: {} total (english_only={}, has_prompt={})",
             current_tokens.len(),
-            self.is_english_only
+            self.is_english_only,
+            !prompt_tokens.is_empty()
         );
 
         // Greedy decoding loop with quality metrics
@@ -701,6 +717,7 @@ impl Transcriber for CandleEngine {
 }
 
 struct SpecialTokens {
+    sot_prev_token: u32,
     sot_token: u32,
     eot_token: u32,
     transcribe_token: u32,
