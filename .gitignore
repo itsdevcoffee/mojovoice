@@ -39,9 +39,3 @@ logs/
 /*.png
 /*.jpeg
 
-# Maximus Loop artifacts
-.maximus/.heartbeat
-.maximus/.stop
-.maximus/.pause
-.maximus/.completed-tasks.json
-.maximus/logs/
