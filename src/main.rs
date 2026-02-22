@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use tracing::info;
+use tracing::{info, warn};
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -408,8 +408,14 @@ fn cmd_start_fixed(model_override: Option<String>, duration: u32, clipboard: boo
     let output_mode = output_mode_from_clipboard(clipboard);
     info!("Output mode: {:?}", output_mode);
 
+    if let Some(ref p) = cfg.model.prompt {
+        if !p.is_empty() {
+            warn!("model.prompt in config is deprecated and will be ignored; use mojovoice vocab add instead.");
+        }
+    }
+
     let vocab_prompt = vocab::VocabStore::open()
-        .and_then(|s| s.get_prompt_string(200))
+        .and_then(|s| s.get_prompt_string(224))
         .unwrap_or(None);
 
     info!("Loading whisper model...");

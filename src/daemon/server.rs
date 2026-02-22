@@ -127,8 +127,14 @@ impl DaemonServer {
 
         info!("Loading whisper model into GPU memory...");
 
-        let vocab_prompt = crate::vocab::store::VocabStore::open()
-            .and_then(|s| s.get_prompt_string(200))
+        if let Some(ref p) = config.model.prompt {
+            if !p.is_empty() {
+                warn!("model.prompt in config is deprecated and will be ignored; use mojovoice vocab add instead.");
+            }
+        }
+
+        let vocab_prompt = crate::vocab::VocabStore::open()
+            .and_then(|s| s.get_prompt_string(224))
             .unwrap_or(None);
 
         // Use CandleEngine (new Candle-based implementation)
