@@ -50,6 +50,11 @@ fn main() {
             commands::get_storage_info,
             // Audio devices
             commands::list_audio_devices,
+            // Vocabulary management
+            commands::vocab_list,
+            commands::vocab_add,
+            commands::vocab_remove,
+            commands::vocab_correct,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -119,6 +119,18 @@ const getMockData = (command: string, args?: Record<string, unknown>): any => {
       };
     case 'validate_path':
       return { valid: true, path: args?.path || '/tmp' };
+    case 'vocab_list':
+      return [
+        { id: 1, term: 'MojoVoice', useCount: 5, source: 'manual', addedAt: Date.now() - 86400000 },
+        { id: 2, term: 'Whisper', useCount: 12, source: 'manual', addedAt: Date.now() - 172800000 },
+        { id: 3, term: 'Tauri', useCount: 3, source: 'correction', addedAt: Date.now() - 3600000 },
+      ];
+    case 'vocab_add':
+      return { success: true };
+    case 'vocab_remove':
+      return true;
+    case 'vocab_correct':
+      return { success: true };
     case 'save_config':
     case 'switch_model':
     case 'start_recording':
