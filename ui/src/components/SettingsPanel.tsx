@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useToast } from './ui/Toast';
 import { invoke } from '../lib/ipc';
 import SettingsConfigTab from './settings/SettingsConfigTab';
@@ -59,10 +59,12 @@ export default function SettingsPanel() {
   });
   const [activeTab, setActiveTab] = useState<'settings' | 'vocab'>('settings');
   const [savedField, setSavedField] = useState<string | null>(null);
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const flashSaved = (field: string) => {
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
     setSavedField(field);
-    setTimeout(() => setSavedField(null), 1500);
+    flashTimerRef.current = setTimeout(() => setSavedField(null), 1500);
   };
 
   // Vocabulary state
