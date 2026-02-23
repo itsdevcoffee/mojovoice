@@ -59,7 +59,7 @@ export default function AdvancedPanel({
           ADVANCED
         </span>
         <span className="font-mono text-[10px] text-[var(--text-tertiary)]">
-          [3 opts]
+          [{saveAudioClips ? 4 : 3} opts]
         </span>
         {!isExpanded && (
           <span className="ml-auto font-mono text-[10px] text-[var(--text-tertiary)] truncate max-w-[110px]">

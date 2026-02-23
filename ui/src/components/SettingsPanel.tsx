@@ -35,8 +35,8 @@ interface DownloadedModel {
 
 interface AudioDevice {
   name: string;
-  is_default: boolean;
-  internal_name: string | null;
+  isDefault: boolean;
+  internalName: string | null;
 }
 
 interface VocabTerm {
@@ -295,6 +295,8 @@ export default function SettingsPanel() {
     localStorage.setItem('advancedSettings.collapsed', String(!newState));
   };
 
+  const tabs = ['settings', 'vocab'] as const;
+
   if (loading || !config) {
     return (
       <div className="text-center py-12">
@@ -306,7 +308,23 @@ export default function SettingsPanel() {
   return (
     <div>
       {/* Two-tab bar */}
-      <div className="flex mb-6" role="tablist" aria-label="Settings sections">
+      <div
+        className="flex mb-6"
+        role="tablist"
+        aria-label="Settings sections"
+        onKeyDown={(e) => {
+          const currentIndex = tabs.indexOf(activeTab);
+          if (e.key === 'ArrowRight') {
+            const next = tabs[(currentIndex + 1) % tabs.length];
+            setActiveTab(next);
+            document.getElementById(`tab-${next}`)?.focus();
+          } else if (e.key === 'ArrowLeft') {
+            const prev = tabs[(currentIndex - 1 + tabs.length) % tabs.length];
+            setActiveTab(prev);
+            document.getElementById(`tab-${prev}`)?.focus();
+          }
+        }}
+      >
         {(['settings', 'vocab'] as const).map((tab, i) => (
           <button
             key={tab}
@@ -314,6 +332,7 @@ export default function SettingsPanel() {
             role="tab"
             aria-selected={activeTab === tab}
             aria-controls={`tabpanel-${tab}`}
+            tabIndex={activeTab === tab ? 0 : -1}
             onClick={() => setActiveTab(tab)}
             className={`
               flex-1 px-4 py-2.5 font-mono text-xs uppercase tracking-[0.12em]

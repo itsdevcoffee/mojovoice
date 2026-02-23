@@ -101,11 +101,13 @@ export default function ModelHeroCard({
               ))
             )}
           </select>
-          {savedModel && (
-            <span className="absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[10px] text-green-400 pointer-events-none">
-              [OK]
-            </span>
-          )}
+          <span
+            aria-live="polite"
+            aria-atomic="true"
+            className={`absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[10px] text-green-400 pointer-events-none transition-opacity duration-300 ${savedModel ? 'opacity-100' : 'opacity-0'}`}
+          >
+            {savedModel ? '[OK]' : ''}
+          </span>
         </div>
 
         {/* Language selector */}
@@ -120,11 +122,13 @@ export default function ModelHeroCard({
               <option key={lang.code} value={lang.code}>{lang.name}</option>
             ))}
           </select>
-          {savedLanguage && (
-            <span className="absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[10px] text-green-400 pointer-events-none">
-              [OK]
-            </span>
-          )}
+          <span
+            aria-live="polite"
+            aria-atomic="true"
+            className={`absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[10px] text-green-400 pointer-events-none transition-opacity duration-300 ${savedLanguage ? 'opacity-100' : 'opacity-0'}`}
+          >
+            {savedLanguage ? '[OK]' : ''}
+          </span>
         </div>
       </div>
     </div>

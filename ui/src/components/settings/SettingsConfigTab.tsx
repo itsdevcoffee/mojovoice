@@ -25,8 +25,8 @@ interface DownloadedModel {
 
 interface AudioDevice {
   name: string;
-  is_default: boolean;
-  internal_name: string | null;
+  isDefault: boolean;
+  internalName: string | null;
 }
 
 interface SettingsConfigTabProps {
@@ -145,8 +145,8 @@ export default function SettingsConfigTab({
         >
           <option value="">System Default</option>
           {audioDevices.map((d) => (
-            <option key={d.internal_name || d.name} value={d.internal_name || d.name}>
-              {d.name}{d.is_default ? ' (Default)' : ''}
+            <option key={d.internalName || d.name} value={d.internalName || d.name}>
+              {d.name}{d.isDefault ? ' (Default)' : ''}
             </option>
           ))}
         </select>
