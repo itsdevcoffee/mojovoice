@@ -23,7 +23,7 @@ interface Config {
     path: string;
     model_id: string;
     language: string;
-    prompt_biasing: string | null;
+    prompt: string | null;
   };
   audio: {
     sample_rate: number;
@@ -173,7 +173,7 @@ export default function SettingsPanel() {
     try {
       const updatedConfig = {
         ...config,
-        model: { ...config.model, prompt_biasing: vocabulary.trim() || null },
+        model: { ...config.model, prompt: vocabulary.trim() || null },
       };
       await invoke('save_config', { config: updatedConfig });
       setConfig(updatedConfig);
@@ -464,7 +464,7 @@ export default function SettingsPanel() {
               <label className="block text-sm font-ui font-medium text-[var(--text-primary)]">Technical Vocabulary</label>
               <p className="text-xs text-[var(--text-tertiary)] font-ui mb-2">Custom words for prompt biasing (comma-separated)</p>
               <textarea
-                value={config.model.prompt_biasing || ''}
+                value={config.model.prompt || ''}
                 onChange={(e) => handleTechnicalVocabularyChange(e.target.value)}
                 placeholder="Kubernetes, PostgreSQL, TypeScript..."
                 rows={3}
