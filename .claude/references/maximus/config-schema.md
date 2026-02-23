@@ -6,7 +6,7 @@ Authoritative field reference for `.maximus/config.yml`. Derived from `engine/li
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `project_name` | string | no | `"Maximus Loop"` | Display name for the project |
+| `project_name` | string | **yes** | — | **Permanent DB identifier** — primary key in MemRL episodes DB. 1–4 words, title case (e.g. `"Aqimo"`, `"My Project"`). Never use placeholders or descriptions. Changing after first run orphans all episode history. |
 | `maximus_version` | string | no | `"1.0.0"` | Config schema version |
 | `loop` | object | **yes** | — | Loop execution settings |
 | `agent` | object | **yes** | — | Agent spawning settings |

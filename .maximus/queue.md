@@ -57,3 +57,58 @@
     ## Related repo
     `/home/maskkiller/dev-coffee/repos/mojo-audio` — mel spectrogram in Mojo lang. Not directly
     related to vocab learning but may be relevant if switching audio processing backends.
+
+- [ ] Auto-mine transcription history for vocab candidates
+  - Added: 2026-02-22
+  - Priority: high
+  - Notes: |
+    Mine ~/.local/share/mojovoice/history.jsonl for candidate vocabulary terms.
+    Heuristics: words capitalized mid-sentence (likely proper nouns), words appearing
+    in patterns like "called X" or "named X", high-frequency unusual words.
+    Surface candidates via `mojovoice vocab suggest` — user confirms each one before
+    it's added. Confirmed terms added with source='history'.
+    This closes the MemRL loop without requiring manual vocab add for everything.
+    See src/history/storage.rs for the existing JSONL reader infrastructure.
+
+- [ ] Wire increment_use_count into transcription results
+  - Added: 2026-02-22
+  - Priority: medium
+  - Notes: |
+    increment_use_count() exists in src/vocab/store.rs but has no call site — the
+    use_count column is always 0 at runtime, making ORDER BY use_count DESC a no-op.
+    After each transcription, scan the result text for vocab terms that appear in it
+    and call increment_use_count() for each match. Terms that show up frequently in
+    real transcriptions will rise to the top of the initial_prompt, giving more weight
+    to the words Whisper actually needs help with. This is the "learning" part of MemRL
+    becoming real.
+
+- [ ] Store correction pairs in a corrections table
+  - Added: 2026-02-22
+  - Priority: medium
+  - Notes: |
+    `mojovoice vocab correct <wrong> <right>` currently discards the <wrong> argument.
+    Add a corrections(id, wrong TEXT, right TEXT, recorded_at INTEGER) table to vocab.db.
+    Persist the wrong→right pair on every `vocab correct` call.
+    This builds a labeled dataset of transcription errors over time.
+    Future use: export as fine-tuning training data via `mojovoice vocab export`.
+
+- [ ] Fine-tuning data export
+  - Added: 2026-02-22
+  - Priority: low
+  - Notes: |
+    Once correction pairs are stored (see above), add `mojovoice vocab export` command.
+    Output formats: JSONL (one {"wrong": "...", "right": "..."} per line) for use with
+    Whisper fine-tuning pipelines, or CSV for analysis.
+    SQL query is trivial: SELECT wrong, right FROM corrections ORDER BY recorded_at.
+    This is the bridge from the MemRL vocab loop to actual model improvement.
+
+- [ ] Confidence / feedback signals on transcription output
+  - Added: 2026-02-22
+  - Priority: low
+  - Notes: |
+    Add a way to mark a transcription as good or bad after the fact.
+    Simplest form: `mojovoice history rate <id> good|bad` CLI command.
+    Store ratings in a ratings(history_id, rating TEXT, rated_at INTEGER) table in vocab.db.
+    Bad-rated transcriptions where vocab terms were present → increment a failure counter
+    on those terms, which can down-weight them in future prompts.
+    This closes the full RL signal: confirm good transcriptions, correct bad ones.

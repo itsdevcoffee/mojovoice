@@ -23,7 +23,7 @@ Validation Failures:
 
 ## Phase 2: Project-Aware Advisories
 
-Only run if Phase 1 passes. Check these 5 things, only report mismatches:
+Only run if Phase 1 passes. Check these 6 things, only report mismatches:
 
 ### 1. Timeout vs project size
 

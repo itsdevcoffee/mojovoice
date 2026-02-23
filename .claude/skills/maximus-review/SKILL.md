@@ -95,6 +95,7 @@ Load `.claude/references/maximus/auto-annotate.md` then ask the user:
 
 > "Would you like to give feedback on this run's episode quality for MemRL training?"
 
+(Source `<project_name>` from `.maximus/config.yml` → `project_name` field, or from `maximus validate --json` → `config_summary.project_name`)
 **If NO:** Run via Bash: `maximus annotate --auto --project <project_name>`
 Display the output (how many corrections written and their types).
 This uses the LLM judge automatically (source: llm, confidence: 0.7).
@@ -105,7 +106,19 @@ Human-confirmed corrections have confidence: 0.95 — higher-quality MemRL train
 
 Then always run: `maximus pattern-update --project <project_name>` and display the pattern summary.
 
-**After annotation, suggest the post-run workflow:**
+**After annotation, detect worktree context and suggest the post-run workflow:**
+
+Run via Bash: `pwd` — check if the path contains `.maximus/worktrees/`.
+
+**If IN a worktree:**
+- The primary next step is `/maximus-finish` which handles archive, clean, and the merge/PR/discard decision in one flow.
+- Present as:
+  ```
+  Next step:
+    /maximus-finish — archive, clean, and integrate this worktree (merge, PR, or discard)
+  ```
+
+**If NOT in a worktree (standard run):**
 - Suggest: retry failed tasks with complexity adjustments, split timeouts, extend plan with tests
 - Present as actionable next steps:
   1. `maximus archive` — save results to `.maximus/archive/` before cleaning

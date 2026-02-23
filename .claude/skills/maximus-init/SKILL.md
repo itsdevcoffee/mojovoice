@@ -98,7 +98,17 @@ If user selects "Yes, I want to change settings":
 
 Read `package.json` (or `Cargo.toml`, `go.mod`, `pyproject.toml` for other languages).
 
-Extract the `name` field value.
+Extract the `name` field value as a **starting point only**. Then apply these rules:
+
+**Formatting rules for `project_name`:**
+- 1–4 words maximum — short proper name, not a description
+- Title case preferred: `"Aqimo"`, `"My Project"`, `"Maximus Loop Self-Build"`
+- Hyphens/slashes acceptable for scoped names: `"@gastrak/oracle-scripts"`
+- ❌ Never use: placeholder text (`[Project Name Here]`), long descriptions, badge copy, or generic defaults like `"My App"`
+- If the package.json `name` is a slug like `"badge-fundamentals"` → convert to title case: `"Badge Fundamentals"`
+- If uncertain, **ask the user directly**: "What should I call this project? It's used as a permanent DB identifier (e.g. 'Aqimo')."
+
+⚠️ **`project_name` is permanent** — it is the primary key in the MemRL episodes database. Changing it after episodes are recorded orphans all historical data. Set it right the first time.
 
 ### Step 2: Detect Commit Prefix
 

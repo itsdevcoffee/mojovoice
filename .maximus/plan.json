@@ -76,8 +76,7 @@
         "cargo test",
         "cargo run -- vocab --help"
       ]
-    }
-    ,
+    },
     {
       "id": 4,
       "phase": 4,
@@ -86,7 +85,7 @@
       "description": "Three small but important fixes to src/main.rs and src/daemon/server.rs. (1) Both files call vocab::store::get_prompt_string(200) — change to 224 to match MAX_PROMPT_TOKENS in encode_initial_prompt() and the Whisper spec (prompt cap = n_text_ctx // 2 = 448 // 2 = 224). (2) src/daemon/server.rs uses the internal path crate::vocab::store::VocabStore — change to the re-exported crate::vocab::VocabStore to be consistent with main.rs. (3) In both cmd_start_fixed() in main.rs and DaemonServer::new() in server.rs, if cfg.model.prompt is Some and non-empty, emit a warn!() log: 'model.prompt in config is deprecated and will be ignored; use mojovoice vocab add instead.' This prevents silent data loss for users who had a static prompt configured.",
       "file": "src/main.rs",
       "complexity_level": "medium",
-      "passes": false,
+      "passes": true,
       "acceptance_criteria": [
         "get_prompt_string(200) calls in src/main.rs and src/daemon/server.rs are changed to get_prompt_string(224)",
         "src/daemon/server.rs imports VocabStore as crate::vocab::VocabStore (not crate::vocab::store::VocabStore)",
@@ -108,7 +107,7 @@
       "description": "src/vocab/store.rs remove_term() currently returns Ok(()) regardless of whether any row was deleted, causing the CLI to always print 'Removed successfully' even when the term did not exist. Fix: rusqlite's execute() returns Result<usize> where the usize is rows affected. Change remove_term to return Result<bool> (true = deleted, false = not found). Update the CLI handler in src/main.rs for VocabCommands::Remove to print 'Removed <term> from vocabulary.' when true, or 'Term <term> not found in vocabulary.' when false. Update the corresponding unit test in src/vocab/store.rs to assert remove_term returns false for a non-existent term.",
       "file": "src/vocab/store.rs",
       "complexity_level": "medium",
-      "passes": false,
+      "passes": true,
       "acceptance_criteria": [
         "remove_term() in src/vocab/store.rs returns Result<bool> instead of Result<()>",
         "remove_term() returns Ok(true) when the term existed and was deleted",
@@ -131,8 +130,10 @@
       "description": "The Whisper token sequence fix in src/transcribe/candle_engine.rs (Task #1) has no unit test, making it the highest-risk unguarded change in the codebase. Refactor the token assembly logic in decode_at_temperature() into a pure standalone function: fn build_decoder_prefix(prompt_tokens: &[u32], special: &SpecialTokens, is_english_only: bool) -> Vec<u32>. This function takes token IDs as plain u32 values and has no model or tokenizer dependency, making it directly unit-testable. Add unit tests in the candle_engine.rs test module that verify: (1) with prompt tokens, sequence starts with sot_prev followed by prompt tokens then special tokens in correct order, (2) without prompt tokens, sot_prev is absent and sequence matches the original behavior, (3) english-only path omits lang/transcribe tokens. Call build_decoder_prefix from decode_at_temperature() so runtime behavior is unchanged.",
       "file": "src/transcribe/candle_engine.rs",
       "complexity_level": "medium",
-      "passes": false,
-      "skills": ["superpowers:test-driven-development"],
+      "passes": true,
+      "skills": [
+        "superpowers:test-driven-development"
+      ],
       "acceptance_criteria": [
         "A fn build_decoder_prefix(prompt_tokens: &[u32], special: &SpecialTokens, is_english_only: bool) -> Vec<u32> function exists in src/transcribe/candle_engine.rs",
         "decode_at_temperature() calls build_decoder_prefix() instead of assembling the prefix inline",

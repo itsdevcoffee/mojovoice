@@ -44,7 +44,33 @@ The engine runs tasks in array order. If Task B depends on Task A's output, Task
 
 Without testing steps, agents skip verification and commit untested code. Always include at least one runnable command.
 
-## 7. Tasks Targeting Engine State Files
+## 7. Generic Testing Steps for Complex Tasks
+
+**Bad:**
+```json
+{
+  "complexity_level": "complex",
+  "testing_steps": ["bun test"]
+}
+```
+Problem: If ANY unrelated test in the full suite fails, the task fails verification even though the agent's code was correct. This causes false negatives and expensive retries.
+
+**Good:**
+```json
+{
+  "complexity_level": "complex",
+  "testing_steps": [
+    "bun run typecheck",
+    "cd lib/shared/episodes && bun test",
+    "bun test"
+  ]
+}
+```
+Approach: Specific subsystem testing first (catches real issues), then full suite as regression check.
+
+**Rule:** Testing steps should be scoped to verify the task's changes, not fail because of unrelated code. For complex multi-file tasks, always lead with typecheck, then subsystem tests, then full suite as safety net.
+
+## 8. Tasks Targeting Engine State Files
 
 **Bad:** Task that modifies `.maximus/plan.json`, `.maximus/progress.md`, or `.maximus/run-summary.json`
 **Good:** Tasks only modify project source code, never engine state
@@ -56,7 +82,7 @@ The engine protects three state files with chmod 444 locks and snapshot-restore 
 
 Tasks targeting any of these will fail silently (chmod 444 prevents writes) or be reverted by the snapshot-restore mechanism.
 
-## 8. Overlapping File Targets
+## 9. Overlapping File Targets
 
 **Bad:** Task 5 and Task 6 both modify `server/routes/index.ts`
 **Good:** Group related changes to the same file in one task, or ensure they touch different parts

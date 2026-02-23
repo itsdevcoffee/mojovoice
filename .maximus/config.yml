@@ -3,7 +3,7 @@
 # Edit these settings before running 'maximus run' to customize behavior.
 
 # Project name — shown in logs and the dashboard.
-project_name: "My Project"
+project_name: "mojovoice"
 
 # Loop behavior
 loop:
@@ -24,7 +24,7 @@ loop:
 agent:
   # Agent provider — which CLI to use for spawning agents.
   # Options: "claude" (default), "codex" (OpenAI Codex CLI).
-  # provider: claude
+  provider: claude
 
   # Default model for tasks without explicit complexity_level.
   # Claude options: "haiku" (fast, cheap), "sonnet" (balanced), "opus" (powerful, expensive).
@@ -39,11 +39,11 @@ agent:
   max_retries: 2
 
   # Model escalation — assign different models by task complexity_level.
-  # escalation:
-  #   enabled: true
-  #   simple: "haiku"
-  #   medium: "sonnet"
-  #   complex: "opus"
+  escalation:
+    enabled: true
+    simple: "haiku"
+    medium: "sonnet"
+    complex: "opus"
 
 # Task source
 tasks:

@@ -1,7 +1,7 @@
 {
   "name": "maximus",
-  "version": "0.2.1",
-  "description": "Automation companion for the Maximus Loop CLI — project initialization, validation, task planning, and run analysis",
+  "version": "0.4.0",
+  "description": "Automation companion for the Maximus Loop CLI — project initialization, validation, task planning, quick task add, and run analysis",
   "author": {
     "name": "Dev Coffee",
     "url": "https://github.com/itsdevcoffee"
