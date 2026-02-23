@@ -11,13 +11,12 @@ import { useTranscriptionActions } from '../hooks/useTranscriptionActions';
 
 const Drawer = lazy(() => import('./ui/Drawer').then(m => ({ default: m.Drawer })));
 const SettingsPanel = lazy(() => import('./SettingsPanel'));
-const HistoryModal = lazy(() => import('./HistoryModal'));
 const CommandPalette = lazy(() => import('./CommandPalette'));
 const ModelsPanel = lazy(() => import('./ModelsPanel').then(m => ({ default: m.ModelsPanel })));
+const HistoryView = lazy(() => import('./HistoryView').then(m => ({ default: m.HistoryView })));
 
 export default function MissionControl() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isTranscriptionsExpanded, setIsTranscriptionsExpanded] = useState(true);
 
@@ -29,16 +28,9 @@ export default function MissionControl() {
     loadHistory(5, 0);
   }, [loadHistory]);
 
-  // Load all history when modal opens
-  useEffect(() => {
-    if (isHistoryModalOpen) {
-      loadHistory(1000, 0);
-    }
-  }, [isHistoryModalOpen, loadHistory]);
-
   // Helper to open history with search focused
   const openHistoryWithSearch = () => {
-    setIsHistoryModalOpen(true);
+    setActiveView('history');
     setTimeout(() => {
       const searchInput = document.querySelector<HTMLInputElement>('[data-search-input]');
       if (searchInput) searchInput.focus();
@@ -56,7 +48,10 @@ export default function MissionControl() {
 
       if (event.key === 'Escape') {
         if (isCommandPaletteOpen) { setIsCommandPaletteOpen(false); return; }
-        if (isHistoryModalOpen) { setIsHistoryModalOpen(false); return; }
+        if (activeView === 'history' || activeView === 'models') {
+          setActiveView('dashboard');
+          return;
+        }
         if (isSettingsOpen) { setIsSettingsOpen(false); return; }
       }
 
@@ -79,10 +74,10 @@ export default function MissionControl() {
         return;
       }
 
-      // Cmd+H: open history modal
+      // Cmd+H: open history view
       if (modifierKey && event.key === 'h') {
         event.preventDefault();
-        setIsHistoryModalOpen(true);
+        setActiveView('history');
         return;
       }
 
@@ -98,7 +93,10 @@ export default function MissionControl() {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isCommandPaletteOpen, isHistoryModalOpen, isSettingsOpen, historyEntries]);
+  }, [isCommandPaletteOpen, activeView, isSettingsOpen, historyEntries]);
+
+  // Determine if we're in a sub-view that needs a back button
+  const isSubView = activeView === 'models' || activeView === 'history';
 
   return (
     <div className="min-h-screen bg-[var(--bg-void)] text-[var(--text-primary)]">
@@ -122,7 +120,7 @@ export default function MissionControl() {
 
       {/* Main content area */}
       <main id="main-content" className="max-w-[800px] mx-auto px-6 pb-12">
-        {activeView === 'models' ? (
+        {isSubView ? (
           <>
             {/* Back to dashboard */}
             <div className="mb-6">
@@ -142,13 +140,26 @@ export default function MissionControl() {
                 <span>[DASHBOARD]</span>
               </button>
             </div>
-            <Suspense fallback={
-              <div className="py-12 text-center font-mono text-xs uppercase tracking-wide text-[var(--text-tertiary)]">
-                Loading models...
-              </div>
-            }>
-              <ModelsPanel />
-            </Suspense>
+
+            {activeView === 'models' && (
+              <Suspense fallback={
+                <div className="py-12 text-center font-mono text-xs uppercase tracking-wide text-[var(--text-tertiary)]">
+                  Loading models...
+                </div>
+              }>
+                <ModelsPanel />
+              </Suspense>
+            )}
+
+            {activeView === 'history' && (
+              <Suspense fallback={
+                <div className="py-12 text-center font-mono text-xs uppercase tracking-wide text-[var(--text-tertiary)]">
+                  Loading history...
+                </div>
+              }>
+                <HistoryView />
+              </Suspense>
+            )}
           </>
         ) : (
           <>
@@ -188,12 +199,19 @@ export default function MissionControl() {
                     ))}
                     <div className="flex justify-center mt-6">
                       <button
-                        className="px-4 py-2 text-sm font-ui text-[var(--accent-primary)] hover:text-[var(--accent-glow)] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-2 focus-visible:shadow-[0_0_20px_rgba(59,130,246,0.5)]"
+                        className="
+                          px-4 py-2 font-mono text-xs uppercase tracking-wide
+                          text-[var(--text-tertiary)]
+                          hover:text-[var(--accent-primary)]
+                          transition-colors duration-150
+                          focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-2
+                          focus-visible:shadow-[0_0_20px_rgba(59,130,246,0.5)]
+                        "
                         title={`View All History (${navigator.platform.toUpperCase().indexOf('MAC') >= 0 ? 'Cmd' : 'Ctrl'}+H)`}
                         aria-label="View all transcription history"
-                        onClick={() => setIsHistoryModalOpen(true)}
+                        onClick={() => setActiveView('history')}
                       >
-                        View All →
+                        [VIEW ALL]
                       </button>
                     </div>
                   </div>
@@ -218,11 +236,6 @@ export default function MissionControl() {
         <Drawer isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)}>
           <SettingsPanel />
         </Drawer>
-      </Suspense>
-
-      {/* History Modal */}
-      <Suspense fallback={null}>
-        <HistoryModal isOpen={isHistoryModalOpen} onClose={() => setIsHistoryModalOpen(false)} />
       </Suspense>
 
       {/* Command Palette */}

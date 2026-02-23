@@ -271,6 +271,21 @@ export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
         {/* Divider */}
         <div className="w-px h-8 bg-[var(--border-default)]" />
 
+        {/* HISTORY nav button */}
+        <button
+          onClick={() => setActiveView('history')}
+          className="
+            font-mono text-xs uppercase tracking-wide
+            text-[var(--text-tertiary)]
+            hover:text-[var(--accent-primary)]
+            transition-colors duration-150
+            focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-2
+          "
+          aria-label="Open transcription history"
+        >
+          [HISTORY]
+        </button>
+
         {/* MODELS nav button */}
         <button
           onClick={() => setActiveView('models')}
