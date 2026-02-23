@@ -274,6 +274,19 @@ export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
         {/* HISTORY + MODELS nav buttons — stacked vertically */}
         <div className="flex flex-col items-end gap-1">
           <button
+            onClick={() => setActiveView('models')}
+            className="
+              font-mono text-xs uppercase tracking-wide
+              text-[var(--text-tertiary)]
+              hover:text-[var(--accent-primary)]
+              transition-colors duration-150
+              focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-2
+            "
+            aria-label="Open models manager"
+          >
+            [MODELS]
+          </button>
+          <button
             onClick={() => setActiveView('history')}
             className="
               font-mono text-xs uppercase tracking-wide
@@ -286,21 +299,6 @@ export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
           >
             [HISTORY]
           </button>
-
-        {/* MODELS nav button */}
-        <button
-          onClick={() => setActiveView('models')}
-          className="
-            font-mono text-xs uppercase tracking-wide
-            text-[var(--text-tertiary)]
-            hover:text-[var(--accent-primary)]
-            transition-colors duration-150
-            focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-2
-          "
-          aria-label="Open models manager"
-        >
-          [MODELS]
-        </button>
         </div>
       </div>
     </div>
