@@ -9,8 +9,6 @@ interface TranscriptionEntry {
   durationMs: number;
   model: string;
   audioPath?: string;
-  latencyMs?: number;
-  confidenceScore?: number;
 }
 
 interface TranscriptionCardProps {
@@ -118,17 +116,9 @@ export const TranscriptionCard: React.FC<TranscriptionCardProps> = ({
           </div>
 
           {/* Metadata Footer */}
-          {(transcription.latencyMs !== undefined || transcription.confidenceScore !== undefined || transcription.model) && (
+          {transcription.model && (
             <div className="mt-3 pt-3 border-t border-[var(--border-default)] flex items-center gap-3 text-[11px] font-mono text-[var(--text-tertiary)]">
-              {transcription.latencyMs !== undefined && (
-                <span title="Inference latency">⚡ {transcription.latencyMs}ms</span>
-              )}
-              {transcription.confidenceScore !== undefined && (
-                <span title="Confidence score">✓ {transcription.confidenceScore.toFixed(1)}%</span>
-              )}
-              {transcription.model && (
-                <span title="Model used">{transcription.model}</span>
-              )}
+              <span title="Model used">{transcription.model}</span>
             </div>
           )}
         </div>
