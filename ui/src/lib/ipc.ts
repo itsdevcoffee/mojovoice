@@ -108,8 +108,11 @@ const getMockData = (command: string, args?: Record<string, unknown>): any => {
       ];
     case 'list_available_models':
       return [
-        { name: 'Whisper Large V3 Turbo', filename: 'large-v3-turbo.bin', size: 1550000000 },
-        { name: 'Whisper Medium', filename: 'medium.bin', size: 1540000000 }
+        { name: 'Whisper Large V3 Turbo', filename: 'large-v3-turbo.bin', size_bytes: 1_610_612_736, is_downloaded: true, is_active: true },
+        { name: 'Whisper Medium', filename: 'medium.bin', size_bytes: 1_533_870_080, is_downloaded: true, is_active: false },
+        { name: 'Whisper Small', filename: 'small.bin', size_bytes: 487_587_840, is_downloaded: false, is_active: false },
+        { name: 'Whisper Base', filename: 'base.bin', size_bytes: 147_951_616, is_downloaded: false, is_active: false },
+        { name: 'Whisper Tiny', filename: 'tiny.bin', size_bytes: 77_691_904, is_downloaded: false, is_active: false },
       ];
     case 'get_storage_info':
       return {

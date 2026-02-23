@@ -4,6 +4,7 @@ import { StatusBar } from './ui/StatusBar';
 import SectionHeader from './ui/SectionHeader';
 import { TranscriptionCard } from './ui/TranscriptionCard';
 import { SystemStatus } from './ui/SystemStatus';
+import { ModelsPanel } from './ModelsPanel';
 import StatusMicroIndicators from './ui/StatusMicroIndicators';
 import RecordingHero from './ui/RecordingHero';
 import { useAppStore } from '../stores/appStore';
@@ -171,6 +172,7 @@ export default function MissionControl() {
         </section>
 
         <SystemStatus />
+        <ModelsPanel />
       </main>
 
       {/* Footer */}
