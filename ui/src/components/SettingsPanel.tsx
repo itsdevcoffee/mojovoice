@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
+import { X } from 'lucide-react';
 import { Button } from './ui/Button';
 import SectionHeader from './ui/SectionHeader';
+import { useToast } from './ui/Toast';
 import { invoke } from '../lib/ipc';
 
 const LANGUAGE_OPTIONS = [
@@ -53,7 +55,16 @@ interface AudioDevice {
   internal_name: string | null;
 }
 
+interface VocabTerm {
+  id: number;
+  term: string;
+  useCount: number;
+  source: string;
+  addedAt: number;
+}
+
 export default function SettingsPanel() {
+  const { toast } = useToast();
   const [config, setConfig] = useState<Config | null>(null);
   const [originalConfig, setOriginalConfig] = useState<Config | null>(null);
   const [downloadedModels, setDownloadedModels] = useState<DownloadedModel[]>([]);
@@ -65,6 +76,25 @@ export default function SettingsPanel() {
     const saved = localStorage.getItem('advancedSettings.collapsed');
     return saved === 'false';
   });
+
+  // Vocabulary state
+  const [vocabTerms, setVocabTerms] = useState<VocabTerm[]>([]);
+  const [vocabLoading, setVocabLoading] = useState(true);
+  const [newTerm, setNewTerm] = useState('');
+  const [wrongTerm, setWrongTerm] = useState('');
+  const [rightTerm, setRightTerm] = useState('');
+
+  const loadVocabTerms = async () => {
+    try {
+      setVocabLoading(true);
+      const terms = await invoke<VocabTerm[]>('vocab_list');
+      setVocabTerms(terms);
+    } catch (error) {
+      console.error('Failed to load vocab terms:', error);
+    } finally {
+      setVocabLoading(false);
+    }
+  };
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -87,6 +117,7 @@ export default function SettingsPanel() {
     };
 
     loadSettings();
+    loadVocabTerms();
   }, []);
 
   const handleModelChange = async (path: string) => {
@@ -168,20 +199,6 @@ export default function SettingsPanel() {
     }
   };
 
-  const handleTechnicalVocabularyChange = async (vocabulary: string) => {
-    if (!config) return;
-    try {
-      const updatedConfig = {
-        ...config,
-        model: { ...config.model, prompt: vocabulary.trim() || null },
-      };
-      await invoke('save_config', { config: updatedConfig });
-      setConfig(updatedConfig);
-    } catch (error) {
-      console.error('Failed to update technical vocabulary:', error);
-    }
-  };
-
   const handleRefreshCommandChange = async (command: string) => {
     if (!config) return;
     try {
@@ -221,6 +238,56 @@ export default function SettingsPanel() {
       setConfig(updatedConfig);
     } catch (error) {
       console.error('Failed to update audio clips path:', error);
+    }
+  };
+
+  const handleVocabAdd = async () => {
+    const term = newTerm.trim();
+    if (!term) return;
+    try {
+      await invoke('vocab_add', { term, source: 'manual' });
+      setNewTerm('');
+      await loadVocabTerms();
+    } catch (error) {
+      console.error('Failed to add vocab term:', error);
+      toast({ message: `Failed to add "${term}"`, variant: 'error' });
+    }
+  };
+
+  const handleVocabRemove = async (term: string) => {
+    try {
+      await invoke('vocab_remove', { term });
+      await loadVocabTerms();
+      toast({
+        message: `"${term}" removed from vocabulary`,
+        variant: 'undo',
+        action: {
+          label: 'Undo',
+          onClick: async () => {
+            await invoke('vocab_add', { term, source: 'manual' });
+            await loadVocabTerms();
+          },
+        },
+      });
+    } catch (error) {
+      console.error('Failed to remove vocab term:', error);
+      toast({ message: `Failed to remove "${term}"`, variant: 'error' });
+    }
+  };
+
+  const handleVocabCorrect = async () => {
+    const wrong = wrongTerm.trim();
+    const right = rightTerm.trim();
+    if (!wrong || !right) return;
+    try {
+      await invoke('vocab_correct', { wrong, right });
+      setWrongTerm('');
+      setRightTerm('');
+      await loadVocabTerms();
+      toast({ message: `Correction recorded: "${wrong}" → "${right}"`, variant: 'success' });
+    } catch (error) {
+      console.error('Failed to record correction:', error);
+      toast({ message: 'Failed to record correction', variant: 'error' });
     }
   };
 
@@ -425,6 +492,101 @@ export default function SettingsPanel() {
         </div>
       </section>
 
+      {/* Vocabulary Section */}
+      <section className="pt-8 border-t border-[var(--border-default)]">
+        <SectionHeader title="VOCABULARY" />
+        <div className="space-y-4 mt-6">
+          {/* Term list */}
+          {vocabLoading ? (
+            <p className="text-xs text-[var(--text-tertiary)] font-ui">Loading vocabulary...</p>
+          ) : vocabTerms.length === 0 ? (
+            <p className="text-xs text-[var(--text-tertiary)] font-ui italic">No custom vocabulary terms yet.</p>
+          ) : (
+            <div className="space-y-1">
+              {vocabTerms.map((vocabTerm) => (
+                <div
+                  key={vocabTerm.id}
+                  className="flex items-center gap-2 px-3 py-2 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded"
+                >
+                  <span className="flex-1 font-mono text-sm text-[var(--text-primary)] truncate">{vocabTerm.term}</span>
+                  <span className="flex-shrink-0 px-1.5 py-0.5 text-[10px] font-mono bg-blue-500/10 border border-blue-500/30 text-blue-400 rounded">
+                    {vocabTerm.useCount}×
+                  </span>
+                  <span className={`flex-shrink-0 px-1.5 py-0.5 text-[10px] font-mono rounded border ${
+                    vocabTerm.source === 'manual'
+                      ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                      : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                  }`}>
+                    {vocabTerm.source}
+                  </span>
+                  <button
+                    onClick={() => handleVocabRemove(vocabTerm.term)}
+                    className="flex-shrink-0 p-1 text-[var(--text-tertiary)] hover:text-red-400 transition-colors duration-150"
+                    aria-label={`Remove ${vocabTerm.term}`}
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add row */}
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={newTerm}
+              onChange={(e) => setNewTerm(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleVocabAdd()}
+              placeholder="Add a term..."
+              className="flex-1 px-3 py-2 bg-[var(--bg-surface)] border-2 border-[var(--border-default)]
+                text-[var(--text-primary)] font-mono text-sm rounded placeholder:text-[var(--text-tertiary)]
+                focus:border-[var(--accent-primary)] focus:outline-none focus:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-150"
+            />
+            <Button variant="primary" size="sm" onClick={handleVocabAdd} disabled={!newTerm.trim()}>
+              Add
+            </Button>
+          </div>
+
+          {/* Correction row */}
+          <div className="space-y-2 pt-3 border-t border-[var(--border-default)]">
+            <label className="block text-xs font-ui font-medium text-[var(--text-secondary)] uppercase tracking-wider">
+              Record Correction
+            </label>
+            <p className="text-xs text-[var(--text-tertiary)] font-ui">Teach the recognizer to prefer one spelling over another</p>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={wrongTerm}
+                onChange={(e) => setWrongTerm(e.target.value)}
+                placeholder="Wrong..."
+                className="flex-1 px-3 py-2 bg-[var(--bg-surface)] border-2 border-[var(--border-default)]
+                  text-[var(--text-primary)] font-mono text-sm rounded placeholder:text-[var(--text-tertiary)]
+                  focus:border-[var(--accent-primary)] focus:outline-none focus:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-150"
+              />
+              <span className="flex-shrink-0 text-[var(--text-tertiary)] font-mono text-sm">→</span>
+              <input
+                type="text"
+                value={rightTerm}
+                onChange={(e) => setRightTerm(e.target.value)}
+                placeholder="Correct..."
+                className="flex-1 px-3 py-2 bg-[var(--bg-surface)] border-2 border-[var(--border-default)]
+                  text-[var(--text-primary)] font-mono text-sm rounded placeholder:text-[var(--text-tertiary)]
+                  focus:border-[var(--accent-primary)] focus:outline-none focus:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-150"
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleVocabCorrect}
+                disabled={!wrongTerm.trim() || !rightTerm.trim()}
+              >
+                Record
+              </Button>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Advanced Section */}
       <section className="pt-8 border-t border-[var(--border-default)]">
         <SectionHeader
@@ -458,20 +620,6 @@ export default function SettingsPanel() {
                     focus:border-[var(--accent-primary)] focus:outline-none focus:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-150"
                 />
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-ui font-medium text-[var(--text-primary)]">Technical Vocabulary</label>
-              <p className="text-xs text-[var(--text-tertiary)] font-ui mb-2">Custom words for prompt biasing (comma-separated)</p>
-              <textarea
-                value={config.model.prompt || ''}
-                onChange={(e) => handleTechnicalVocabularyChange(e.target.value)}
-                placeholder="Kubernetes, PostgreSQL, TypeScript..."
-                rows={3}
-                className="w-full px-4 py-3 bg-[var(--bg-surface)] border-2 border-[var(--border-default)]
-                  text-[var(--text-primary)] font-mono text-sm rounded placeholder:text-[var(--text-tertiary)] resize-none
-                  focus:border-[var(--accent-primary)] focus:outline-none focus:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-150"
-              />
             </div>
 
             <div className="space-y-2">
