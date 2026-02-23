@@ -1,10 +1,9 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
-import { Settings as SettingsIcon } from 'lucide-react';
+import { Settings as SettingsIcon, ChevronLeft } from 'lucide-react';
 import { StatusBar } from './ui/StatusBar';
 import SectionHeader from './ui/SectionHeader';
 import { TranscriptionCard } from './ui/TranscriptionCard';
 import { SystemStatus } from './ui/SystemStatus';
-import { ModelsPanel } from './ModelsPanel';
 import StatusMicroIndicators from './ui/StatusMicroIndicators';
 import RecordingHero from './ui/RecordingHero';
 import { useAppStore } from '../stores/appStore';
@@ -14,6 +13,7 @@ const Drawer = lazy(() => import('./ui/Drawer').then(m => ({ default: m.Drawer }
 const SettingsPanel = lazy(() => import('./SettingsPanel'));
 const HistoryModal = lazy(() => import('./HistoryModal'));
 const CommandPalette = lazy(() => import('./CommandPalette'));
+const ModelsPanel = lazy(() => import('./ModelsPanel').then(m => ({ default: m.ModelsPanel })));
 
 export default function MissionControl() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -21,7 +21,7 @@ export default function MissionControl() {
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isTranscriptionsExpanded, setIsTranscriptionsExpanded] = useState(true);
 
-  const { historyEntries, loadHistory } = useAppStore();
+  const { historyEntries, loadHistory, activeView, setActiveView } = useAppStore();
   const { handleCopy: handleCopyTranscription, handleDelete: handleDeleteTranscription } = useTranscriptionActions(5);
 
   // Load recent transcriptions on mount
@@ -122,57 +122,88 @@ export default function MissionControl() {
 
       {/* Main content area */}
       <main id="main-content" className="max-w-[800px] mx-auto px-6 pb-12">
-        <RecordingHero />
-
-        {/* Status bar */}
-        <StatusBar className="mt-12" />
-
-        {/* Recent Transcriptions Section */}
-        <section className="mt-12">
-          <SectionHeader
-            title="RECENT TRANSCRIPTIONS"
-            isExpanded={isTranscriptionsExpanded}
-            onToggle={() => setIsTranscriptionsExpanded((prev) => !prev)}
-          />
-
-          <div
-            className={`
-              overflow-hidden transition-all duration-200
-              ${isTranscriptionsExpanded ? 'max-h-[2000px] opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}
-            `}
-            style={{ transitionTimingFunction: 'var(--ease-out)' }}
-          >
-            {historyEntries.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-sm text-[var(--text-tertiary)] font-ui">No transcriptions yet</p>
+        {activeView === 'models' ? (
+          <>
+            {/* Back to dashboard */}
+            <div className="mb-6">
+              <button
+                onClick={() => setActiveView('dashboard')}
+                className="
+                  flex items-center gap-1
+                  font-mono text-xs uppercase tracking-wide
+                  text-[var(--text-tertiary)]
+                  hover:text-[var(--accent-primary)]
+                  transition-colors duration-150
+                  focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-2
+                "
+                aria-label="Back to dashboard"
+              >
+                <ChevronLeft size={14} />
+                <span>[DASHBOARD]</span>
+              </button>
+            </div>
+            <Suspense fallback={
+              <div className="py-12 text-center font-mono text-xs uppercase tracking-wide text-[var(--text-tertiary)]">
+                Loading models...
               </div>
-            ) : (
-              <div className="space-y-4">
-                {historyEntries.slice(0, 5).map((entry) => (
-                  <TranscriptionCard
-                    key={entry.id}
-                    transcription={entry}
-                    onCopy={handleCopyTranscription}
-                    onDelete={handleDeleteTranscription}
-                  />
-                ))}
-                <div className="flex justify-center mt-6">
-                  <button
-                    className="px-4 py-2 text-sm font-ui text-[var(--accent-primary)] hover:text-[var(--accent-glow)] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-2 focus-visible:shadow-[0_0_20px_rgba(59,130,246,0.5)]"
-                    title={`View All History (${navigator.platform.toUpperCase().indexOf('MAC') >= 0 ? 'Cmd' : 'Ctrl'}+H)`}
-                    aria-label="View all transcription history"
-                    onClick={() => setIsHistoryModalOpen(true)}
-                  >
-                    View All →
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
+            }>
+              <ModelsPanel />
+            </Suspense>
+          </>
+        ) : (
+          <>
+            <RecordingHero />
 
-        <SystemStatus />
-        <ModelsPanel />
+            {/* Status bar */}
+            <StatusBar className="mt-12" />
+
+            {/* Recent Transcriptions Section */}
+            <section className="mt-12">
+              <SectionHeader
+                title="RECENT TRANSCRIPTIONS"
+                isExpanded={isTranscriptionsExpanded}
+                onToggle={() => setIsTranscriptionsExpanded((prev) => !prev)}
+              />
+
+              <div
+                className={`
+                  overflow-hidden transition-all duration-200
+                  ${isTranscriptionsExpanded ? 'max-h-[2000px] opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}
+                `}
+                style={{ transitionTimingFunction: 'var(--ease-out)' }}
+              >
+                {historyEntries.length === 0 ? (
+                  <div className="text-center py-12">
+                    <p className="text-sm text-[var(--text-tertiary)] font-ui">No transcriptions yet</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {historyEntries.slice(0, 5).map((entry) => (
+                      <TranscriptionCard
+                        key={entry.id}
+                        transcription={entry}
+                        onCopy={handleCopyTranscription}
+                        onDelete={handleDeleteTranscription}
+                      />
+                    ))}
+                    <div className="flex justify-center mt-6">
+                      <button
+                        className="px-4 py-2 text-sm font-ui text-[var(--accent-primary)] hover:text-[var(--accent-glow)] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-2 focus-visible:shadow-[0_0_20px_rgba(59,130,246,0.5)]"
+                        title={`View All History (${navigator.platform.toUpperCase().indexOf('MAC') >= 0 ? 'Cmd' : 'Ctrl'}+H)`}
+                        aria-label="View all transcription history"
+                        onClick={() => setIsHistoryModalOpen(true)}
+                      >
+                        View All →
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <SystemStatus />
+          </>
+        )}
       </main>
 
       {/* Footer */}

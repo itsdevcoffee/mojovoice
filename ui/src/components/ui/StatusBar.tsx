@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronDown, Play } from 'lucide-react';
 import { invoke } from '../../lib/ipc';
+import { useAppStore } from '../../stores/appStore';
 
 interface DaemonStatus {
   running: boolean;
@@ -34,6 +35,7 @@ interface StatusBarProps {
 }
 
 export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
+  const { setActiveView } = useAppStore();
   const [daemonStatus, setDaemonStatus] = useState<DaemonStatus>({
     running: false,
     modelLoaded: false,
@@ -265,6 +267,24 @@ export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
             {currentMicrophone}
           </span>
         </div>
+
+        {/* Divider */}
+        <div className="w-px h-8 bg-[var(--border-default)]" />
+
+        {/* MODELS nav button */}
+        <button
+          onClick={() => setActiveView('models')}
+          className="
+            font-mono text-xs uppercase tracking-wide
+            text-[var(--text-tertiary)]
+            hover:text-[var(--accent-primary)]
+            transition-colors duration-150
+            focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-2
+          "
+          aria-label="Open models manager"
+        >
+          [MODELS]
+        </button>
       </div>
     </div>
   );
