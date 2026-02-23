@@ -1,4 +1,3 @@
-// ui/src/components/settings/SettingRow.tsx
 interface SettingRowProps {
   label: string;       // monospace key label e.g. "timeout_secs"
   saved?: boolean;     // when true, shows [OK] flash
@@ -19,9 +18,9 @@ export default function SettingRow({ label, saved, children }: SettingRowProps) 
           ${saved ? 'opacity-100' : 'opacity-0'}
         `}
         aria-live="polite"
-        aria-label={saved ? 'Saved' : ''}
+        aria-atomic="true"
       >
-        [OK]
+        {saved ? '[OK]' : ''}
       </span>
     </div>
   );
