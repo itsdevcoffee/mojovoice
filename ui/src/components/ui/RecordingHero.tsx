@@ -27,47 +27,54 @@ export default function RecordingHero() {
     }
   };
 
+  const handleCancel = async () => {
+    try {
+      await invoke('cancel_recording');
+    } catch {
+      // ignore cancel errors
+    } finally {
+      setIsRecording(false);
+    }
+  };
+
   return (
-    <div className="flex flex-col items-center justify-center mt-16 mb-12">
-      {/* Pulsing ring container */}
-      <div className="relative">
-        {/* Outer pulsing ring (visible when recording) */}
+    <div className="flex flex-col gap-4 mt-6 mb-4">
+      {/* Compact horizontal control row */}
+      <div className="flex items-center gap-3 h-[48px]">
+        {/* Recording indicator dot */}
         {isRecording && (
-          <div
-            className="absolute inset-0 border-2 border-[var(--success)] animate-pulse-ring gpu-accelerated"
+          <span
+            className="inline-block w-2 h-2 rounded-full bg-[var(--success)] animate-pulse gpu-accelerated"
             aria-hidden="true"
           />
         )}
+
         <Button
           variant="primary"
-          size="lg"
+          size="sm"
           loading={isRecording}
           onClick={handleTestRecording}
           disabled={isRecording}
-          className={`w-[280px] h-[120px] text-xl relative z-10 ${
-            isRecording
-              ? 'border-[var(--success)] shadow-[0_0_20px_rgba(34,197,94,0.5)]'
-              : ''
-          }`}
+          className={isRecording ? 'border-[var(--success)] shadow-[0_0_12px_rgba(34,197,94,0.4)]' : ''}
         >
           {isRecording ? 'RECORDING...' : '⏺ TEST MIC'}
         </Button>
-      </div>
 
-      {/* Keyboard shortcut hint */}
-      <p className="mt-3 text-xs text-[var(--text-tertiary)] font-ui" aria-live="polite">
-        {isRecording ? (
-          'Recording... (5s)'
-        ) : (
-          <>
-            Press <kbd className="px-2 py-1 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded font-mono text-[var(--text-secondary)]">Space</kbd> to start recording
-          </>
+        {isRecording && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleCancel}
+            className="border-red-500 text-red-400 hover:bg-red-500 hover:text-white hover:shadow-[0_0_12px_rgba(239,68,68,0.4)]"
+          >
+            CANCEL
+          </Button>
         )}
-      </p>
+      </div>
 
       {/* Transcription result */}
       {transcription && (
-        <div className="mt-8 w-full max-w-[600px]" role="status" aria-live="polite" aria-atomic="true">
+        <div className="w-full max-w-[600px]" role="status" aria-live="polite" aria-atomic="true">
           <div className="p-6 bg-[var(--bg-surface)] border-2 border-[var(--border-default)]">
             <p className="text-sm text-[var(--text-tertiary)] font-ui mb-2">Transcription:</p>
             <p className="text-base text-[var(--text-primary)] font-ui leading-relaxed">{transcription}</p>
@@ -77,7 +84,7 @@ export default function RecordingHero() {
 
       {/* Error message */}
       {error && (
-        <div className="mt-8 w-full max-w-[600px]" role="alert" aria-live="assertive">
+        <div className="w-full max-w-[600px]" role="alert" aria-live="assertive">
           <div className="p-6 bg-red-500/10 border-2 border-red-500/50">
             <p className="text-sm text-red-400 font-ui mb-2">Error:</p>
             <p className="text-base text-red-300 font-ui leading-relaxed">{error}</p>
