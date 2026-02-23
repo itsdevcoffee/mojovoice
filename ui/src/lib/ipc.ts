@@ -44,6 +44,7 @@ const getMockData = (command: string, args?: Record<string, unknown>): any => {
       return {
         cpu_cores: 8,
         total_ram_gb: 16.0,
+        used_ram_gb: 4.2,
         gpu_available: false,
         gpu_name: null,
         gpu_vram_mb: null,

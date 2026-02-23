@@ -38,6 +38,7 @@ pub struct HistoryResponse {
 pub struct SystemInfo {
     pub cpu_cores: usize,
     pub total_ram_gb: f32,
+    pub used_ram_gb: f64,
     pub gpu_available: bool,
     pub gpu_name: Option<String>,
     pub gpu_vram_mb: Option<u32>,
@@ -860,6 +861,7 @@ pub async fn get_system_info() -> Result<SystemInfo, String> {
     sys.refresh_memory();
     let total_ram_bytes = sys.total_memory();
     let total_ram_gb = (total_ram_bytes as f64 / 1_073_741_824.0) as f32; // bytes to GB
+    let used_ram_gb = sys.used_memory() as f64 / (1024.0 * 1024.0 * 1024.0);
 
     // Get GPU info
     let gpu_info = detect_gpu_info();
@@ -870,6 +872,7 @@ pub async fn get_system_info() -> Result<SystemInfo, String> {
     Ok(SystemInfo {
         cpu_cores: num_cpus::get(),
         total_ram_gb,
+        used_ram_gb,
         gpu_available: gpu_info.available,
         gpu_name: gpu_info.name,
         gpu_vram_mb: gpu_info.vram_mb,

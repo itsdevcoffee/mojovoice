@@ -6,6 +6,7 @@ import { invoke } from '../../lib/ipc';
 interface SystemInfo {
   cpu_cores: number;
   total_ram_gb: number;
+  used_ram_gb: number;
   gpu_available: boolean;
   gpu_name: string | null;
   gpu_vram_mb: number | null;
@@ -95,7 +96,7 @@ export function SystemStatus() {
     return `${mb} MB`;
   };
 
-  const ramUsedGb = 0; // TODO: wire to real usage when available
+  const ramUsedGb = systemInfo?.used_ram_gb ?? 0;
   const ramTotalGb = systemInfo?.total_ram_gb ?? 0;
   const ramPercent = ramTotalGb > 0 ? (ramUsedGb / ramTotalGb) * 100 : 0;
   const isRunning = daemonStatus?.running ?? false;
