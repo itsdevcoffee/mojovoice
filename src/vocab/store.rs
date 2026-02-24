@@ -230,4 +230,40 @@ mod tests {
         let prompt = store.get_prompt_string(224).unwrap();
         assert_eq!(prompt, None);
     }
+
+    /// Verify the character budget truncation when vocabulary exceeds the token limit.
+    /// get_prompt_string uses `max_tokens * 4` chars as an approximation for the token budget.
+    /// This test ensures terms beyond the budget are dropped rather than causing silent overflow
+    /// into encode_initial_prompt's hard 224-token truncation.
+    #[test]
+    fn test_get_prompt_string_truncates_long_vocab_at_budget() {
+        let (store, _dir) = temp_store();
+        // Add 20 terms of ~45 chars each — total ~900 chars >> budget of 224*4=896 chars
+        for i in 0..20 {
+            let term = format!("AVeryLongTechnicalTermForTestingPurposes{:03}", i);
+            store.add_term(&term, "manual").unwrap();
+        }
+        let prompt = store.get_prompt_string(224).unwrap();
+        let s = prompt.expect("should return Some with many terms");
+        assert!(
+            s.len() <= 224 * 4,
+            "Prompt exceeded character budget: {} chars (budget={})",
+            s.len(),
+            224 * 4
+        );
+        // Must still contain at least the first term
+        assert!(s.contains("AVeryLongTechnicalTermForTestingPurposes000"));
+    }
+
+    /// A single term that perfectly fits at the budget boundary must be returned.
+    #[test]
+    fn test_get_prompt_string_single_term_at_budget_boundary() {
+        let (store, _dir) = temp_store();
+        // Term of exactly 224*4 chars — right at the limit
+        let term: String = "A".repeat(224 * 4);
+        store.add_term(&term, "manual").unwrap();
+        let prompt = store.get_prompt_string(224).unwrap();
+        // Term is exactly at char_budget, so result.len() + candidate.len() == char_budget → fits
+        assert!(prompt.is_some(), "Term at exact budget should be included");
+    }
 }

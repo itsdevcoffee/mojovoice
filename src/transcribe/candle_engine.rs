@@ -818,4 +818,41 @@ mod tests {
         let expected_format = format!("<|{}|>", language);
         assert_eq!(expected_format, "<|en|>");
     }
+
+    /// Verify that a max-size prompt (224 tokens) stays within the 448-token decoder budget.
+    /// The decoder loop uses `max_tokens = 448 - start_result_idx` to bound iterations.
+    /// If the prefix exceeds 228 tokens (224 prompt + 4 control tokens), max_tokens < 220
+    /// which still works, but any prefix > 448 would cause a panic/underflow.
+    #[test]
+    fn test_large_prompt_fits_within_448_token_decoder_budget() {
+        let special = make_special_tokens();
+        // Simulate the max allowed prompt tokens (as enforced by encode_initial_prompt)
+        let prompt_tokens: Vec<u32> = (0..224).collect();
+        let result = build_decoder_prefix(&prompt_tokens, &special, false);
+
+        // Expected: [sot_prev, 224 prompt tokens, sot, lang, transcribe, notimestamps] = 229 total
+        assert_eq!(result.len(), 229, "Expected 229 tokens (1 sot_prev + 224 prompt + 4 control)");
+        assert_eq!(result[0], special.sot_prev_token, "Must start with sot_prev");
+        assert_eq!(result[225], special.sot_token, "SOT must follow prompt tokens");
+
+        // Verify the decoder budget is always positive: 448 - prefix_len > 0
+        assert!(result.len() < 448, "Prefix must leave room for generated tokens");
+    }
+
+    /// Verify the correct Whisper token ordering with a real-world vocab prompt scenario:
+    /// multiple comma-separated terms as produced by VocabStore::get_prompt_string().
+    #[test]
+    fn test_vocab_style_prompt_ordering() {
+        let special = make_special_tokens();
+        // Simulate 5 token IDs as would come from tokenizing "Claude, Maximus Loop, claude code"
+        let prompt_tokens = vec![5765u32, 11, 28435, 25332, 11, 22918, 2697];
+        let result = build_decoder_prefix(&prompt_tokens, &special, false);
+
+        assert_eq!(result[0], special.sot_prev_token);
+        assert_eq!(&result[1..=7], prompt_tokens.as_slice());
+        assert_eq!(result[8], special.sot_token);
+        assert_eq!(result[9], special.language_token);
+        assert_eq!(result[10], special.transcribe_token);
+        assert_eq!(result[11], special.no_timestamps_token);
+    }
 }
