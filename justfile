@@ -32,27 +32,26 @@ ui:
 
 # === Install Commands ===
 
-# Install CPU build to ~/.local/bin
-# Note: rm before cp handles "Text file busy" when daemon is running
-install: build
+# Install CUDA build to ~/.local/bin (default — use install-cpu for non-GPU machines)
+install: build-cuda
     @mkdir -p {{lib_dir}}
-    rm -f {{install_dir}}/mojovoice
-    cp target/release/mojovoice {{install_dir}}/
-    cp lib/libmojo_audio.so {{lib_dir}}/
-    @echo "Installed mojovoice to {{install_dir}}"
-    @echo "Run 'just daemon-restart' to use the new build"
-
-# Install CUDA build to ~/.local/bin
-install-cuda: build-cuda
-    @mkdir -p {{lib_dir}}
-    rm -f {{install_dir}}/mojovoice
+    rm -f {{install_dir}}/mojovoice  # rm first to handle "Text file busy" when daemon is running
     cp target/release/mojovoice {{install_dir}}/
     cp lib/libmojo_audio.so {{lib_dir}}/
     @echo "Installed mojovoice (CUDA) to {{install_dir}}"
     @echo "Run 'just daemon-restart' to use the new build"
 
-# Install and restart daemon
-install-restart: install-cuda
+# Install CPU-only build (fallback for machines without CUDA)
+install-cpu: build
+    @mkdir -p {{lib_dir}}
+    rm -f {{install_dir}}/mojovoice
+    cp target/release/mojovoice {{install_dir}}/
+    cp lib/libmojo_audio.so {{lib_dir}}/
+    @echo "Installed mojovoice (CPU only) to {{install_dir}}"
+    @echo "Run 'just daemon-restart' to use the new build"
+
+# Install (CUDA) and restart daemon in one step
+install-restart: install
     @echo "Restarting daemon..."
     -{{install_dir}}/mojovoice daemon down 2>/dev/null || true
     @sleep 1
