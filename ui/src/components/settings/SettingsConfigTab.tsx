@@ -2,6 +2,7 @@ import ModelHeroCard from './ModelHeroCard';
 import SettingRow from './SettingRow';
 import BehaviorChip from './BehaviorChip';
 import AdvancedPanel from './AdvancedPanel';
+import CustomSelect from '../ui/CustomSelect';
 
 interface Config {
   model: { path: string; model_id: string; language: string; prompt: string | null };
@@ -72,13 +73,6 @@ export default function SettingsConfigTab({
   onAudioClipsPathChange,
   onAdvancedToggle,
 }: SettingsConfigTabProps) {
-  const selectClass = `
-    w-full px-3 py-2 bg-[var(--bg-surface)] border-2 border-[var(--border-default)]
-    text-[var(--text-primary)] font-mono text-xs
-    focus:border-[var(--accent-primary)] focus:outline-none
-    focus:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-150
-  `;
-
   return (
     <div>
       {/* ── HERO: Active model + language ── */}
@@ -137,19 +131,18 @@ export default function SettingsConfigTab({
 
       {/* device */}
       <SettingRow label="device" saved={savedField === 'device'}>
-        <select
+        <CustomSelect
           value={config.audio.device_name || ''}
-          onChange={(e) => onAudioDeviceChange(e.target.value)}
-          className={selectClass}
-          aria-label="Audio input device"
-        >
-          <option value="">System Default</option>
-          {audioDevices.map((d) => (
-            <option key={d.internalName || d.name} value={d.internalName || d.name}>
-              {d.name}{d.isDefault ? ' (Default)' : ''}
-            </option>
-          ))}
-        </select>
+          onChange={onAudioDeviceChange}
+          options={[
+            { value: '', label: 'System Default' },
+            ...audioDevices.map((d) => ({
+              value: d.internalName || d.name,
+              label: `${d.name}${d.isDefault ? ' (Default)' : ''}`,
+            })),
+          ]}
+          ariaLabel="Audio input device"
+        />
       </SettingRow>
 
       {/* ── OUTPUT ── */}

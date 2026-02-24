@@ -1,3 +1,5 @@
+import CustomSelect from '../ui/CustomSelect';
+
 const LANGUAGE_OPTIONS = [
   { code: 'auto', name: 'Auto-detect' },
   { code: 'en', name: 'English' },
@@ -42,13 +44,6 @@ export default function ModelHeroCard({
 }: ModelHeroCardProps) {
   const activeModel = downloadedModels.find((m) => m.isActive);
 
-  const selectClass = `
-    w-full px-3 py-2 bg-[var(--bg-void)] border-2 border-[var(--border-default)]
-    text-[var(--text-primary)] font-mono text-xs
-    focus:border-[var(--accent-primary)] focus:outline-none
-    focus:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-150
-  `;
-
   return (
     <div
       className="
@@ -84,52 +79,26 @@ export default function ModelHeroCard({
 
       {/* Model selector */}
       <div className="space-y-2">
-        <div className="relative">
-          <select
-            value={activeModelPath}
-            onChange={(e) => onModelChange(e.target.value)}
-            className={selectClass}
-            aria-label="Select model"
-          >
-            {downloadedModels.length === 0 ? (
-              <option value="" disabled>No models downloaded</option>
-            ) : (
-              downloadedModels.map((model) => (
-                <option key={model.path} value={model.path}>
-                  {model.name} ({model.sizeMb} MB)
-                </option>
-              ))
-            )}
-          </select>
-          <span
-            aria-live="polite"
-            aria-atomic="true"
-            className={`absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[10px] text-green-400 pointer-events-none transition-opacity duration-300 ${savedModel ? 'opacity-100' : 'opacity-0'}`}
-          >
-            {savedModel ? '[OK]' : ''}
-          </span>
-        </div>
+        <CustomSelect
+          value={activeModelPath}
+          onChange={onModelChange}
+          options={
+            downloadedModels.length === 0
+              ? [{ value: '', label: 'No models downloaded' }]
+              : downloadedModels.map((m) => ({ value: m.path, label: `${m.name} (${m.sizeMb} MB)` }))
+          }
+          ariaLabel="Select model"
+          showSaved={savedModel}
+        />
 
         {/* Language selector */}
-        <div className="relative">
-          <select
-            value={language}
-            onChange={(e) => onLanguageChange(e.target.value)}
-            className={selectClass}
-            aria-label="Select language"
-          >
-            {LANGUAGE_OPTIONS.map((lang) => (
-              <option key={lang.code} value={lang.code}>{lang.name}</option>
-            ))}
-          </select>
-          <span
-            aria-live="polite"
-            aria-atomic="true"
-            className={`absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[10px] text-green-400 pointer-events-none transition-opacity duration-300 ${savedLanguage ? 'opacity-100' : 'opacity-0'}`}
-          >
-            {savedLanguage ? '[OK]' : ''}
-          </span>
-        </div>
+        <CustomSelect
+          value={language}
+          onChange={onLanguageChange}
+          options={LANGUAGE_OPTIONS.map((l) => ({ value: l.code, label: l.name }))}
+          ariaLabel="Select language"
+          showSaved={savedLanguage}
+        />
       </div>
     </div>
   );
