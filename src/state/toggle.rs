@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tracing::info;
 
 use super::paths::get_pid_file;
+use super::paths::get_listen_pid_file;
 
 /// Global flag to signal recording should stop
 pub static STOP_RECORDING: AtomicBool = AtomicBool::new(false);
@@ -153,6 +154,69 @@ pub fn cleanup_recording() -> Result<()> {
     Ok(())
 }
 
+/// Check if a listen session is currently in progress
+pub fn is_listening() -> Result<Option<RecordingState>> {
+    let pid_file = get_listen_pid_file()?;
+
+    if !pid_file.exists() {
+        return Ok(None);
+    }
+
+    let content = fs::read_to_string(&pid_file)?;
+    let mut lines = content.lines();
+
+    let pid: u32 = lines.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+    let started_at: u64 = lines.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+
+    if pid == 0 {
+        let _ = fs::remove_file(&pid_file);
+        return Ok(None);
+    }
+
+    let process_exists = signal::kill(Pid::from_raw(pid as i32), None).is_ok();
+    if !process_exists {
+        info!("Cleaning up stale listen PID file (process {} not running)", pid);
+        let _ = fs::remove_file(&pid_file);
+        return Ok(None);
+    }
+
+    Ok(Some(RecordingState { pid, started_at }))
+}
+
+/// Mark listen session as started (create listen.pid)
+pub fn start_listen() -> Result<()> {
+    let pid_file = get_listen_pid_file()?;
+    let pid = std::process::id();
+    let started_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .context("System time is before UNIX epoch")?
+        .as_secs();
+
+    let mut file = fs::File::create(&pid_file).context("Failed to create listen PID file")?;
+    writeln!(file, "{}", pid)?;
+    writeln!(file, "{}", started_at)?;
+    info!("Listen session started (PID: {}, file: {})", pid, pid_file.display());
+    Ok(())
+}
+
+/// Clean up listen PID file
+pub fn cleanup_listen() -> Result<()> {
+    let pid_file = get_listen_pid_file()?;
+    if pid_file.exists() {
+        fs::remove_file(&pid_file)?;
+        info!("Cleaned up listen PID file");
+    }
+    Ok(())
+}
+
+/// Stop a running listen session by sending SIGUSR1
+pub fn stop_listen(state: &RecordingState) -> Result<()> {
+    info!("Sending stop signal to listen process (PID: {})", state.pid);
+    signal::kill(Pid::from_raw(state.pid as i32), Signal::SIGUSR1)
+        .context("Failed to send stop signal to listen process")?;
+    Ok(())
+}
+
 /// Set up signal handler for SIGUSR1
 pub fn setup_signal_handler() -> Result<()> {
     // Register handler for SIGUSR1
@@ -201,5 +265,47 @@ mod tests {
 
         // Should not be recording after cleanup
         assert!(is_recording().unwrap().is_none());
+    }
+
+    #[test]
+    fn test_listen_state_lifecycle() {
+        let _ = cleanup_listen();
+        assert!(is_listening().unwrap().is_none());
+
+        start_listen().unwrap();
+
+        let state = is_listening().unwrap();
+        assert!(state.is_some());
+        assert_eq!(state.unwrap().pid, std::process::id());
+
+        cleanup_listen().unwrap();
+        assert!(is_listening().unwrap().is_none());
+    }
+
+    #[test]
+    fn test_listen_stale_pid_is_cleaned_up() {
+        use std::io::Write;
+
+        let pid_file = super::super::paths::get_listen_pid_file().unwrap();
+        let mut file = std::fs::File::create(&pid_file).unwrap();
+        writeln!(file, "99999999").unwrap();
+        writeln!(file, "0").unwrap();
+        drop(file);
+
+        let result = is_listening().unwrap();
+        assert!(result.is_none());
+        assert!(!pid_file.exists(), "stale PID file should have been removed");
+    }
+
+    #[test]
+    fn test_listen_and_recording_pid_files_are_independent() {
+        let _ = cleanup_listen();
+        let _ = cleanup_recording();
+
+        start_listen().unwrap();
+        assert!(is_listening().unwrap().is_some());
+        assert!(is_recording().unwrap().is_none());
+
+        cleanup_listen().unwrap();
     }
 }
