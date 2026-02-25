@@ -1019,12 +1019,69 @@ fn cmd_vocab(command: VocabCommands) -> Result<()> {
 }
 
 fn cmd_listen(source: Option<String>, max_duration: u32, clipboard: bool) -> Result<()> {
-    anyhow::bail!(
-        "cmd_listen not yet implemented (source={:?}, max_duration={}, clipboard={})",
-        source,
-        max_duration,
-        clipboard
-    )
+    if state::toggle::is_listening()?.is_some() {
+        // Second invocation: stop the running session
+        return cmd_listen_stop();
+    }
+    // First invocation: start a new session
+    cmd_listen_start(source, max_duration, clipboard)
+}
+
+/// Capture audio from source, block until stop signal or max_duration, then transcribe
+fn cmd_listen_start(source: Option<String>, max_duration: u32, clipboard: bool) -> Result<()> {
+    if state::toggle::is_listening()?.is_some() {
+        anyhow::bail!("listen session already active — run 'mojovoice listen' again to stop it");
+    }
+
+    if !daemon::is_daemon_running() {
+        anyhow::bail!("daemon is not running — start it first with: mojovoice daemon up");
+    }
+
+    let cfg = config::load()?;
+    let output_mode = output_mode_from_clipboard(clipboard);
+
+    state::toggle::STOP_RECORDING.store(false, std::sync::atomic::Ordering::SeqCst);
+    state::toggle::setup_signal_handler()?;
+    state::toggle::start_listen()?;
+
+    println!(
+        "Listening on {}. Run 'mojovoice listen' again to stop (max {}s).",
+        source.as_deref().unwrap_or("default input"),
+        max_duration
+    );
+
+    let samples = audio::capture_toggle(max_duration, cfg.audio.sample_rate, source.as_deref());
+
+    // Always clean up PID file, even if capture failed
+    let _ = state::toggle::cleanup_listen();
+
+    let samples = samples?;
+
+    if samples.is_empty() {
+        println!("No audio captured.");
+        return Ok(());
+    }
+
+    info!("Captured {} samples, sending to daemon for transcription...", samples.len());
+
+    let response = daemon::send_request(&daemon::DaemonRequest::TranscribeAudio { samples })?;
+
+    match response {
+        daemon::DaemonResponse::Success { text } => {
+            if text.is_empty() {
+                println!("No speech detected.");
+                return Ok(());
+            }
+            info!("Transcribed: {}", text);
+            output::inject_text(&text, output_mode)?;
+            send_notification("Listen Transcription", &truncate_preview(&text), "normal");
+            Ok(())
+        }
+        daemon::DaemonResponse::Error { message } => {
+            anyhow::bail!("Transcription failed: {}", message)
+        }
+        _ => anyhow::bail!("Unexpected response from daemon"),
+    }
 }
 
 /// Stop a running listen session (sends SIGUSR1 to the listen process)
@@ -1164,5 +1221,37 @@ mod listen_tests {
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("no listen session active"), "got: {}", msg);
+    }
+
+    #[test]
+    fn test_cmd_listen_already_listening_returns_error() {
+        // Start a fake listen session with current PID
+        state::toggle::start_listen().unwrap();
+
+        let result = cmd_listen_start(None, 300, false);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("listen session already active"), "got: {}", msg);
+
+        // Clean up
+        let _ = state::toggle::cleanup_listen();
+    }
+
+    #[test]
+    fn test_cmd_listen_daemon_not_running_returns_error() {
+        // Ensure no listen session is active
+        let _ = state::toggle::cleanup_listen();
+
+        // This test is meaningful only when daemon is NOT running.
+        // If daemon is running, skip gracefully.
+        if daemon::is_daemon_running() {
+            println!("Skipping: daemon is running");
+            return;
+        }
+
+        let result = cmd_listen_start(None, 300, false);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("daemon is not running"), "got: {}", msg);
     }
 }
