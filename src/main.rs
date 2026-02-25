@@ -1134,7 +1134,6 @@ mod listen_tests {
 
     #[test]
     fn test_cmd_listen_default_max_duration_is_300() {
-        use clap::Parser;
         let cli = Cli::parse_from(["mojovoice", "listen"]);
         if let Commands::Listen { max_duration, .. } = cli.command {
             assert_eq!(max_duration, 300);
