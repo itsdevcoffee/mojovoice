@@ -33,6 +33,11 @@ pub fn get_daemon_pid_file() -> Result<PathBuf> {
     Ok(get_state_dir()?.join("daemon.pid"))
 }
 
+/// Get the listen session PID file path (separate from recording PID)
+pub fn get_listen_pid_file() -> Result<PathBuf> {
+    Ok(get_state_dir()?.join("listen.pid"))
+}
+
 /// Get the data directory for mojovoice (~/.local/share/mojovoice)
 pub fn get_data_dir() -> Result<PathBuf> {
     let proj_dirs = ProjectDirs::from("", "", "mojovoice")
@@ -56,5 +61,13 @@ mod tests {
     fn test_state_dir_creation() {
         let dir = get_state_dir();
         assert!(dir.is_ok());
+    }
+
+    #[test]
+    fn test_listen_pid_file_is_distinct_from_recording_pid() {
+        let listen_pid = get_listen_pid_file().unwrap();
+        let recording_pid = get_pid_file().unwrap();
+        assert_ne!(listen_pid, recording_pid);
+        assert!(listen_pid.to_string_lossy().ends_with("listen.pid"));
     }
 }
