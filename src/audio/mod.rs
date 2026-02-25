@@ -236,6 +236,30 @@ fn get_pipewire_default_source() -> Result<String> {
     anyhow::bail!("Could not find default source in pactl info")
 }
 
+/// Get the monitor source for the current default PipeWire/PulseAudio sink.
+/// Returns e.g. "bluez_output.XX_XX_XX.1.monitor" for active headphones.
+/// Returns None if pactl is unavailable or no default sink is set.
+#[cfg(target_os = "linux")]
+pub fn get_default_sink_monitor() -> Option<String> {
+    use std::process::Command;
+
+    let output = Command::new("pactl")
+        .args(["get-default-sink"])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let sink = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if sink.is_empty() {
+        return None;
+    }
+
+    Some(format!("{}.monitor", sink))
+}
+
 /// Audio device configuration
 struct AudioSetup {
     device: Device,
@@ -634,5 +658,18 @@ mod tests {
         let samples: Vec<f32> = (0..100).map(|x| (x as f32).sin()).collect();
         let result = resample_linear(&samples, 2.0); // 2x downsampling
         assert!(result.len() < samples.len());
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_get_default_sink_monitor_returns_monitor_suffix() {
+        match get_default_sink_monitor() {
+            Some(source) => assert!(
+                source.ends_with(".monitor"),
+                "expected .monitor suffix, got: {}",
+                source
+            ),
+            None => println!("pactl unavailable or no default sink — skipping assertion"),
+        }
     }
 }
