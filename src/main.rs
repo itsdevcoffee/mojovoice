@@ -1036,6 +1036,11 @@ fn cmd_listen_start(source: Option<String>, max_duration: u32, clipboard: bool) 
     let cfg = config::load()?;
     let output_mode = output_mode_from_clipboard(clipboard);
 
+    // On Linux: default to monitor of current default sink (captures app audio like Discord)
+    // Falls back to default mic input if pactl unavailable.
+    #[cfg(target_os = "linux")]
+    let source = source.or_else(|| audio::get_default_sink_monitor());
+
     state::toggle::STOP_RECORDING.store(false, std::sync::atomic::Ordering::SeqCst);
     state::toggle::setup_signal_handler()?;
     state::toggle::start_listen()?;
@@ -1217,6 +1222,21 @@ mod listen_tests {
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("no listen session active"), "got: {}", msg);
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_cmd_listen_start_auto_detects_monitor_source() {
+        // Verify the auto-detection helper returns a valid monitor source name
+        let resolved = audio::get_default_sink_monitor();
+        if let Some(ref source) = resolved {
+            assert!(
+                source.ends_with(".monitor"),
+                "auto-detected source should end with .monitor, got: {}",
+                source
+            );
+        }
+        // None is acceptable if pactl unavailable
     }
 
     #[test]
