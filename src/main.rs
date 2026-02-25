@@ -1029,10 +1029,6 @@ fn cmd_listen(source: Option<String>, max_duration: u32, clipboard: bool) -> Res
 
 /// Capture audio from source, block until stop signal or max_duration, then transcribe
 fn cmd_listen_start(source: Option<String>, max_duration: u32, clipboard: bool) -> Result<()> {
-    if state::toggle::is_listening()?.is_some() {
-        anyhow::bail!("listen session already active — run 'mojovoice listen' again to stop it");
-    }
-
     if !daemon::is_daemon_running() {
         anyhow::bail!("daemon is not running — start it first with: mojovoice daemon up");
     }
@@ -1221,20 +1217,6 @@ mod listen_tests {
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("no listen session active"), "got: {}", msg);
-    }
-
-    #[test]
-    fn test_cmd_listen_already_listening_returns_error() {
-        // Start a fake listen session with current PID
-        state::toggle::start_listen().unwrap();
-
-        let result = cmd_listen_start(None, 300, false);
-        assert!(result.is_err());
-        let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("listen session already active"), "got: {}", msg);
-
-        // Clean up
-        let _ = state::toggle::cleanup_listen();
     }
 
     #[test]
