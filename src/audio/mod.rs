@@ -120,16 +120,18 @@ fn list_pipewire_devices() -> Result<Vec<AudioDeviceInfo>> {
         if parts.len() >= 2 {
             let source_name = parts[1].to_string();
 
-            // Skip monitor sources (outputs) - we only want input sources
-            if source_name.ends_with(".monitor") {
-                continue;
-            }
-
             // Get human-readable description
             let description = get_source_description(&source_name).unwrap_or_else(|| source_name.clone());
 
+            // Prefix monitor sources (application audio loopbacks) so they're visually distinct
+            let display_name = if source_name.ends_with(".monitor") {
+                format!("[Monitor] {}", description)
+            } else {
+                description
+            };
+
             devices.push(AudioDeviceInfo {
-                name: description,
+                name: display_name,
                 is_default: default_source.as_ref() == Some(&source_name),
                 internal_name: Some(source_name), // Store PipeWire source name
             });
@@ -589,6 +591,36 @@ fn resample_linear(samples: &[f32], ratio: f32) -> Vec<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_monitor_source_display_name_gets_prefix() {
+        let source_name = "alsa_output.pci-0000_00_1f.3.analog-stereo.monitor";
+        let description = "Built-in Audio Analog Stereo";
+
+        let display_name = if source_name.ends_with(".monitor") {
+            format!("[Monitor] {}", description)
+        } else {
+            description.to_string()
+        };
+
+        assert!(display_name.starts_with("[Monitor]"));
+        assert!(display_name.contains("Built-in Audio"));
+    }
+
+    #[test]
+    fn test_non_monitor_source_has_no_prefix() {
+        let source_name = "alsa_input.pci-0000_00_1f.3.analog-stereo";
+        let description = "Built-in Audio Analog Stereo";
+
+        let display_name = if source_name.ends_with(".monitor") {
+            format!("[Monitor] {}", description)
+        } else {
+            description.to_string()
+        };
+
+        assert!(!display_name.starts_with("[Monitor]"));
+        assert_eq!(display_name, description);
+    }
 
     #[test]
     fn test_resample_linear_upsampling() {
