@@ -168,6 +168,21 @@ enum Commands {
         #[command(subcommand)]
         command: VocabCommands,
     },
+
+    /// Listen to an external audio source and transcribe (toggle mode)
+    Listen {
+        /// PipeWire/ALSA source name to capture from (e.g. "[Monitor] Speakers"). Defaults to system input.
+        #[arg(short, long)]
+        source: Option<String>,
+
+        /// Max recording duration in seconds before auto-stop
+        #[arg(short = 'd', long, default_value = "300")]
+        max_duration: u32,
+
+        /// Copy to clipboard instead of typing
+        #[arg(short, long)]
+        clipboard: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -266,6 +281,11 @@ fn main() -> Result<()> {
             report,
         } => cmd_benchmark(samples_dir, output_dir, stdout_only, report)?,
         Commands::Vocab { command } => cmd_vocab(command)?,
+        Commands::Listen {
+            source,
+            max_duration,
+            clipboard,
+        } => cmd_listen(source, max_duration, clipboard)?,
     }
 
     Ok(())
@@ -998,6 +1018,15 @@ fn cmd_vocab(command: VocabCommands) -> Result<()> {
     Ok(())
 }
 
+fn cmd_listen(source: Option<String>, max_duration: u32, clipboard: bool) -> Result<()> {
+    anyhow::bail!(
+        "cmd_listen not yet implemented (source={:?}, max_duration={}, clipboard={})",
+        source,
+        max_duration,
+        clipboard
+    )
+}
+
 /// Transcribe a WAV file via daemon (for testing/debugging)
 fn cmd_transcribe_file(path: &std::path::Path, _model_override: Option<String>) -> Result<()> {
     use hound::WavReader;
@@ -1097,4 +1126,20 @@ fn cmd_transcribe_file(path: &std::path::Path, _model_override: Option<String>) 
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod listen_tests {
+    use super::*;
+
+    #[test]
+    fn test_cmd_listen_default_max_duration_is_300() {
+        use clap::Parser;
+        let cli = Cli::parse_from(["mojovoice", "listen"]);
+        if let Commands::Listen { max_duration, .. } = cli.command {
+            assert_eq!(max_duration, 300);
+        } else {
+            panic!("Expected Listen command");
+        }
+    }
 }
