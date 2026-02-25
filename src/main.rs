@@ -1027,6 +1027,19 @@ fn cmd_listen(source: Option<String>, max_duration: u32, clipboard: bool) -> Res
     )
 }
 
+/// Stop a running listen session (sends SIGUSR1 to the listen process)
+fn cmd_listen_stop() -> Result<()> {
+    match state::toggle::is_listening()? {
+        Some(state) => {
+            info!("Sending stop signal to listen session (PID: {})", state.pid);
+            state::toggle::stop_listen(&state)?;
+            println!("Listen session stopped. Transcribing...");
+            Ok(())
+        }
+        None => anyhow::bail!("no listen session active"),
+    }
+}
+
 /// Transcribe a WAV file via daemon (for testing/debugging)
 fn cmd_transcribe_file(path: &std::path::Path, _model_override: Option<String>) -> Result<()> {
     use hound::WavReader;
@@ -1140,5 +1153,16 @@ mod listen_tests {
         } else {
             panic!("Expected Listen command");
         }
+    }
+
+    #[test]
+    fn test_cmd_listen_stop_no_session_returns_error() {
+        // Ensure no listen.pid exists
+        let _ = state::toggle::cleanup_listen();
+
+        let result = cmd_listen_stop();
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("no listen session active"), "got: {}", msg);
     }
 }
