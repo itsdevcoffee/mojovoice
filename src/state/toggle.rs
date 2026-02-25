@@ -243,9 +243,18 @@ pub fn should_stop() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Mutex, OnceLock};
+
+    // Serializes tests that share on-disk PID files to prevent race conditions
+    // when cargo runs tests in parallel (the default).
+    static PID_FILE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    fn pid_lock() -> std::sync::MutexGuard<'static, ()> {
+        PID_FILE_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap()
+    }
 
     #[test]
     fn test_recording_state_lifecycle() {
+        let _guard = pid_lock();
         // Clean up any existing state
         let _ = cleanup_recording();
 
@@ -269,6 +278,7 @@ mod tests {
 
     #[test]
     fn test_listen_state_lifecycle() {
+        let _guard = pid_lock();
         let _ = cleanup_listen();
         assert!(is_listening().unwrap().is_none());
 
@@ -284,6 +294,7 @@ mod tests {
 
     #[test]
     fn test_listen_stale_pid_is_cleaned_up() {
+        let _guard = pid_lock();
         use std::io::Write;
 
         let pid_file = super::super::paths::get_listen_pid_file().unwrap();
@@ -299,6 +310,7 @@ mod tests {
 
     #[test]
     fn test_listen_and_recording_pid_files_are_independent() {
+        let _guard = pid_lock();
         let _ = cleanup_listen();
         let _ = cleanup_recording();
 
