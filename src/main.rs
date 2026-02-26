@@ -1118,8 +1118,17 @@ fn cmd_listen_cancel() -> Result<()> {
             let cancel_file = state::paths::get_listen_cancel_file()?;
             std::fs::write(&cancel_file, "")?;
 
+            // Clean up sentinel if stop_listen fails (prevents stale cancel on next session)
+            let _cancel_guard = scopeguard::guard(cancel_file.clone(), |f| {
+                let _ = std::fs::remove_file(&f);
+            });
+
             info!("Cancelling listen session (PID: {})", state.pid);
             state::toggle::stop_listen(&state)?;
+
+            // Stop succeeded — defuse the guard so sentinel persists for the listen process
+            std::mem::forget(_cancel_guard);
+
             println!("Listen session cancelled.");
             Ok(())
         }
@@ -1287,7 +1296,6 @@ mod listen_tests {
 
     #[test]
     fn test_listen_cancel_flag_parses() {
-        use clap::Parser;
         let cli = Cli::parse_from(["mojovoice", "listen", "--cancel"]);
         if let Commands::Listen { cancel, .. } = cli.command {
             assert!(cancel);
