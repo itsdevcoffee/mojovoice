@@ -1,0 +1,24 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// MojoVoice Listen — Waybar Module Config
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Add "custom/mojovoice-listen" to your modules-left/right/center list.
+// Pairs with: listen-style-snippet.css
+// Signal 9 = manual refresh trigger (pkill -RTMIN+9 waybar)
+//
+// Setup:
+//   cp integrations/waybar/mojovoice-listen-status.sh ~/.config/waybar/scripts/
+//   cp integrations/waybar/mojovoice-listen-menu.sh   ~/.config/waybar/scripts/
+//   chmod +x ~/.config/waybar/scripts/mojovoice-listen-*.sh
+//
+"custom/mojovoice-listen": {
+    "format": "{}",
+    "return-type": "json",
+    "exec": "~/.config/waybar/scripts/mojovoice-listen-status.sh",
+    "on-click": "mojovoice listen &",
+    "on-click-right": "~/.config/waybar/scripts/mojovoice-listen-menu.sh &",
+    "on-click-middle": "mojovoice listen --cancel &",
+    "signal": 9,
+    "interval": 1,
+    "tooltip": true
+},
