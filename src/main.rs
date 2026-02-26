@@ -182,6 +182,10 @@ enum Commands {
         /// Copy to clipboard instead of typing
         #[arg(short, long)]
         clipboard: bool,
+
+        /// Cancel a running listen session without transcribing
+        #[arg(long)]
+        cancel: bool,
     },
 }
 
@@ -285,7 +289,8 @@ fn main() -> Result<()> {
             source,
             max_duration,
             clipboard,
-        } => cmd_listen(source, max_duration, clipboard)?,
+            cancel,
+        } => cmd_listen(source, max_duration, clipboard, cancel)?,
     }
 
     Ok(())
@@ -1018,7 +1023,10 @@ fn cmd_vocab(command: VocabCommands) -> Result<()> {
     Ok(())
 }
 
-fn cmd_listen(source: Option<String>, max_duration: u32, clipboard: bool) -> Result<()> {
+fn cmd_listen(source: Option<String>, max_duration: u32, clipboard: bool, cancel: bool) -> Result<()> {
+    if cancel {
+        return cmd_listen_cancel();
+    }
     if state::toggle::is_listening()?.is_some() {
         // Second invocation: stop the running session
         return cmd_listen_stop();
@@ -1095,6 +1103,26 @@ fn cmd_listen_stop() -> Result<()> {
             Ok(())
         }
         None => anyhow::bail!("no listen session active"),
+    }
+}
+
+/// Cancel a running listen session — stops capture and discards audio without transcribing
+fn cmd_listen_cancel() -> Result<()> {
+    match state::toggle::is_listening()? {
+        None => {
+            println!("No listen session active.");
+            Ok(())
+        }
+        Some(state) => {
+            // Write sentinel file so the listen process knows to discard on stop
+            let cancel_file = state::paths::get_listen_cancel_file()?;
+            std::fs::write(&cancel_file, "")?;
+
+            info!("Cancelling listen session (PID: {})", state.pid);
+            state::toggle::stop_listen(&state)?;
+            println!("Listen session cancelled.");
+            Ok(())
+        }
     }
 }
 
@@ -1255,5 +1283,24 @@ mod listen_tests {
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("daemon is not running"), "got: {}", msg);
+    }
+
+    #[test]
+    fn test_listen_cancel_flag_parses() {
+        use clap::Parser;
+        let cli = Cli::parse_from(["mojovoice", "listen", "--cancel"]);
+        if let Commands::Listen { cancel, .. } = cli.command {
+            assert!(cancel);
+        } else {
+            panic!("Expected Listen command");
+        }
+    }
+
+    #[test]
+    fn test_cmd_listen_cancel_no_session_prints_message() {
+        let _ = state::toggle::cleanup_listen();
+        // Should succeed (Ok) with a message, not error
+        let result = cmd_listen_cancel();
+        assert!(result.is_ok(), "expected Ok, got: {:?}", result);
     }
 }
