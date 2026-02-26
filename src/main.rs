@@ -1035,6 +1035,19 @@ fn cmd_listen(source: Option<String>, max_duration: u32, clipboard: bool, cancel
     cmd_listen_start(source, max_duration, clipboard)
 }
 
+/// Check if a listen cancel was requested. Returns true and deletes the sentinel if present.
+fn check_and_clear_cancel_file() -> bool {
+    let Ok(path) = state::paths::get_listen_cancel_file() else {
+        return false;
+    };
+    if path.exists() {
+        let _ = std::fs::remove_file(&path);
+        true
+    } else {
+        false
+    }
+}
+
 /// Capture audio from source, block until stop signal or max_duration, then transcribe
 fn cmd_listen_start(source: Option<String>, max_duration: u32, clipboard: bool) -> Result<()> {
     if !daemon::is_daemon_running() {
@@ -1063,6 +1076,12 @@ fn cmd_listen_start(source: Option<String>, max_duration: u32, clipboard: bool) 
 
     // Always clean up PID file, even if capture failed
     let _ = state::toggle::cleanup_listen();
+
+    // Check if cancel was requested — discard audio without transcribing
+    if check_and_clear_cancel_file() {
+        println!("Listen session cancelled.");
+        return Ok(());
+    }
 
     let samples = samples?;
 
@@ -1310,5 +1329,22 @@ mod listen_tests {
         // Should succeed (Ok) with a message, not error
         let result = cmd_listen_cancel();
         assert!(result.is_ok(), "expected Ok, got: {:?}", result);
+    }
+
+    #[test]
+    fn test_check_and_clear_cancel_file() {
+        let cancel_file = state::paths::get_listen_cancel_file().unwrap();
+
+        // No file → returns false
+        let _ = std::fs::remove_file(&cancel_file); // ensure clean
+        assert!(!check_and_clear_cancel_file());
+
+        // File present → returns true and removes it
+        std::fs::write(&cancel_file, "").unwrap();
+        assert!(check_and_clear_cancel_file());
+        assert!(!cancel_file.exists(), "cancel file should be deleted after check");
+
+        // Second call → false again
+        assert!(!check_and_clear_cancel_file());
     }
 }
