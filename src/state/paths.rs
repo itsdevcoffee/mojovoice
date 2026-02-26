@@ -38,6 +38,12 @@ pub fn get_listen_pid_file() -> Result<PathBuf> {
     Ok(get_state_dir()?.join("listen.pid"))
 }
 
+/// Get the listen cancel sentinel file path
+/// Presence of this file signals the listen process to discard audio on stop
+pub fn get_listen_cancel_file() -> Result<PathBuf> {
+    Ok(get_state_dir()?.join("listen.cancel"))
+}
+
 /// Get the data directory for mojovoice (~/.local/share/mojovoice)
 pub fn get_data_dir() -> Result<PathBuf> {
     let proj_dirs = ProjectDirs::from("", "", "mojovoice")
@@ -69,5 +75,14 @@ mod tests {
         let recording_pid = get_pid_file().unwrap();
         assert_ne!(listen_pid, recording_pid);
         assert!(listen_pid.to_string_lossy().ends_with("listen.pid"));
+    }
+
+    #[test]
+    fn test_listen_cancel_file_is_in_state_dir_and_distinct() {
+        let cancel = get_listen_cancel_file().unwrap();
+        let pid = get_listen_pid_file().unwrap();
+        assert_ne!(cancel, pid);
+        assert!(cancel.to_string_lossy().ends_with("listen.cancel"));
+        assert_eq!(cancel.parent().unwrap(), get_state_dir().unwrap().as_path());
     }
 }
