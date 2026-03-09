@@ -50,6 +50,15 @@ install-cpu: build
     @echo "Installed mojovoice (CPU only) to {{install_dir}}"
     @echo "Run 'just daemon-restart' to use the new build"
 
+# Install on macOS (Metal, no CUDA — copies .dylib)
+install-mac: build
+    @mkdir -p {{lib_dir}}
+    rm -f {{install_dir}}/mojovoice
+    cp target/release/mojovoice {{install_dir}}/
+    cp lib/libmojo_audio.dylib {{lib_dir}}/
+    @echo "Installed mojovoice (macOS / Metal) to {{install_dir}}"
+    @echo "Run 'just daemon-restart' to use the new build"
+
 # Install (CUDA) and restart daemon in one step
 install-restart: install
     @echo "Restarting daemon..."
