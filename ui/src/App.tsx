@@ -2,6 +2,7 @@ import { useEffect, lazy, Suspense } from 'react';
 import { invoke } from './lib/ipc';
 import { useAppStore } from './stores/appStore';
 import { ToastProvider } from './components/ui/Toast';
+import SetupWizard from './components/wizard/SetupWizard';
 
 // Lazy load MissionControl for code splitting
 const MissionControl = lazy(() => import('./components/MissionControl'));
@@ -10,7 +11,7 @@ import './styles/globals.css';
 import { type ScalePreset, isValidPreset, clampScale } from './lib/scale';
 
 function App() {
-  const { setDaemonStatus, addLog, setUIScale } = useAppStore();
+  const { setDaemonStatus, addLog, setUIScale, wizardComplete } = useAppStore();
 
   useEffect(() => {
     // Add initial log
@@ -75,6 +76,10 @@ function App() {
 
     return () => clearInterval(interval);
   }, [setDaemonStatus, addLog, setUIScale]);
+
+  if (!wizardComplete) {
+    return <SetupWizard />;
+  }
 
   return (
     <ToastProvider>

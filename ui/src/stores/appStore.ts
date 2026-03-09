@@ -70,6 +70,10 @@ interface AppState {
   scalePreset: ScalePreset;
   customScale: number;
 
+  // First-run wizard
+  wizardComplete: boolean;
+  setWizardComplete: () => void;
+
   // Actions
   setDaemonStatus: (status: DaemonStatus) => void;
   refreshDaemonStatus: () => Promise<void>;
@@ -118,6 +122,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   uiScale: 1.0,
   scalePreset: 'medium',
   customScale: 1.0,
+
+  // First-run wizard
+  wizardComplete: localStorage.getItem('mojovoice_wizard_complete') === 'true',
+  setWizardComplete: () => {
+    localStorage.setItem('mojovoice_wizard_complete', 'true');
+    set({ wizardComplete: true });
+  },
 
   // Actions
   setDaemonStatus: (status) => set({ daemonStatus: status }),
