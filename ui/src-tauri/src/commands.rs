@@ -962,6 +962,10 @@ pub struct AudioConfig {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct OutputConfig {
+    /// Force display server type: "wayland", "x11", or null for auto-detect.
+    /// Preserved on round-trip even though the UI doesn't currently edit this field.
+    #[serde(default)]
+    pub display_server: Option<String>,
     pub append_space: bool,
     pub refresh_command: Option<String>,
 }
@@ -1275,9 +1279,10 @@ pub struct RegistryModel {
     pub gguf_file: Option<String>,
 }
 
-/// Model that's been downloaded locally
+/// Model that's been downloaded locally.
+/// Field names are snake_case to match the inline type used in ModelsPanel.tsx
+/// (`{ name, filename, is_active }`) and SettingsPanel.tsx's DownloadedModel interface.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct DownloadedModel {
     pub name: String,
     pub filename: String,
@@ -1442,10 +1447,58 @@ fn is_active_model(active_path: &str, dirname: &str) -> bool {
     false
 }
 
-/// List all available models from the registry
+/// Available model entry returned to ModelsPanel.tsx.
+/// Combines registry metadata with on-disk download status.
+/// Field names are snake_case to match AvailableModel interface in ModelsPanel.tsx.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AvailableModel {
+    pub name: String,
+    pub filename: String,
+    /// File size in bytes (ModelsPanel formats this itself)
+    pub size_bytes: u64,
+    pub is_downloaded: bool,
+    pub is_active: bool,
+}
+
+/// List all available models from the registry, annotated with download/active status.
 #[tauri::command]
-pub async fn list_available_models() -> Result<Vec<RegistryModel>, String> {
-    Ok(get_model_registry())
+pub async fn list_available_models() -> Result<Vec<AvailableModel>, String> {
+    let registry = get_model_registry();
+    let models_dir = get_models_dir().unwrap_or_else(|_| std::path::PathBuf::new());
+
+    // Load active model path from config (best-effort — empty string if unavailable)
+    let active_path = if let Ok(cfg) = get_config().await {
+        cfg.model.path
+    } else {
+        String::new()
+    };
+
+    let result = registry
+        .into_iter()
+        .map(|m| {
+            let dir = models_dir.join(&m.filename);
+            // A model is "downloaded" when all required files exist inside its directory.
+            let is_downloaded = if dir.exists() && dir.is_dir() {
+                let has_model = dir.join("model.safetensors").exists()
+                    || dir.join("model.gguf").exists();
+                let has_meta = dir.join("config.json").exists()
+                    && dir.join("tokenizer.json").exists();
+                has_model && has_meta
+            } else {
+                false
+            };
+            let is_active = is_active_model(&active_path, &m.filename);
+            AvailableModel {
+                size_bytes: m.size_mb as u64 * 1_000_000,
+                name: m.name,
+                filename: m.filename,
+                is_downloaded,
+                is_active,
+            }
+        })
+        .collect();
+
+    Ok(result)
 }
 
 /// List all downloaded models (safetensors directories)
@@ -1537,10 +1590,24 @@ pub async fn list_downloaded_models() -> Result<Vec<DownloadedModel>, String> {
     Ok(downloaded)
 }
 
-/// Delete a downloaded model (directory)
+/// Resolve registry filename from a model name (e.g. "large-v3-turbo" → "whisper-large-v3-turbo").
+/// The UI passes model.name (registry name); we need the directory filename for disk ops.
+fn resolve_model_filename(model_name: &str) -> Option<String> {
+    get_model_registry()
+        .into_iter()
+        .find(|m| m.name == model_name)
+        .map(|m| m.filename)
+}
+
+/// Delete a downloaded model directory.
+/// `model_name` is the registry `name` field (e.g. "large-v3-turbo"), as sent by the UI.
 #[tauri::command]
-pub async fn delete_model(filename: String) -> Result<(), String> {
+pub async fn delete_model(model_name: String) -> Result<(), String> {
     let models_dir = get_models_dir()?;
+
+    // Resolve the directory filename from the registry name
+    let filename = resolve_model_filename(&model_name)
+        .unwrap_or_else(|| model_name.clone()); // fallback: treat name as filename
 
     // Validate path is within models directory (prevent path traversal)
     let path = validate_model_path(&models_dir, &filename)?;
@@ -1555,7 +1622,7 @@ pub async fn delete_model(filename: String) -> Result<(), String> {
         return Err("Cannot delete the currently active model. Switch to a different model first.".to_string());
     }
 
-    // Delete directory (safetensors models are directories)
+    // Delete directory (models are stored as directories)
     if path.is_dir() {
         std::fs::remove_dir_all(&path)
             .map_err(|e| format!("Failed to delete model directory: {}", e))?;
@@ -1568,10 +1635,18 @@ pub async fn delete_model(filename: String) -> Result<(), String> {
     Ok(())
 }
 
-/// Switch to a different model (updates config and restarts daemon)
+/// Switch to a different model (updates config and restarts daemon).
+/// `model_name` is the registry `name` field (e.g. "large-v3-turbo"), as sent by the UI.
 #[tauri::command]
-pub async fn switch_model(filename: String) -> Result<(), String> {
+pub async fn switch_model(model_name: String) -> Result<(), String> {
     let models_dir = get_models_dir()?;
+
+    // Resolve the directory filename from the registry name
+    let registry = get_model_registry();
+    let reg_model = registry.iter().find(|m| m.name == model_name);
+    let filename = reg_model
+        .map(|m| m.filename.clone())
+        .unwrap_or_else(|| model_name.clone()); // fallback: treat name as filename
 
     // Validate path is within models directory (prevent path traversal)
     let model_path = validate_model_path(&models_dir, &filename)?;
@@ -1580,14 +1655,13 @@ pub async fn switch_model(filename: String) -> Result<(), String> {
         return Err("Model not found. Download it first.".to_string());
     }
 
-    // Update config with new model path (directory path for safetensors)
+    // Update config with new model path (directory path)
     let mut config = get_config().await?;
     config.model.path = model_path.to_string_lossy().to_string();
 
-    // Look up repo_id from registry
-    let registry = get_model_registry();
-    if let Some(reg_model) = registry.iter().find(|m| m.filename == filename) {
-        config.model.model_id = reg_model.repo_id.clone();
+    // Update repo_id from registry
+    if let Some(m) = reg_model {
+        config.model.model_id = m.repo_id.clone();
     }
 
     save_config(config).await?;
@@ -1595,17 +1669,17 @@ pub async fn switch_model(filename: String) -> Result<(), String> {
     // Restart daemon to load new model
     restart_daemon().await?;
 
-    eprintln!("Switched to model: {}", filename);
+    eprintln!("Switched to model: {} (dir: {})", model_name, filename);
     Ok(())
 }
 
-/// Storage information for the models directory
+/// Storage information for the models directory.
+/// Field names match what ModelsPanel.tsx expects (snake_case, in GB).
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct StorageInfo {
-    pub used: u64,   // bytes used by models
-    pub free: u64,   // bytes free on disk
-    pub total: u64,  // total disk space
+    pub models_size_gb: f64, // GB used by downloaded models
+    pub available_gb: f64,   // GB free on the disk that contains the models dir
+    pub total_gb: f64,       // total disk space in GB
 }
 
 /// Get storage information for models directory
@@ -1616,10 +1690,11 @@ pub async fn get_storage_info() -> Result<StorageInfo, String> {
     let models_dir = get_models_dir()?;
 
     // Calculate total size of all models
-    let mut used: u64 = 0;
-    if models_dir.exists() {
-        used = calculate_dir_size(&models_dir);
-    }
+    let models_bytes: u64 = if models_dir.exists() {
+        calculate_dir_size(&models_dir)
+    } else {
+        0
+    };
 
     // Get disk space info
     let disks = Disks::new_with_refreshed_list();
@@ -1643,7 +1718,7 @@ pub async fn get_storage_info() -> Result<StorageInfo, String> {
         }
     }
 
-    let (free, total) = if let Some(disk) = best_disk {
+    let (available_bytes, total_bytes) = if let Some(disk) = best_disk {
         (disk.available_space(), disk.total_space())
     } else {
         // Fallback: use first disk or zeros
@@ -1652,7 +1727,12 @@ pub async fn get_storage_info() -> Result<StorageInfo, String> {
             .unwrap_or((0, 0))
     };
 
-    Ok(StorageInfo { used, free, total })
+    const GB: f64 = 1_073_741_824.0;
+    Ok(StorageInfo {
+        models_size_gb: models_bytes as f64 / GB,
+        available_gb: available_bytes as f64 / GB,
+        total_gb: total_bytes as f64 / GB,
+    })
 }
 
 /// Calculate total size of a directory recursively
