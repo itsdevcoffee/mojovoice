@@ -39,7 +39,7 @@ export default function SetupWizard() {
     setWizardComplete();
   };
 
-  const handleTestBack = () => goTo(1);
+  const handleTestBack = () => goTo(2);
 
   const modelDisplayName = MODEL_DISPLAY_NAMES[selectedModel] ?? selectedModel;
 

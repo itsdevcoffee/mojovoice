@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import WizardStep from '../WizardStep';
 import { Button } from '../../ui/Button';
 
@@ -29,7 +29,6 @@ export default function TestStep({ onNext, onBack }: TestStepProps) {
     }, RECORDING_DURATION_MS);
   };
 
-  // Cleanup on unmount
   const cleanupTimer = () => {
     if (timerRef.current !== null) {
       clearTimeout(timerRef.current);
@@ -37,11 +36,8 @@ export default function TestStep({ onNext, onBack }: TestStepProps) {
     }
   };
 
-  // Use a cleanup ref approach — register cleanup via useEffect alternative
-  // We attach cleanup directly to component lifecycle via ref
-  if (typeof window !== 'undefined') {
-    // Attach to window unload is not ideal; instead rely on button state
-  }
+  // Ensure timer is cleared if component unmounts mid-recording
+  useEffect(() => () => cleanupTimer(), []);
 
   return (
     <WizardStep
