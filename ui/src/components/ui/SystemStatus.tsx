@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Play, Square, RotateCcw } from 'lucide-react';
 import SectionHeader from './SectionHeader';
 import { invoke } from '../../lib/ipc';
+import { useAppStore } from '../../stores/appStore';
 
 interface SystemInfo {
   cpu_cores: number;
@@ -13,19 +14,13 @@ interface SystemInfo {
   platform: string;
 }
 
-interface DaemonStatus {
-  running: boolean;
-  model_loaded: boolean;
-  gpu_enabled: boolean;
-  gpu_name: string | null;
-  uptime_secs: number | null;
-}
 
 export function SystemStatus() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
-  const [daemonStatus, setDaemonStatus] = useState<DaemonStatus | null>(null);
   const [daemonAction, setDaemonAction] = useState<string | null>(null);
+  // Read daemon status from the single source of truth (appStore, polled by App.tsx)
+  const { daemonStatus, refreshDaemonStatus } = useAppStore();
 
   useEffect(() => {
     const saved = localStorage.getItem('systemStatus.collapsed');
@@ -44,21 +39,7 @@ export function SystemStatus() {
       }
     };
 
-    const loadDaemonStatus = async () => {
-      try {
-        const status = await invoke<DaemonStatus>('get_daemon_status');
-        setDaemonStatus(status);
-      } catch (err) {
-        console.error('Failed to load daemon status:', err);
-      }
-    };
-
     loadSystemInfo();
-    loadDaemonStatus();
-
-    // Poll daemon status every 5s
-    const interval = setInterval(loadDaemonStatus, 5000);
-    return () => clearInterval(interval);
   }, []);
 
   const handleToggle = () => {
@@ -71,9 +52,8 @@ export function SystemStatus() {
     try {
       setDaemonAction(action);
       await invoke(action);
-      // Refresh status after action
-      const status = await invoke<DaemonStatus>('get_daemon_status');
-      setDaemonStatus(status);
+      // Refresh status via the store so all consumers update together
+      await refreshDaemonStatus();
     } catch (err) {
       console.error(`Failed to ${action}:`, err);
     } finally {
@@ -99,8 +79,9 @@ export function SystemStatus() {
   const ramUsedGb = systemInfo?.used_ram_gb ?? 0;
   const ramTotalGb = systemInfo?.total_ram_gb ?? 0;
   const ramPercent = ramTotalGb > 0 ? (ramUsedGb / ramTotalGb) * 100 : 0;
-  const isRunning = daemonStatus?.running ?? false;
-  const isModelLoaded = daemonStatus?.model_loaded ?? false;
+  // daemonStatus comes from appStore (camelCase fields)
+  const isRunning = daemonStatus.running;
+  const isModelLoaded = daemonStatus.modelLoaded;
 
   return (
     <section className="mt-12">
@@ -161,7 +142,7 @@ export function SystemStatus() {
               label="GPU"
               value={
                 systemInfo?.gpu_name
-                  ?? (daemonStatus?.gpu_name
+                  ?? (daemonStatus.gpuName
                     ?? (systemInfo?.gpu_available ? 'Available' : 'None'))
               }
             />
@@ -181,7 +162,7 @@ export function SystemStatus() {
             {/* Uptime */}
             <ReadoutCell
               label="Uptime"
-              value={formatUptime(daemonStatus?.uptime_secs ?? null)}
+              value={formatUptime(null)}
             />
           </div>
 

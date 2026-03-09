@@ -1,96 +1,135 @@
-import { useState } from 'react';
-import { Button } from './Button';
+import { useEffect, useRef } from 'react';
+import { Mic, Square } from 'lucide-react';
 import { invoke } from '../../lib/ipc';
 import { useAppStore } from '../../stores/appStore';
 
-export default function RecordingHero() {
-  const [isRecording, setIsRecording] = useState(false);
-  const [transcription, setTranscription] = useState('');
-  const [error, setError] = useState('');
-  const { loadHistory } = useAppStore();
+interface RecordingHeroProps {
+  onTranscription?: (text: string) => void;
+}
 
-  const handleTestRecording = async () => {
-    try {
-      setError('');
-      setTranscription('');
-      setIsRecording(true);
+export default function RecordingHero({ onTranscription }: RecordingHeroProps) {
+  const { isRecording, isProcessing, setRecording, setProcessing, loadHistory } = useAppStore();
 
-      await invoke('start_recording');
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      const result = await invoke<string>('stop_recording');
-      setTranscription(result);
-      loadHistory(5, 0);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setIsRecording(false);
+  // Track whether prefers-reduced-motion is set
+  const prefersReducedMotion = useRef(
+    typeof window !== 'undefined'
+      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      : false
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const handler = (e: MediaQueryListEvent) => {
+      prefersReducedMotion.current = e.matches;
+    };
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
+  const handleClick = async () => {
+    if (isProcessing) return;
+
+    if (!isRecording) {
+      // Start recording
+      try {
+        await invoke('start_recording');
+        setRecording(true);
+      } catch (err) {
+        console.error('Failed to start recording:', err);
+      }
+    } else {
+      // Stop recording and wait for transcription
+      setRecording(false);
+      setProcessing(true);
+      try {
+        const result = await invoke<string | { success: boolean }>('stop_recording');
+        // Real backend returns a string; mock returns { success: true }
+        const text = typeof result === 'string' ? result : '';
+        if (text) {
+          onTranscription?.(text);
+          await loadHistory(5, 0);
+        }
+      } catch (err) {
+        console.error('Failed to stop recording:', err);
+      } finally {
+        setProcessing(false);
+      }
     }
   };
 
-  const handleCancel = async () => {
-    try {
-      await invoke('cancel_recording');
-    } catch {
-      // ignore cancel errors
-    } finally {
-      setIsRecording(false);
-    }
-  };
+  const pulseClass = prefersReducedMotion.current ? '' : 'animate-pulse';
 
   return (
-    <div className="flex flex-col gap-4 mt-6 mb-4">
-      {/* Compact horizontal control row */}
-      <div className="flex items-center gap-3 h-[48px]">
-        {/* Recording indicator dot */}
+    <div className="flex flex-col items-center gap-6 py-10">
+      {/* Central recording button */}
+      <div className="relative flex items-center justify-center">
+        {/* Pulsing acid green ring — only when recording and no reduced motion */}
         {isRecording && (
           <span
-            className="inline-block w-2 h-2 rounded-full bg-[var(--success)] animate-pulse gpu-accelerated"
+            className={`
+              absolute inset-0 rounded-full
+              border-4 border-[var(--accent-secondary,#a3e635)]
+              ${pulseClass}
+              gpu-accelerated
+            `}
+            style={{ transform: 'scale(1.25)' }}
             aria-hidden="true"
           />
         )}
 
-        <Button
-          variant="primary"
-          size="sm"
-          loading={isRecording}
-          onClick={handleTestRecording}
-          disabled={isRecording}
-          className={isRecording ? 'border-[var(--success)] shadow-[0_0_12px_rgba(34,197,94,0.4)]' : ''}
+        <button
+          type="button"
+          onClick={handleClick}
+          disabled={isProcessing}
+          aria-label={
+            isProcessing
+              ? 'Transcribing audio…'
+              : isRecording
+                ? 'Stop recording'
+                : 'Start recording'
+          }
+          aria-pressed={isRecording}
+          className={`
+            relative z-10
+            w-20 h-20 rounded-full
+            flex items-center justify-center
+            border-4
+            transition-all duration-200
+            focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-4
+            disabled:cursor-not-allowed disabled:opacity-60
+            ${isRecording
+              ? 'bg-[var(--accent-secondary,#a3e635)] border-[var(--accent-secondary,#a3e635)] text-[var(--bg-void)] shadow-[0_0_24px_rgba(163,230,53,0.5)]'
+              : 'bg-[var(--accent-primary)] border-[var(--accent-primary)] text-white shadow-[0_0_16px_rgba(59,130,246,0.4)] hover:shadow-[0_0_24px_rgba(59,130,246,0.6)]'
+            }
+          `}
         >
-          {isRecording ? 'RECORDING...' : '⏺ TEST MIC'}
-        </Button>
-
-        {isRecording && (
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleCancel}
-            className="border-red-500 text-red-400 hover:bg-red-500 hover:text-white hover:shadow-[0_0_12px_rgba(239,68,68,0.4)]"
-          >
-            CANCEL
-          </Button>
-        )}
+          {isProcessing ? (
+            <span
+              className="inline-block w-7 h-7 border-[3px] border-white border-t-transparent rounded-full animate-spin"
+              aria-hidden="true"
+            />
+          ) : isRecording ? (
+            <Square size={28} aria-hidden="true" />
+          ) : (
+            <Mic size={28} aria-hidden="true" />
+          )}
+        </button>
       </div>
 
-      {/* Transcription result */}
-      {transcription && (
-        <div className="w-full max-w-[600px]" role="status" aria-live="polite" aria-atomic="true">
-          <div className="p-6 bg-[var(--bg-surface)] border-2 border-[var(--border-default)]">
-            <p className="text-sm text-[var(--text-tertiary)] font-ui mb-2">Transcription:</p>
-            <p className="text-base text-[var(--text-primary)] font-ui leading-relaxed">{transcription}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Error message */}
-      {error && (
-        <div className="w-full max-w-[600px]" role="alert" aria-live="assertive">
-          <div className="p-6 bg-red-500/10 border-2 border-red-500/50">
-            <p className="text-sm text-red-400 font-ui mb-2">Error:</p>
-            <p className="text-base text-red-300 font-ui leading-relaxed">{error}</p>
-          </div>
-        </div>
-      )}
+      {/* Status label */}
+      <p
+        className="font-mono text-sm uppercase tracking-widest"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {isProcessing ? (
+          <span className="text-[var(--text-secondary)]">TRANSCRIBING...</span>
+        ) : isRecording ? (
+          <span className="text-[var(--accent-secondary,#a3e635)]">RECORDING</span>
+        ) : (
+          <span className="text-[var(--text-tertiary)]">CLICK TO RECORD</span>
+        )}
+      </p>
     </div>
   );
 }

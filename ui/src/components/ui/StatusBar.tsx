@@ -3,14 +3,6 @@ import { ChevronDown, Play } from 'lucide-react';
 import { invoke } from '../../lib/ipc';
 import { useAppStore } from '../../stores/appStore';
 
-interface DaemonStatus {
-  running: boolean;
-  modelLoaded: boolean;
-  gpuEnabled: boolean;
-  gpuName?: string;
-  uptimeSecs?: number;
-}
-
 interface AppConfig {
   model: {
     path: string;
@@ -35,38 +27,16 @@ interface StatusBarProps {
 }
 
 export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
-  const { setActiveView } = useAppStore();
-  const [daemonStatus, setDaemonStatus] = useState<DaemonStatus>({
-    running: false,
-    modelLoaded: false,
-    gpuEnabled: false,
-  });
+  const { setActiveView, daemonStatus, refreshDaemonStatus } = useAppStore();
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [downloadedModels, setDownloadedModels] = useState<DownloadedModel[]>([]);
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
 
-  // Load daemon status and config on mount
+  // Load config and models on mount (daemon status comes from appStore)
   useEffect(() => {
-    loadStatus();
     loadConfig();
     loadModels();
-
-    // Poll status every 5 seconds
-    const interval = setInterval(() => {
-      loadStatus();
-    }, 5000);
-
-    return () => clearInterval(interval);
   }, []);
-
-  const loadStatus = async () => {
-    try {
-      const status = await invoke<DaemonStatus>('get_daemon_status');
-      setDaemonStatus(status);
-    } catch (error) {
-      console.error('Failed to load daemon status:', error);
-    }
-  };
 
   const loadConfig = async () => {
     try {
@@ -101,7 +71,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
     try {
       setIsStarting(true);
       await invoke('start_daemon');
-      await loadStatus();
+      await refreshDaemonStatus();
     } catch (error) {
       console.error('Failed to start daemon:', error);
     } finally {
