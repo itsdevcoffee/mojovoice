@@ -1,7 +1,10 @@
+import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { Button } from '../ui/Button';
+import { useToast } from '../ui/Toast';
+import { invoke } from '../../lib/ipc';
 
-interface VocabTerm {
+interface VocabEntry {
   id: number;
   term: string;
   useCount: number;
@@ -9,33 +12,91 @@ interface VocabTerm {
   addedAt: number;
 }
 
-interface VocabTabProps {
-  vocabTerms: VocabTerm[];
-  vocabLoading: boolean;
-  newTerm: string;
-  wrongTerm: string;
-  rightTerm: string;
-  onNewTermChange: (v: string) => void;
-  onWrongTermChange: (v: string) => void;
-  onRightTermChange: (v: string) => void;
-  onVocabAdd: () => void;
-  onVocabRemove: (term: string) => void;
-  onVocabCorrect: () => void;
-}
+export default function VocabTab() {
+  const { toast } = useToast();
+  const [terms, setTerms] = useState<VocabEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newTerm, setNewTerm] = useState('');
+  const [wrongTerm, setWrongTerm] = useState('');
+  const [rightTerm, setRightTerm] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [correcting, setCorrecting] = useState(false);
 
-export default function VocabTab({
-  vocabTerms,
-  vocabLoading,
-  newTerm,
-  wrongTerm,
-  rightTerm,
-  onNewTermChange,
-  onWrongTermChange,
-  onRightTermChange,
-  onVocabAdd,
-  onVocabRemove,
-  onVocabCorrect,
-}: VocabTabProps) {
+  const loadTerms = async () => {
+    try {
+      setLoading(true);
+      const data = await invoke<VocabEntry[]>('vocab_list');
+      setTerms(data);
+    } catch (err) {
+      console.error('Failed to load vocab terms:', err);
+      toast({ message: 'Failed to load vocabulary', variant: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTerms();
+    // No cleanup needed — loadTerms is a one-shot async fetch
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleAdd = async () => {
+    const term = newTerm.trim();
+    if (!term || adding) return;
+    setAdding(true);
+    try {
+      await invoke('vocab_add', { term, source: 'manual' });
+      setNewTerm('');
+      await loadTerms();
+    } catch (err) {
+      console.error('Failed to add vocab term:', err);
+      toast({ message: `Failed to add "${term}"`, variant: 'error' });
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleRemove = async (term: string) => {
+    try {
+      await invoke('vocab_remove', { term });
+      await loadTerms();
+      toast({
+        message: `"${term}" removed from vocabulary`,
+        variant: 'undo',
+        action: {
+          label: 'Undo',
+          onClick: async () => {
+            await invoke('vocab_add', { term, source: 'manual' });
+            await loadTerms();
+          },
+        },
+      });
+    } catch (err) {
+      console.error('Failed to remove vocab term:', err);
+      toast({ message: `Failed to remove "${term}"`, variant: 'error' });
+    }
+  };
+
+  const handleCorrect = async () => {
+    const wrong = wrongTerm.trim();
+    const right = rightTerm.trim();
+    if (!wrong || !right || correcting) return;
+    setCorrecting(true);
+    try {
+      await invoke('vocab_correct', { wrong, right });
+      setWrongTerm('');
+      setRightTerm('');
+      await loadTerms();
+      toast({ message: `Correction recorded: "${wrong}" → "${right}"`, variant: 'success' });
+    } catch (err) {
+      console.error('Failed to record correction:', err);
+      toast({ message: 'Failed to record correction', variant: 'error' });
+    } finally {
+      setCorrecting(false);
+    }
+  };
+
   const inputClass = `
     w-full px-3 py-2 bg-[var(--bg-surface)] border-2 border-[var(--border-default)]
     text-[var(--text-primary)] font-mono text-sm placeholder:text-[var(--text-tertiary)]
@@ -50,41 +111,44 @@ export default function VocabTab({
       <div>
         <p className="font-mono text-xs uppercase tracking-[0.12em] text-[var(--text-tertiary)] mb-3">
           TERMS
-          {vocabTerms.length > 0 && (
-            <span className="ml-2 text-[var(--accent-primary)]">[{vocabTerms.length}]</span>
+          {terms.length > 0 && (
+            <span className="ml-2 text-[var(--accent-primary)]">[{terms.length}]</span>
           )}
         </p>
 
-        {vocabLoading ? (
+        {loading ? (
           <p className="text-xs text-[var(--text-tertiary)] font-ui italic">Loading...</p>
-        ) : vocabTerms.length === 0 ? (
-          <div className="border-2 border-dashed border-[var(--border-default)] p-4 text-center">
-            <p className="text-xs text-[var(--text-tertiary)] font-mono italic">no terms yet</p>
+        ) : terms.length === 0 ? (
+          <div className="border-2 border-dashed border-[var(--border-default)] p-6 text-center">
+            <p className="text-xs text-[var(--text-tertiary)] font-mono mb-1">no terms yet</p>
+            <p className="text-[10px] text-[var(--text-tertiary)] font-ui">
+              Add words below to bias the recognizer toward specific spellings.
+            </p>
           </div>
         ) : (
           <div className="border-2 border-[var(--border-default)] divide-y divide-[var(--border-default)]">
-            {vocabTerms.map((vocabTerm) => (
+            {terms.map((entry) => (
               <div
-                key={vocabTerm.id}
+                key={entry.id}
                 className="flex items-center gap-2 px-3 py-2 hover:bg-[var(--bg-elevated)] transition-colors duration-100"
               >
                 <span className="flex-1 font-mono text-sm text-[var(--text-primary)] truncate">
-                  {vocabTerm.term}
+                  {entry.term}
                 </span>
                 <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-mono bg-blue-500/10 border border-blue-500/30 text-blue-400">
-                  {vocabTerm.useCount}×
+                  {entry.useCount}×
                 </span>
                 <span className={`shrink-0 px-1.5 py-0.5 text-[10px] font-mono border ${
-                  vocabTerm.source === 'manual'
+                  entry.source === 'manual'
                     ? 'bg-green-500/10 border-green-500/30 text-green-400'
                     : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
                 }`}>
-                  {vocabTerm.source}
+                  {entry.source}
                 </span>
                 <button
-                  onClick={() => onVocabRemove(vocabTerm.term)}
+                  onClick={() => handleRemove(entry.term)}
                   className="shrink-0 p-1 text-[var(--text-tertiary)] hover:text-red-400 transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-blue-500"
-                  aria-label={`Remove ${vocabTerm.term}`}
+                  aria-label={`Remove ${entry.term}`}
                 >
                   <X size={12} />
                 </button>
@@ -98,12 +162,17 @@ export default function VocabTab({
           <input
             type="text"
             value={newTerm}
-            onChange={(e) => onNewTermChange(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && onVocabAdd()}
+            onChange={(e) => setNewTerm(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
             placeholder="Add a term..."
             className={inputClass}
           />
-          <Button variant="primary" size="sm" onClick={onVocabAdd} disabled={!newTerm.trim()}>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleAdd}
+            disabled={!newTerm.trim() || adding}
+          >
             Add
           </Button>
         </div>
@@ -127,7 +196,7 @@ export default function VocabTab({
             <input
               type="text"
               value={wrongTerm}
-              onChange={(e) => onWrongTermChange(e.target.value)}
+              onChange={(e) => setWrongTerm(e.target.value)}
               placeholder="misspelling or wrong word..."
               className={inputClass}
             />
@@ -149,7 +218,7 @@ export default function VocabTab({
             <input
               type="text"
               value={rightTerm}
-              onChange={(e) => onRightTermChange(e.target.value)}
+              onChange={(e) => setRightTerm(e.target.value)}
               placeholder="correct spelling..."
               className={inputClass}
             />
@@ -159,8 +228,8 @@ export default function VocabTab({
             <Button
               variant="ghost"
               size="sm"
-              onClick={onVocabCorrect}
-              disabled={!wrongTerm.trim() || !rightTerm.trim()}
+              onClick={handleCorrect}
+              disabled={!wrongTerm.trim() || !rightTerm.trim() || correcting}
             >
               [RECORD FIX]
             </Button>

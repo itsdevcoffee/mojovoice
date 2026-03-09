@@ -20,8 +20,9 @@ const getMockData = (command: string, args?: Record<string, unknown>): any => {
         model: {
           path: '/mock/path/model.bin',
           model_id: 'mock-model',
+          draft_model_path: null,
           language: 'en',
-          prompt_biasing: null
+          prompt: null
         },
         audio: {
           sample_rate: 16000,
@@ -38,6 +39,9 @@ const getMockData = (command: string, args?: Record<string, unknown>): any => {
         ui: {
           scale_preset: 'medium',
           custom_scale: 1.0
+        },
+        history: {
+          max_entries: 500
         }
       };
     case 'get_system_info':
@@ -103,8 +107,8 @@ const getMockData = (command: string, args?: Record<string, unknown>): any => {
       };
     case 'list_audio_devices':
       return [
-        { name: 'Default Microphone', isDefault: true },
-        { name: 'Built-in Microphone', isDefault: false }
+        { name: 'Default Microphone', isDefault: true, internalName: null },
+        { name: 'Built-in Microphone', isDefault: false, internalName: 'alsa_input.pci-0000_00_1f.3.analog-stereo' }
       ];
     case 'list_available_models':
       return [
