@@ -81,6 +81,7 @@ export function ModelsPanel() {
   const [deleting, setDeleting] = useState<Set<string>>(new Set());
   const [switching, setSwitching] = useState<Set<string>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const refreshDownloadedModels = useCallback(async (completedModelName?: string) => {
     try {
@@ -117,6 +118,7 @@ export function ModelsPanel() {
   // Initial data load
   useEffect(() => {
     const load = async () => {
+      setLoadError(null);
       try {
         const [available, storage, downloaded] = await Promise.all([
           invoke<AvailableModel[]>('list_available_models'),
@@ -134,6 +136,7 @@ export function ModelsPanel() {
         setStorageInfo(storage);
       } catch (err) {
         console.error('[ModelsPanel] Failed to load data:', err);
+        setLoadError('Failed to load models. Click refresh to retry.');
       }
     };
     load();
@@ -148,15 +151,23 @@ export function ModelsPanel() {
   const handleRefresh = async () => {
     if (refreshing) return;
     setRefreshing(true);
+    setLoadError(null);
     try {
-      const [available, storage] = await Promise.all([
+      const [available, storage, downloaded] = await Promise.all([
         invoke<AvailableModel[]>('list_available_models'),
         invoke<StorageInfo>('get_storage_info'),
+        invoke<{ name: string; filename: string; is_active: boolean }[]>('list_downloaded_models'),
       ]);
-      setModels(available);
+      const reconciled = available.map(m => {
+        const found = downloaded.find(d => d.name === m.name || d.filename === m.filename);
+        if (found) return { ...m, is_downloaded: true, is_active: found.is_active };
+        return { ...m, is_downloaded: false };
+      });
+      setModels(reconciled);
       setStorageInfo(storage);
     } catch (err) {
       console.error('[ModelsPanel] Refresh failed:', err);
+      setLoadError('Failed to load models. Click refresh to retry.');
     } finally {
       setRefreshing(false);
     }
@@ -265,7 +276,30 @@ export function ModelsPanel() {
 
           {/* ── Model cards ──────────────────────────────────────────────── */}
           <div className="divide-y-2 divide-[var(--border-default)]">
-            {models.length === 0 ? (
+            {loadError && models.length === 0 ? (
+              <div className="bg-[var(--bg-surface)] px-4 py-8 text-center relative z-10 flex flex-col items-center gap-3">
+                <span className="font-mono text-xs text-[var(--error)]">
+                  {loadError}
+                </span>
+                <button
+                  onClick={handleRefresh}
+                  disabled={refreshing}
+                  className="
+                    flex items-center gap-1.5 px-3 py-1.5
+                    font-mono text-[10px] uppercase tracking-[0.08em]
+                    text-[var(--text-tertiary)]
+                    border-2 border-[var(--border-default)]
+                    bg-transparent
+                    hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)]
+                    disabled:opacity-40 disabled:cursor-not-allowed
+                    transition-all duration-150
+                  "
+                >
+                  <RefreshCw size={10} className={refreshing ? 'animate-spin' : ''} />
+                  <span>Retry</span>
+                </button>
+              </div>
+            ) : models.length === 0 ? (
               <div className="bg-[var(--bg-surface)] px-4 py-8 text-center relative z-10">
                 <span className="font-mono text-xs text-[var(--text-tertiary)]">
                   Loading models…

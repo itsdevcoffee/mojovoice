@@ -78,7 +78,7 @@ export function useModelDownload(onDownloadComplete?: (modelName: string) => voi
 
     const setupListener = async () => {
       try {
-        unlisten = await listen<RawDownloadProgress>('download-progress', (event) => {
+        const fn = await listen<RawDownloadProgress>('download-progress', (event) => {
           if (!isMountedRef.current) return;
 
           const raw = event.payload;
@@ -114,6 +114,11 @@ export function useModelDownload(onDownloadComplete?: (modelName: string) => voi
             timeoutIds.current.add(id);
           }
         });
+        if (!isMountedRef.current) {
+          fn(); // component unmounted during await — clean up immediately
+          return;
+        }
+        unlisten = fn;
       } catch (err) {
         console.error('[useModelDownload] Failed to set up listener:', err);
       }
@@ -171,6 +176,18 @@ export function useModelDownload(onDownloadComplete?: (modelName: string) => voi
       await invoke('cancel_download', { modelName });
     } catch (err) {
       console.error('[useModelDownload] Failed to cancel download:', err);
+      setDownloads(prev => {
+        const next = new Map(prev);
+        const existing = next.get(modelName);
+        if (existing) {
+          next.set(modelName, {
+            ...existing,
+            status: 'error',
+            errorMessage: 'Cancel failed — download may still be running',
+          });
+        }
+        return next;
+      });
     }
   }, []);
 
