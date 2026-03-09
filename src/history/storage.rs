@@ -143,6 +143,12 @@ pub struct HistoryEntry {
     /// Path to saved audio file (if save_audio_clips is enabled)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub audio_path: Option<String>,
+    /// Total inference latency in milliseconds (time from audio end to text output)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latency_ms: Option<u64>,
+    /// Confidence score as a percentage (0.0–100.0)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub confidence_score: Option<f32>,
 }
 
 impl HistoryEntry {
@@ -155,6 +161,8 @@ impl HistoryEntry {
             duration_ms,
             model,
             audio_path,
+            latency_ms: None,
+            confidence_score: None,
         }
     }
 }

@@ -3,10 +3,9 @@ import { useToast } from '../components/ui/Toast';
 
 /**
  * Shared copy/delete handlers for transcription entries.
- * @param reloadLimit - How many entries to reload after undo (5 for main page, 1000 for history modal)
  */
-export function useTranscriptionActions(reloadLimit: number = 5) {
-  const { historyEntries, loadHistory, deleteHistoryEntry } = useAppStore();
+export function useTranscriptionActions(_reloadLimit: number = 5) {
+  const { deleteHistoryEntry } = useAppStore();
   const { toast } = useToast();
 
   const handleCopy = async (text: string) => {
@@ -20,33 +19,20 @@ export function useTranscriptionActions(reloadLimit: number = 5) {
   };
 
   const handleDelete = async (id: string) => {
-    const entry = historyEntries.find((e) => e.id === id);
-    if (!entry) return;
-
-    let undone = false;
-
-    toast({
-      message: 'Transcription deleted',
-      variant: 'undo',
-      duration: 5000,
-      action: {
-        label: 'Undo',
-        onClick: () => {
-          undone = true;
-          loadHistory(reloadLimit, 0);
-        },
-      },
-      onExpire: () => {
-        if (!undone) {
-          deleteHistoryEntry(id);
-        }
-      },
-    });
-
-    // Optimistically remove from UI
+    // Optimistically remove from UI immediately
     useAppStore.setState((state) => ({
       historyEntries: state.historyEntries.filter((e) => e.id !== id),
     }));
+
+    try {
+      await deleteHistoryEntry(id);
+      toast({ message: 'Transcription deleted', variant: 'success' });
+    } catch (err) {
+      console.error('Failed to delete transcription:', err);
+      // Reload to restore the entry if delete failed
+      useAppStore.getState().loadHistory();
+      toast({ message: 'Failed to delete transcription', variant: 'error' });
+    }
   };
 
   return { handleCopy, handleDelete };

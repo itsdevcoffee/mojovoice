@@ -16,6 +16,8 @@ interface TranscriptionEntry {
   durationMs: number;
   model: string;
   audioPath?: string;
+  latencyMs?: number;
+  confidenceScore?: number;
 }
 
 interface HistoryResponse {
@@ -220,13 +222,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   deleteHistoryEntry: async (id: string) => {
-    try {
-      await invoke('delete_history_entry', { id });
-      // Reload history to get accurate state
-      get().loadHistory();
-    } catch (error) {
-      console.error('Failed to delete history entry:', error);
-    }
+    // Throws on failure so callers can handle errors (e.g. optimistic UI rollback)
+    await invoke('delete_history_entry', { id });
   },
 
   clearHistory: async () => {

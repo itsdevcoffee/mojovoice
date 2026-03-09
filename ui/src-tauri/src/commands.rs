@@ -22,6 +22,10 @@ pub struct TranscriptionEntry {
     pub model: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub audio_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latency_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub confidence_score: Option<f32>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -373,6 +377,8 @@ fn convert_history_entry(entry: mojovoice::history::HistoryEntry) -> Transcripti
         duration_ms: entry.duration_ms,
         model: entry.model,
         audio_path: entry.audio_path,
+        latency_ms: entry.latency_ms,
+        confidence_score: entry.confidence_score,
     }
 }
 

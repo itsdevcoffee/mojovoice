@@ -9,6 +9,8 @@ interface TranscriptionEntry {
   durationMs: number;
   model: string;
   audioPath?: string;
+  latencyMs?: number;
+  confidenceScore?: number;
 }
 
 interface TranscriptionCardProps {
@@ -37,6 +39,16 @@ const getWordCount = (text: string): number => {
 const getTitleFromText = (text: string): string => {
   const words = text.trim().split(/\s+/);
   return words.slice(0, 7).join(' ') + (words.length > 7 ? '...' : '');
+};
+
+/**
+ * Return the basename of a model path, without extension.
+ * e.g. "/home/user/.local/share/models/large-v3-turbo.bin" → "large-v3-turbo"
+ * e.g. "large-v3-turbo" → "large-v3-turbo"
+ */
+const abbreviateModel = (model: string): string => {
+  const basename = model.split('/').pop() ?? model;
+  return basename.replace(/\.[^.]+$/, '');
 };
 
 export const TranscriptionCard: React.FC<TranscriptionCardProps> = ({
@@ -116,9 +128,23 @@ export const TranscriptionCard: React.FC<TranscriptionCardProps> = ({
           </div>
 
           {/* Metadata Footer */}
-          {transcription.model && (
+          {(transcription.model || transcription.latencyMs != null || transcription.confidenceScore != null) && (
             <div className="mt-3 pt-3 border-t border-[var(--border-default)] flex items-center gap-3 text-[11px] font-mono text-[var(--text-tertiary)]">
-              <span title="Model used">{transcription.model}</span>
+              {transcription.model && (
+                <span title={transcription.model}>{abbreviateModel(transcription.model)}</span>
+              )}
+              {transcription.latencyMs != null && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span title="Inference latency">{transcription.latencyMs}ms</span>
+                </>
+              )}
+              {transcription.confidenceScore != null && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span title="Confidence score">{transcription.confidenceScore.toFixed(1)}%</span>
+                </>
+              )}
             </div>
           )}
         </div>
