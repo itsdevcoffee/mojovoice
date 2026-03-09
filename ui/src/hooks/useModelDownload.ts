@@ -2,7 +2,20 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { invoke } from '../lib/ipc';
 
-export interface DownloadProgress {
+/** Shape of each download in progress, keyed by modelName */
+export interface DownloadState {
+  modelId: string;
+  progress: number; // 0-100
+  speedMbps: number;
+  etaSecs: number;
+  downloadedMb: number;
+  totalMb: number;
+  status: 'idle' | 'downloading' | 'cancelled' | 'error' | 'done';
+  errorMessage?: string;
+}
+
+/** Raw event payload emitted by the Tauri backend */
+interface RawDownloadProgress {
   modelName: string;
   downloadedBytes: number;
   totalBytes: number;
@@ -11,10 +24,53 @@ export interface DownloadProgress {
   error?: string;
 }
 
-export function useModelDownload() {
-  const [downloads, setDownloads] = useState<Map<string, DownloadProgress>>(new Map());
+function toDownloadState(raw: RawDownloadProgress): DownloadState {
+  const totalMb = raw.totalBytes / 1_048_576;
+  const downloadedMb = raw.downloadedBytes / 1_048_576;
+  const progress =
+    raw.totalBytes > 0 ? Math.round((raw.downloadedBytes / raw.totalBytes) * 100) : 0;
+  const speedMbps = raw.speedBps / 1_048_576;
+  const remainingMb = totalMb - downloadedMb;
+  const etaSecs = speedMbps > 0 ? Math.round(remainingMb / speedMbps) : 0;
+
+  let status: DownloadState['status'];
+  switch (raw.status) {
+    case 'complete':
+    case 'verifying':
+      status = 'done';
+      break;
+    case 'error':
+      status = 'error';
+      break;
+    case 'cancelled':
+      status = 'cancelled';
+      break;
+    default:
+      status = 'downloading';
+  }
+
+  return {
+    modelId: raw.modelName,
+    progress,
+    speedMbps,
+    etaSecs,
+    downloadedMb,
+    totalMb,
+    status,
+    errorMessage: raw.error,
+  };
+}
+
+export function useModelDownload(onDownloadComplete?: (modelName: string) => void) {
+  const [downloads, setDownloads] = useState<Map<string, DownloadState>>(new Map());
   const timeoutIds = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   const isMountedRef = useRef(true);
+  const onDownloadCompleteRef = useRef(onDownloadComplete);
+
+  // Keep ref in sync without re-running the effect
+  useEffect(() => {
+    onDownloadCompleteRef.current = onDownloadComplete;
+  });
 
   useEffect(() => {
     let unlisten: UnlistenFn | null = null;
@@ -22,39 +78,44 @@ export function useModelDownload() {
 
     const setupListener = async () => {
       try {
-        console.log('[useModelDownload] Setting up download-progress listener');
-        unlisten = await listen<DownloadProgress>('download-progress', (event) => {
-          console.log('[useModelDownload] Received event:', event);
-          // Skip if component unmounted
+        unlisten = await listen<RawDownloadProgress>('download-progress', (event) => {
           if (!isMountedRef.current) return;
 
-          const progress = event.payload;
-          console.log('[useModelDownload] Progress payload:', progress);
-          const isFinished = progress.status === 'complete' || progress.status === 'error' || progress.status === 'cancelled';
+          const raw = event.payload;
+          const state = toDownloadState(raw);
+          const isFinished =
+            state.status === 'done' ||
+            state.status === 'error' ||
+            state.status === 'cancelled';
 
           setDownloads(prev => {
             const next = new Map(prev);
-            next.set(progress.modelName, progress);
+            next.set(raw.modelName, state);
             return next;
           });
 
-          // Remove finished downloads after a delay (only if still mounted)
+          // After a completed download, refresh the downloaded-models list in the parent
+          if (state.status === 'done' && isMountedRef.current) {
+            onDownloadCompleteRef.current?.(raw.modelName);
+          }
+
+          // Remove finished entry after a short delay so the UI can show final state
           if (isFinished && isMountedRef.current) {
-            const timeoutId = setTimeout(() => {
+            const id = setTimeout(() => {
               if (isMountedRef.current) {
                 setDownloads(current => {
                   const updated = new Map(current);
-                  updated.delete(progress.modelName);
+                  updated.delete(raw.modelName);
                   return updated;
                 });
               }
-              timeoutIds.current.delete(timeoutId);
+              timeoutIds.current.delete(id);
             }, 3000);
-            timeoutIds.current.add(timeoutId);
+            timeoutIds.current.add(id);
           }
         });
-      } catch (error) {
-        console.error('Failed to set up download progress listener:', error);
+      } catch (err) {
+        console.error('[useModelDownload] Failed to set up listener:', err);
       }
     };
 
@@ -62,58 +123,76 @@ export function useModelDownload() {
 
     return () => {
       isMountedRef.current = false;
-      if (unlisten) {
-        unlisten();
-      }
-      // Clear all pending timeouts to prevent memory leaks
+      unlisten?.();
       timeoutIds.current.forEach(clearTimeout);
       timeoutIds.current.clear();
     };
   }, []);
 
   const startDownload = useCallback(async (modelName: string) => {
-    // Initialize progress state
+    // Optimistically mark as downloading so the UI responds immediately
     setDownloads(prev => {
       const next = new Map(prev);
       next.set(modelName, {
-        modelName,
-        downloadedBytes: 0,
-        totalBytes: 0,
-        speedBps: 0,
+        modelId: modelName,
+        progress: 0,
+        speedMbps: 0,
+        etaSecs: 0,
+        downloadedMb: 0,
+        totalMb: 0,
         status: 'downloading',
       });
       return next;
     });
 
-    await invoke('download_model', { modelName });
+    try {
+      await invoke('download_model', { modelName });
+    } catch (err) {
+      console.error('[useModelDownload] Failed to start download:', err);
+      setDownloads(prev => {
+        const next = new Map(prev);
+        next.set(modelName, {
+          modelId: modelName,
+          progress: 0,
+          speedMbps: 0,
+          etaSecs: 0,
+          downloadedMb: 0,
+          totalMb: 0,
+          status: 'error',
+          errorMessage: String(err),
+        });
+        return next;
+      });
+    }
   }, []);
-
-  const isDownloading = useCallback((modelName: string) => {
-    const progress = downloads.get(modelName);
-    return progress?.status === 'downloading' || progress?.status === 'verifying';
-  }, [downloads]);
-
-  const getProgress = useCallback((modelName: string) => {
-    return downloads.get(modelName);
-  }, [downloads]);
 
   const cancelDownload = useCallback(async (modelName: string) => {
     try {
       await invoke('cancel_download', { modelName });
-      console.log('[useModelDownload] Cancellation requested for:', modelName);
-    } catch (error) {
-      console.error('[useModelDownload] Failed to cancel download:', error);
+    } catch (err) {
+      console.error('[useModelDownload] Failed to cancel download:', err);
     }
   }, []);
+
+  const isDownloading = useCallback(
+    (modelName: string) => {
+      const state = downloads.get(modelName);
+      return state?.status === 'downloading';
+    },
+    [downloads],
+  );
+
+  const getDownloadState = useCallback(
+    (modelName: string): DownloadState | undefined => downloads.get(modelName),
+    [downloads],
+  );
 
   return {
     downloads,
     startDownload,
     cancelDownload,
     isDownloading,
-    getProgress,
-    activeDownloads: Array.from(downloads.values()).filter(
-      d => d.status === 'downloading' || d.status === 'verifying'
-    ),
+    getDownloadState,
+    activeDownloads: (Array.from(downloads.values()) as DownloadState[]).filter(d => d.status === 'downloading'),
   };
 }
