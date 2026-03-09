@@ -49,9 +49,6 @@ interface AppState {
   isRecording: boolean;
   isProcessing: boolean;
 
-  // Session transcriptions (for dashboard)
-  transcriptions: TranscriptionEntry[];
-
   // History state (persistent)
   historyEntries: TranscriptionEntry[];
   historyTotal: number;
@@ -78,7 +75,6 @@ interface AppState {
   refreshDaemonStatus: () => Promise<void>;
   setRecording: (recording: boolean) => void;
   setProcessing: (processing: boolean) => void;
-  addTranscription: (entry: TranscriptionEntry) => void;
   setActiveView: (view: AppState['activeView']) => void;
   addIPCCall: (call: IPCCall) => void;
   addLog: (log: LogEntry) => void;
@@ -104,7 +100,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   isRecording: false,
   isProcessing: false,
-  transcriptions: [],
 
   // History initial state
   historyEntries: [],
@@ -136,10 +131,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   setRecording: (recording) => set({ isRecording: recording }),
   setProcessing: (processing) => set({ isProcessing: processing }),
-  addTranscription: (entry) =>
-    set((state) => ({
-      transcriptions: [entry, ...state.transcriptions].slice(0, 50) // Keep last 50
-    })),
   setActiveView: (view) => set({ activeView: view }),
   addIPCCall: (call) =>
     set((state) => ({

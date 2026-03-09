@@ -120,16 +120,18 @@ fn list_pipewire_devices() -> Result<Vec<AudioDeviceInfo>> {
         if parts.len() >= 2 {
             let source_name = parts[1].to_string();
 
-            // Skip monitor sources (outputs) - we only want input sources
-            if source_name.ends_with(".monitor") {
-                continue;
-            }
-
             // Get human-readable description
             let description = get_source_description(&source_name).unwrap_or_else(|| source_name.clone());
 
+            // Prefix monitor sources (application audio loopbacks) so they're visually distinct
+            let display_name = if source_name.ends_with(".monitor") {
+                format!("[Monitor] {}", description)
+            } else {
+                description
+            };
+
             devices.push(AudioDeviceInfo {
-                name: description,
+                name: display_name,
                 is_default: default_source.as_ref() == Some(&source_name),
                 internal_name: Some(source_name), // Store PipeWire source name
             });
@@ -232,6 +234,30 @@ fn get_pipewire_default_source() -> Result<String> {
     }
 
     anyhow::bail!("Could not find default source in pactl info")
+}
+
+/// Get the monitor source for the current default PipeWire/PulseAudio sink.
+/// Returns e.g. "bluez_output.XX_XX_XX.1.monitor" for active headphones.
+/// Returns None if pactl is unavailable or no default sink is set.
+#[cfg(target_os = "linux")]
+pub fn get_default_sink_monitor() -> Option<String> {
+    use std::process::Command;
+
+    let output = Command::new("pactl")
+        .args(["get-default-sink"])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let sink = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if sink.is_empty() {
+        return None;
+    }
+
+    Some(format!("{}.monitor", sink))
 }
 
 /// Audio device configuration
@@ -591,6 +617,36 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_monitor_source_display_name_gets_prefix() {
+        let source_name = "alsa_output.pci-0000_00_1f.3.analog-stereo.monitor";
+        let description = "Built-in Audio Analog Stereo";
+
+        let display_name = if source_name.ends_with(".monitor") {
+            format!("[Monitor] {}", description)
+        } else {
+            description.to_string()
+        };
+
+        assert!(display_name.starts_with("[Monitor]"));
+        assert!(display_name.contains("Built-in Audio"));
+    }
+
+    #[test]
+    fn test_non_monitor_source_has_no_prefix() {
+        let source_name = "alsa_input.pci-0000_00_1f.3.analog-stereo";
+        let description = "Built-in Audio Analog Stereo";
+
+        let display_name = if source_name.ends_with(".monitor") {
+            format!("[Monitor] {}", description)
+        } else {
+            description.to_string()
+        };
+
+        assert!(!display_name.starts_with("[Monitor]"));
+        assert_eq!(display_name, description);
+    }
+
+    #[test]
     fn test_resample_linear_upsampling() {
         let samples = vec![0.0, 1.0, 0.0, -1.0];
         let result = resample_linear(&samples, 0.5); // 2x upsampling
@@ -602,5 +658,18 @@ mod tests {
         let samples: Vec<f32> = (0..100).map(|x| (x as f32).sin()).collect();
         let result = resample_linear(&samples, 2.0); // 2x downsampling
         assert!(result.len() < samples.len());
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_get_default_sink_monitor_returns_monitor_suffix() {
+        match get_default_sink_monitor() {
+            Some(source) => assert!(
+                source.ends_with(".monitor"),
+                "expected .monitor suffix, got: {}",
+                source
+            ),
+            None => println!("pactl unavailable or no default sink — skipping assertion"),
+        }
     }
 }

@@ -38,6 +38,7 @@ pub struct HistoryResponse {
 pub struct SystemInfo {
     pub cpu_cores: usize,
     pub total_ram_gb: f32,
+    pub used_ram_gb: f64,
     pub gpu_available: bool,
     pub gpu_name: Option<String>,
     pub gpu_vram_mb: Option<u32>,
@@ -860,6 +861,7 @@ pub async fn get_system_info() -> Result<SystemInfo, String> {
     sys.refresh_memory();
     let total_ram_bytes = sys.total_memory();
     let total_ram_gb = (total_ram_bytes as f64 / 1_073_741_824.0) as f32; // bytes to GB
+    let used_ram_gb = sys.used_memory() as f64 / (1024.0 * 1024.0 * 1024.0);
 
     // Get GPU info
     let gpu_info = detect_gpu_info();
@@ -870,6 +872,7 @@ pub async fn get_system_info() -> Result<SystemInfo, String> {
     Ok(SystemInfo {
         cpu_cores: num_cpus::get(),
         total_ram_gb,
+        used_ram_gb,
         gpu_available: gpu_info.available,
         gpu_name: gpu_info.name,
         gpu_vram_mb: gpu_info.vram_mb,
@@ -1676,4 +1679,67 @@ fn calculate_dir_size(path: &std::path::Path) -> u64 {
     }
 
     total
+}
+
+// =============================================================================
+// Vocabulary Management
+// =============================================================================
+
+/// Vocabulary entry returned to the UI
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VocabEntry {
+    pub id: i64,
+    pub term: String,
+    pub use_count: i64,
+    pub source: String,
+    pub added_at: i64,
+}
+
+/// List all vocabulary entries
+#[tauri::command]
+pub async fn vocab_list() -> Result<Vec<VocabEntry>, String> {
+    let store = mojovoice::vocab::VocabStore::open()
+        .map_err(|e| format!("Failed to open vocab store: {}", e))?;
+    let entries = store.list_terms()
+        .map_err(|e| format!("Failed to list vocab terms: {}", e))?;
+    Ok(entries
+        .into_iter()
+        .map(|e| VocabEntry {
+            id: e.id,
+            term: e.term,
+            use_count: e.use_count,
+            source: e.source,
+            added_at: e.added_at,
+        })
+        .collect())
+}
+
+/// Add a term to the vocabulary
+#[tauri::command]
+pub async fn vocab_add(term: String, source: String) -> Result<(), String> {
+    let store = mojovoice::vocab::VocabStore::open()
+        .map_err(|e| format!("Failed to open vocab store: {}", e))?;
+    store.add_term(&term, &source)
+        .map_err(|e| format!("Failed to add vocab term: {}", e))
+}
+
+/// Remove a term from the vocabulary. Returns true if deleted, false if not found.
+#[tauri::command]
+pub async fn vocab_remove(term: String) -> Result<bool, String> {
+    let store = mojovoice::vocab::VocabStore::open()
+        .map_err(|e| format!("Failed to open vocab store: {}", e))?;
+    store.remove_term(&term)
+        .map_err(|e| format!("Failed to remove vocab term: {}", e))
+}
+
+/// Correct a vocabulary term: remove the wrong spelling and add the right one.
+#[tauri::command]
+pub async fn vocab_correct(wrong: String, right: String) -> Result<(), String> {
+    let store = mojovoice::vocab::VocabStore::open()
+        .map_err(|e| format!("Failed to open vocab store: {}", e))?;
+    store.remove_term(&wrong)
+        .map_err(|e| format!("Failed to remove wrong term: {}", e))?;
+    store.add_term(&right, "correction")
+        .map_err(|e| format!("Failed to add corrected term: {}", e))
 }

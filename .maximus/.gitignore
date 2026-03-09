@@ -1,0 +1,18 @@
+# Ignore everything by default (runtime artifacts)
+*
+
+# Track this gitignore
+!.gitignore
+
+# Track configuration and project state
+!config.yml
+!plan.json
+!progress.md
+!queue.md
+!tui-state.json
+
+# Track archived batch data (but not runtime logs)
+!archive/
+!archive/*/
+!archive/**
+archive/*/logs/

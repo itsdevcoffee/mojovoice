@@ -200,3 +200,50 @@ fn test_transcribe_silence_returns_minimal_output() {
         },
     }
 }
+
+/// Regression test for the memrl vocab prompt hang.
+///
+/// When vocab terms are loaded as an initial prompt, the decoder prefix grows
+/// (sot_prev + N prompt tokens + sot + lang + transcribe + notimestamps).
+/// Without CUDA, the O(N³) self-attention computation over the growing
+/// token sequence makes each transcription appear to hang indefinitely.
+///
+/// This test guards against that regression by asserting a 30-second timeout.
+/// If the daemon was built without `--features cuda`, transcription of 2 seconds
+/// of silence would block for many minutes, failing this assertion.
+#[test]
+#[ignore] // Requires daemon with model loaded and vocab terms present
+fn test_transcription_with_vocab_prompt_returns_within_timeout() {
+    assert!(
+        is_daemon_running(),
+        "Daemon is not running. Start it first with: mojovoice daemon up"
+    );
+
+    // 2 seconds of silence — minimal audio, maximises chance of exposing hang
+    let silence: Vec<f32> = vec![0.0; 32000];
+
+    let start = std::time::Instant::now();
+    let response = send_request(&DaemonRequest::TranscribeAudio { samples: silence })
+        .expect("Failed to send request to daemon");
+    let elapsed = start.elapsed();
+
+    assert!(
+        elapsed < std::time::Duration::from_secs(30),
+        "Transcription took {:?} — likely decoder hang (CPU-only binary or O(N³) decoder loop). \
+         Rebuild with: RUSTFLAGS=\"-L /usr/lib64 -L /usr/local/lib/ollama\" cargo build --release --features cuda",
+        elapsed
+    );
+
+    // Any valid response within the timeout is acceptable
+    match response {
+        DaemonResponse::Success { text } => {
+            println!("Transcription completed in {:?}: {:?}", elapsed, text);
+        },
+        DaemonResponse::Error { message } => {
+            println!("Transcription returned error in {:?}: {}", elapsed, message);
+        },
+        other => {
+            panic!("Unexpected response: {:?}", other);
+        },
+    }
+}

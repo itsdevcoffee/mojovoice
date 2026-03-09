@@ -127,6 +127,16 @@ impl DaemonServer {
 
         info!("Loading whisper model into GPU memory...");
 
+        if let Some(ref p) = config.model.prompt {
+            if !p.is_empty() {
+                warn!("model.prompt in config is deprecated and will be ignored; use mojovoice vocab add instead.");
+            }
+        }
+
+        let vocab_prompt = crate::vocab::VocabStore::open()
+            .and_then(|s| s.get_prompt_string(224))
+            .unwrap_or(None);
+
         // Use CandleEngine (new Candle-based implementation)
         let transcriber = crate::transcribe::candle_engine::CandleEngine::with_options(
             config
@@ -135,7 +145,7 @@ impl DaemonServer {
                 .to_str()
                 .ok_or_else(|| anyhow::anyhow!("Invalid model path"))?,
             &config.model.language,
-            config.model.prompt.clone(),
+            vocab_prompt,
         )?;
 
         info!("Model loaded and resident in GPU VRAM");

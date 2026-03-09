@@ -8,3 +8,4 @@ pub mod model;
 pub mod output;
 pub mod state;
 pub mod transcribe;
+pub mod vocab;

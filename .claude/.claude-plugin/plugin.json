@@ -1,0 +1,19 @@
+{
+  "name": "maximus",
+  "version": "0.4.0",
+  "description": "Automation companion for the Maximus Loop CLI — project initialization, validation, task planning, quick task add, and run analysis",
+  "author": {
+    "name": "Dev Coffee",
+    "url": "https://github.com/itsdevcoffee"
+  },
+  "repository": "https://github.com/itsdevcoffee/devcoffee-agent-skills",
+  "keywords": [
+    "maximus-loop",
+    "automation",
+    "planning",
+    "init",
+    "validate",
+    "review"
+  ],
+  "license": "MIT"
+}

@@ -1,0 +1,79 @@
+# Maximus Loop Configuration
+# This file controls how the autonomous loop engine executes your tasks.
+# Edit these settings before running 'maximus run' to customize behavior.
+
+# Project name — shown in logs and the dashboard.
+project_name: "mojovoice"
+
+# Loop behavior
+loop:
+  # How many iterations to run before stopping (-1 for unlimited, 0 for dry-run).
+  # Each iteration processes one task from the plan.
+  max_iterations: -1
+
+  # Sequential or parallel task execution.
+  mode: sequential
+
+  # Whether the engine auto-commits after each task completes.
+  auto_commit: true
+
+  # Whether to continue processing tasks after a failure.
+  continue_on_error: false
+
+# Agent spawning and execution
+agent:
+  # Agent provider — which CLI to use for spawning agents.
+  # Options: "claude" (default), "codex" (OpenAI Codex CLI).
+  provider: claude
+
+  # Default model for tasks without explicit complexity_level.
+  # Claude options: "haiku" (fast, cheap), "sonnet" (balanced), "opus" (powerful, expensive).
+  # Codex options: "codex-mini-latest", "gpt-5.1-codex", "gpt-5.3-codex", etc.
+  # Override per-task by setting complexity_level in your plan.json.
+  default_model: "sonnet"
+
+  # Maximum time to wait for a Claude instance to complete a task (seconds).
+  timeout: 900
+
+  # Number of times to retry a failed task before marking it blocked.
+  max_retries: 2
+
+  # Model escalation — assign different models by task complexity_level.
+  escalation:
+    enabled: true
+    simple: "haiku"
+    medium: "sonnet"
+    complex: "opus"
+
+# Task source
+tasks:
+  # Path to your plan.json file relative to the project root.
+  source: ".maximus/plan.json"
+
+  # Whether to automatically mark tasks as done (passes: true) on success.
+  auto_mark_done: true
+
+# Progress tracking
+progress:
+  # Path to progress.md for recording iteration history.
+  file: ".maximus/progress.md"
+
+  # Output format for progress entries.
+  format: markdown
+
+# Git integration
+git:
+  # Whether git integration is enabled.
+  enabled: true
+
+  # Prefix for auto-commit messages.
+  commit_prefix: "maximus:"
+
+  # Whether to auto-push after commits.
+  auto_push: false
+
+# Code review (future feature)
+# review:
+#   enabled: false
+#   min_severity: "medium"
+#   max_phases: 3

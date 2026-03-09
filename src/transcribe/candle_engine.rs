@@ -354,6 +354,7 @@ impl CandleEngine {
                 .ok_or_else(|| anyhow::anyhow!("Token not found: {}", token))
         };
 
+        let sot_prev_token = token_id("<|startofprev|>")?;
         let sot_token = token_id("<|startoftranscript|>")?;
         let eot_token = token_id("<|endoftext|>")?;
         let transcribe_token = token_id("<|transcribe|>")?;
@@ -361,6 +362,7 @@ impl CandleEngine {
         let language_token = token_id(&format!("<|{}|>", self.language))?;
 
         Ok(SpecialTokens {
+            sot_prev_token,
             sot_token,
             eot_token,
             transcribe_token,
@@ -379,9 +381,8 @@ impl CandleEngine {
 
             let tokens = encoding.get_ids().to_vec();
 
-            // CRITICAL: Whisper expects short prompts (<50 tokens)
-            // Long prompts cause decoder to get stuck in infinite loops
-            const MAX_PROMPT_TOKENS: usize = 50;
+            // Whisper's actual limit is 224 prompt tokens (half the decoder context of 448)
+            const MAX_PROMPT_TOKENS: usize = 224;
             if tokens.len() > MAX_PROMPT_TOKENS {
                 warn!(
                     "Initial prompt has {} tokens, truncating to {} (prompt length: {} chars)",
@@ -436,29 +437,14 @@ impl CandleEngine {
             audio_features.dim(2)?
         );
 
-        // Build initial token sequence based on model type:
-        // - Multilingual: <|sot|><|lang|><|transcribe|><|notimestamps|>[prompt]
-        // - English-only: <|sot|><|notimestamps|>[prompt]
-        let mut current_tokens = if self.is_english_only {
-            // English-only models expect simplified sequence (no language/task tokens)
-            vec![special_tokens.sot_token, special_tokens.no_timestamps_token]
-        } else {
-            // Multilingual models need full sequence
-            vec![
-                special_tokens.sot_token,
-                special_tokens.language_token,
-                special_tokens.transcribe_token,
-                special_tokens.no_timestamps_token,
-            ]
-        };
-        let num_special = current_tokens.len();
-        current_tokens.extend_from_slice(&prompt_tokens);
+        // Build initial token sequence using correct Whisper prompt format.
+        let mut current_tokens =
+            build_decoder_prefix(&prompt_tokens, &special_tokens, self.is_english_only);
         debug!(
-            "Initial tokens: {} special + {} prompt = {} total (english_only={})",
-            num_special,
-            prompt_tokens.len(),
+            "Initial tokens: {} total (english_only={}, has_prompt={})",
             current_tokens.len(),
-            self.is_english_only
+            self.is_english_only,
+            !prompt_tokens.is_empty()
         );
 
         // Greedy decoding loop with quality metrics
@@ -701,6 +687,7 @@ impl Transcriber for CandleEngine {
 }
 
 struct SpecialTokens {
+    sot_prev_token: u32,
     sot_token: u32,
     eot_token: u32,
     transcribe_token: u32,
@@ -708,8 +695,117 @@ struct SpecialTokens {
     language_token: u32,
 }
 
+/// Build the decoder prefix token sequence for Whisper decoding.
+///
+/// Constructs the initial token sequence according to the Whisper prompt format:
+/// - With prompt, multilingual: `<sot_prev>[prompt]<sot><lang><transcribe><notimestamps>`
+/// - With prompt, english-only: `<sot_prev>[prompt]<sot><notimestamps>`
+/// - Without prompt, multilingual: `<sot><lang><transcribe><notimestamps>`
+/// - Without prompt, english-only: `<sot><notimestamps>`
+fn build_decoder_prefix(
+    prompt_tokens: &[u32],
+    special: &SpecialTokens,
+    is_english_only: bool,
+) -> Vec<u32> {
+    if !prompt_tokens.is_empty() {
+        let mut tokens = vec![special.sot_prev_token];
+        tokens.extend_from_slice(prompt_tokens);
+        if is_english_only {
+            tokens.extend_from_slice(&[special.sot_token, special.no_timestamps_token]);
+        } else {
+            tokens.extend_from_slice(&[
+                special.sot_token,
+                special.language_token,
+                special.transcribe_token,
+                special.no_timestamps_token,
+            ]);
+        }
+        tokens
+    } else if is_english_only {
+        vec![special.sot_token, special.no_timestamps_token]
+    } else {
+        vec![
+            special.sot_token,
+            special.language_token,
+            special.transcribe_token,
+            special.no_timestamps_token,
+        ]
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use super::{build_decoder_prefix, SpecialTokens};
+
+    fn make_special_tokens() -> SpecialTokens {
+        SpecialTokens {
+            sot_prev_token: 50360,
+            sot_token: 50258,
+            eot_token: 50257,
+            transcribe_token: 50359,
+            no_timestamps_token: 50363,
+            language_token: 50259,
+        }
+    }
+
+    #[test]
+    fn test_with_prompt_tokens_starts_with_sot_prev_then_prompt_then_sot() {
+        let special = make_special_tokens();
+        let prompt_tokens = vec![100u32, 200, 300];
+        let result = build_decoder_prefix(&prompt_tokens, &special, false);
+
+        assert_eq!(result[0], special.sot_prev_token, "Should start with sot_prev_token");
+        assert_eq!(result[1], 100, "Second token should be first prompt token");
+        assert_eq!(result[2], 200, "Third token should be second prompt token");
+        assert_eq!(result[3], 300, "Fourth token should be third prompt token");
+        assert_eq!(result[4], special.sot_token, "SOT should come after prompt tokens");
+    }
+
+    #[test]
+    fn test_empty_prompt_starts_with_sot_no_sot_prev() {
+        let special = make_special_tokens();
+        let prompt_tokens: Vec<u32> = vec![];
+        let result = build_decoder_prefix(&prompt_tokens, &special, false);
+
+        assert_eq!(result[0], special.sot_token, "Should start with sot_token when no prompt");
+        assert!(
+            !result.contains(&special.sot_prev_token),
+            "sot_prev_token should not appear with empty prompt"
+        );
+    }
+
+    #[test]
+    fn test_multilingual_path_includes_lang_and_transcribe_tokens() {
+        let special = make_special_tokens();
+        let prompt_tokens: Vec<u32> = vec![];
+        let result = build_decoder_prefix(&prompt_tokens, &special, false);
+
+        assert!(
+            result.contains(&special.language_token),
+            "Multilingual path should include language_token"
+        );
+        assert!(
+            result.contains(&special.transcribe_token),
+            "Multilingual path should include transcribe_token"
+        );
+    }
+
+    #[test]
+    fn test_english_only_omits_lang_and_transcribe_tokens() {
+        let special = make_special_tokens();
+        let prompt_tokens: Vec<u32> = vec![];
+        let result = build_decoder_prefix(&prompt_tokens, &special, true);
+
+        assert!(
+            !result.contains(&special.language_token),
+            "English-only path should not include language_token"
+        );
+        assert!(
+            !result.contains(&special.transcribe_token),
+            "English-only path should not include transcribe_token"
+        );
+    }
+
     #[test]
     fn test_empty_audio() {
         let empty_audio: Vec<f32> = vec![];
@@ -721,5 +817,42 @@ mod tests {
         let language = "en";
         let expected_format = format!("<|{}|>", language);
         assert_eq!(expected_format, "<|en|>");
+    }
+
+    /// Verify that a max-size prompt (224 tokens) stays within the 448-token decoder budget.
+    /// The decoder loop uses `max_tokens = 448 - start_result_idx` to bound iterations.
+    /// If the prefix exceeds 228 tokens (224 prompt + 4 control tokens), max_tokens < 220
+    /// which still works, but any prefix > 448 would cause a panic/underflow.
+    #[test]
+    fn test_large_prompt_fits_within_448_token_decoder_budget() {
+        let special = make_special_tokens();
+        // Simulate the max allowed prompt tokens (as enforced by encode_initial_prompt)
+        let prompt_tokens: Vec<u32> = (0..224).collect();
+        let result = build_decoder_prefix(&prompt_tokens, &special, false);
+
+        // Expected: [sot_prev, 224 prompt tokens, sot, lang, transcribe, notimestamps] = 229 total
+        assert_eq!(result.len(), 229, "Expected 229 tokens (1 sot_prev + 224 prompt + 4 control)");
+        assert_eq!(result[0], special.sot_prev_token, "Must start with sot_prev");
+        assert_eq!(result[225], special.sot_token, "SOT must follow prompt tokens");
+
+        // Verify the decoder budget is always positive: 448 - prefix_len > 0
+        assert!(result.len() < 448, "Prefix must leave room for generated tokens");
+    }
+
+    /// Verify the correct Whisper token ordering with a real-world vocab prompt scenario:
+    /// multiple comma-separated terms as produced by VocabStore::get_prompt_string().
+    #[test]
+    fn test_vocab_style_prompt_ordering() {
+        let special = make_special_tokens();
+        // Simulate 5 token IDs as would come from tokenizing "Claude, Maximus Loop, claude code"
+        let prompt_tokens = vec![5765u32, 11, 28435, 25332, 11, 22918, 2697];
+        let result = build_decoder_prefix(&prompt_tokens, &special, false);
+
+        assert_eq!(result[0], special.sot_prev_token);
+        assert_eq!(&result[1..=7], prompt_tokens.as_slice());
+        assert_eq!(result[8], special.sot_token);
+        assert_eq!(result[9], special.language_token);
+        assert_eq!(result[10], special.transcribe_token);
+        assert_eq!(result[11], special.no_timestamps_token);
     }
 }

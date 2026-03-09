@@ -1,0 +1,152 @@
+{
+  "version": "1.0.0",
+  "tasks": [
+    {
+      "id": 1,
+      "phase": 1,
+      "category": "bugfix",
+      "feature": "Fix initial_prompt decoder token ordering",
+      "description": "The Whisper decoder in src/transcribe/candle_engine.rs has a critical bug: prompt tokens are appended after <|notimestamps|>, causing the decoder to treat them as transcript output and loop infinitely. The correct Whisper prompt token sequence is: <|startofprev|>[prompt_tokens]<|startoftranscript|><|lang|><|transcribe|><|notimestamps|>. Fix by adding sot_prev_token to SpecialTokens, looking it up in get_special_tokens(), restructuring the token sequence assembly in decode_at_temperature(), and raising MAX_PROMPT_TOKENS from 50 to 224 (the actual Whisper limit).",
+      "file": "src/transcribe/candle_engine.rs",
+      "complexity_level": "medium",
+      "passes": true,
+      "skills": [
+        "superpowers:systematic-debugging"
+      ],
+      "acceptance_criteria": [
+        "MAX_PROMPT_TOKENS constant in encode_initial_prompt() is updated from 50 to 224",
+        "SpecialTokens struct has a sot_prev_token: u32 field",
+        "get_special_tokens() looks up the <|startofprev|> token via self.tokenizer.token_to_id()",
+        "When initial_prompt is Some, decode_at_temperature() builds tokens as [sot_prev, ...prompt_tokens, sot, lang, transcribe, notimestamps] for multilingual and [sot_prev, ...prompt_tokens, sot, notimestamps] for english-only models",
+        "When initial_prompt is None, the token sequence is unchanged — sot_prev is NOT prepended",
+        "cargo test passes with no regressions",
+        "cargo check passes without warnings"
+      ],
+      "testing_steps": [
+        "cargo test",
+        "cargo check"
+      ]
+    },
+    {
+      "id": 2,
+      "phase": 2,
+      "category": "database",
+      "feature": "SQLite vocabulary store module",
+      "description": "Create a new src/vocab/ module backed by SQLite for storing personal vocabulary terms that bias Whisper transcription. Add rusqlite = { version = \"0.31\", features = [\"bundled\"] } to Cargo.toml. Create src/vocab/store.rs with schema: vocabulary(id INTEGER PRIMARY KEY AUTOINCREMENT, term TEXT NOT NULL UNIQUE, added_at INTEGER NOT NULL, use_count INTEGER NOT NULL DEFAULT 0, source TEXT NOT NULL). The DB file lives at ~/.local/share/mojovoice/vocab.db via state::paths::get_data_dir(). Implement: add_term(term, source), remove_term(term), list_terms(), increment_use_count(term), and get_prompt_string(max_tokens) which returns comma-separated terms sorted by use_count DESC truncated to fit max_tokens. Declare mod vocab; in src/main.rs.",
+      "file": "src/vocab/store.rs",
+      "complexity_level": "medium",
+      "passes": true,
+      "acceptance_criteria": [
+        "rusqlite with bundled feature is added to Cargo.toml dependencies",
+        "src/vocab/mod.rs and src/vocab/store.rs exist and mod vocab; is declared in src/main.rs",
+        "open_db() creates vocab.db at the path returned by state::paths::get_data_dir().join(\"vocab.db\") and runs CREATE TABLE IF NOT EXISTS on first call",
+        "add_term(\"Claude\", \"manual\") inserts successfully and a duplicate call is a no-op (INSERT OR IGNORE)",
+        "list_terms() returns a Vec of VocabEntry sorted by use_count DESC then term ASC",
+        "get_prompt_string(224) returns Some(\"Claude, Maximus, Wolfie\") with terms sorted by use_count DESC, or None if the store is empty",
+        "cargo test passes including unit tests for add_term, remove_term, list_terms, and get_prompt_string using a temp DB path"
+      ],
+      "testing_steps": [
+        "cargo test",
+        "cargo check"
+      ]
+    },
+    {
+      "id": 3,
+      "phase": 3,
+      "category": "feature",
+      "feature": "Vocab CLI commands and transcription wiring",
+      "description": "Add a mojovoice vocab subcommand to the clap CLI in src/main.rs with four sub-subcommands: add <term> (source='manual'), list, remove <term>, and correct <wrong> <right> (adds <right> with source='auto'). Wire vocab into both transcription paths: in cmd_start_fixed() in src/main.rs and in DaemonServer::new() in src/daemon/server.rs, call vocab::store::get_prompt_string(200) and use the result as the initial_prompt argument passed to CandleEngine::with_options(), overriding config.model.prompt. The vocab list command must print a friendly 'No vocabulary terms yet.' message when the store is empty rather than an empty table.",
+      "file": "src/main.rs",
+      "complexity_level": "medium",
+      "passes": true,
+      "skills": [
+        "superpowers:verification-before-completion"
+      ],
+      "acceptance_criteria": [
+        "mojovoice vocab add \"Claude\" prints a confirmation message and the term appears in mojovoice vocab list output",
+        "mojovoice vocab list on an empty store prints 'No vocabulary terms yet.' instead of panicking or showing an empty list",
+        "mojovoice vocab remove \"Claude\" removes the term and subsequent list output no longer shows it",
+        "mojovoice vocab correct \"clod\" \"Claude\" adds \"Claude\" with source='auto' and prints a confirmation message",
+        "cmd_start_fixed() in src/main.rs calls vocab::store::get_prompt_string(200) and passes the result as initial_prompt to CandleEngine::with_options()",
+        "DaemonServer::new() in src/daemon/server.rs calls vocab::store::get_prompt_string(200) and passes the result as initial_prompt to CandleEngine::with_options()",
+        "cargo test and cargo check both pass with no warnings"
+      ],
+      "testing_steps": [
+        "cargo check",
+        "cargo test",
+        "cargo run -- vocab --help"
+      ]
+    },
+    {
+      "id": 4,
+      "phase": 4,
+      "category": "bugfix",
+      "feature": "Fix call-site inconsistencies in main.rs and server.rs",
+      "description": "Three small but important fixes to src/main.rs and src/daemon/server.rs. (1) Both files call vocab::store::get_prompt_string(200) — change to 224 to match MAX_PROMPT_TOKENS in encode_initial_prompt() and the Whisper spec (prompt cap = n_text_ctx // 2 = 448 // 2 = 224). (2) src/daemon/server.rs uses the internal path crate::vocab::store::VocabStore — change to the re-exported crate::vocab::VocabStore to be consistent with main.rs. (3) In both cmd_start_fixed() in main.rs and DaemonServer::new() in server.rs, if cfg.model.prompt is Some and non-empty, emit a warn!() log: 'model.prompt in config is deprecated and will be ignored; use mojovoice vocab add instead.' This prevents silent data loss for users who had a static prompt configured.",
+      "file": "src/main.rs",
+      "complexity_level": "medium",
+      "passes": true,
+      "acceptance_criteria": [
+        "get_prompt_string(200) calls in src/main.rs and src/daemon/server.rs are changed to get_prompt_string(224)",
+        "src/daemon/server.rs imports VocabStore as crate::vocab::VocabStore (not crate::vocab::store::VocabStore)",
+        "cmd_start_fixed() in src/main.rs emits warn!() when cfg.model.prompt is Some and non-empty before transcription starts",
+        "DaemonServer::new() in src/daemon/server.rs emits the same warn!() when config.model.prompt is Some and non-empty",
+        "cargo check passes without warnings",
+        "cargo test passes with no regressions"
+      ],
+      "testing_steps": [
+        "cargo check",
+        "cargo test"
+      ]
+    },
+    {
+      "id": 5,
+      "phase": 4,
+      "category": "bugfix",
+      "feature": "Fix remove_term false success confirmation",
+      "description": "src/vocab/store.rs remove_term() currently returns Ok(()) regardless of whether any row was deleted, causing the CLI to always print 'Removed successfully' even when the term did not exist. Fix: rusqlite's execute() returns Result<usize> where the usize is rows affected. Change remove_term to return Result<bool> (true = deleted, false = not found). Update the CLI handler in src/main.rs for VocabCommands::Remove to print 'Removed <term> from vocabulary.' when true, or 'Term <term> not found in vocabulary.' when false. Update the corresponding unit test in src/vocab/store.rs to assert remove_term returns false for a non-existent term.",
+      "file": "src/vocab/store.rs",
+      "complexity_level": "medium",
+      "passes": true,
+      "acceptance_criteria": [
+        "remove_term() in src/vocab/store.rs returns Result<bool> instead of Result<()>",
+        "remove_term() returns Ok(true) when the term existed and was deleted",
+        "remove_term() returns Ok(false) when the term did not exist in the database",
+        "The CLI handler in src/main.rs for VocabCommands::Remove prints 'Removed <term> from vocabulary.' on Ok(true)",
+        "The CLI handler prints 'Term <term> not found in vocabulary.' on Ok(false)",
+        "A unit test in src/vocab/store.rs asserts remove_term returns false for a term that was never added",
+        "cargo test passes including the updated and new tests"
+      ],
+      "testing_steps": [
+        "cargo test",
+        "cargo check"
+      ]
+    },
+    {
+      "id": 6,
+      "phase": 4,
+      "category": "testing",
+      "feature": "Add decoder prefix regression test",
+      "description": "The Whisper token sequence fix in src/transcribe/candle_engine.rs (Task #1) has no unit test, making it the highest-risk unguarded change in the codebase. Refactor the token assembly logic in decode_at_temperature() into a pure standalone function: fn build_decoder_prefix(prompt_tokens: &[u32], special: &SpecialTokens, is_english_only: bool) -> Vec<u32>. This function takes token IDs as plain u32 values and has no model or tokenizer dependency, making it directly unit-testable. Add unit tests in the candle_engine.rs test module that verify: (1) with prompt tokens, sequence starts with sot_prev followed by prompt tokens then special tokens in correct order, (2) without prompt tokens, sot_prev is absent and sequence matches the original behavior, (3) english-only path omits lang/transcribe tokens. Call build_decoder_prefix from decode_at_temperature() so runtime behavior is unchanged.",
+      "file": "src/transcribe/candle_engine.rs",
+      "complexity_level": "medium",
+      "passes": true,
+      "skills": [
+        "superpowers:test-driven-development"
+      ],
+      "acceptance_criteria": [
+        "A fn build_decoder_prefix(prompt_tokens: &[u32], special: &SpecialTokens, is_english_only: bool) -> Vec<u32> function exists in src/transcribe/candle_engine.rs",
+        "decode_at_temperature() calls build_decoder_prefix() instead of assembling the prefix inline",
+        "A unit test verifies that with non-empty prompt_tokens the returned vec starts with sot_prev_token, followed by the prompt tokens, followed by sot_token",
+        "A unit test verifies that with empty prompt_tokens the returned vec starts with sot_token (no sot_prev prepended)",
+        "A unit test verifies the multilingual path includes lang_token and transcribe_token after sot_token",
+        "A unit test verifies the english-only path omits lang_token and transcribe_token",
+        "cargo test passes with all new tests passing"
+      ],
+      "testing_steps": [
+        "cargo test",
+        "cargo check"
+      ]
+    }
+  ]
+}

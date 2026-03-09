@@ -1,17 +1,16 @@
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { invoke } from './lib/ipc';
 import { useAppStore } from './stores/appStore';
-import Navigation from './components/Navigation';
-import Dashboard from './components/Dashboard';
-import DevTools from './components/DevTools';
-import Settings from './components/Settings';
-import ModelManagement from './components/ModelManagement';
-import TranscriptionHistory from './components/TranscriptionHistory';
+import { ToastProvider } from './components/ui/Toast';
+
+// Lazy load MissionControl for code splitting
+const MissionControl = lazy(() => import('./components/MissionControl'));
+
 import './styles/globals.css';
 import { type ScalePreset, isValidPreset, clampScale } from './lib/scale';
 
 function App() {
-  const { activeView, setDaemonStatus, addLog, setUIScale } = useAppStore();
+  const { setDaemonStatus, addLog, setUIScale } = useAppStore();
 
   useEffect(() => {
     // Add initial log
@@ -78,15 +77,27 @@ function App() {
   }, [setDaemonStatus, addLog, setUIScale]);
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] grid-background p-6">
-      <Navigation />
-
-      {activeView === 'dashboard' && <Dashboard />}
-      {activeView === 'devtools' && <DevTools />}
-      {activeView === 'history' && <TranscriptionHistory />}
-      {activeView === 'models' && <ModelManagement />}
-      {activeView === 'settings' && <Settings />}
-    </div>
+    <ToastProvider>
+      {/* Skip to main content link for screen readers */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-6 focus:py-3 focus:bg-blue-600 focus:text-white focus:border-2 focus:border-black focus:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] focus:font-semibold focus:uppercase focus:tracking-wide"
+      >
+        Skip to main content
+      </a>
+      <Suspense
+        fallback={
+          <div className="flex items-center justify-center min-h-screen bg-[var(--bg-void)]">
+            <div className="text-center">
+              <div className="w-8 h-8 border-2 border-slate-700 border-t-blue-500 rounded-full animate-spin mx-auto mb-4" />
+              <p className="text-slate-400 font-mono text-sm">Loading...</p>
+            </div>
+          </div>
+        }
+      >
+        <MissionControl />
+      </Suspense>
+    </ToastProvider>
   );
 }
 

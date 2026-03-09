@@ -1,6 +1,6 @@
 [package]
 name = "mojovoice"
-version = "0.5.5"
+version = "0.5.6"
 edition = "2024"
 rust-version = "1.85"
 description = "Voice dictation for Linux developers"
@@ -58,6 +58,9 @@ uuid = { version = "1", features = ["v4"] }
 
 # File locking for history concurrent access
 fs2 = "0.4"
+
+# SQLite for vocabulary store
+rusqlite = { version = "0.31", features = ["bundled"] }
 
 # Clipboard - always available
 arboard = "3.6"

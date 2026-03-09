@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use tracing::info;
+use tracing::{info, warn};
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -16,6 +16,7 @@ mod model;
 mod output;
 mod state;
 mod transcribe;
+mod vocab;
 
 /// Validate that the model file exists, returning a helpful error if not
 fn validate_model_path(cfg: &config::Config) -> Result<()> {
@@ -161,6 +162,58 @@ enum Commands {
         #[arg(long)]
         report: bool,
     },
+
+    /// Manage vocabulary terms used to bias transcription
+    Vocab {
+        #[command(subcommand)]
+        command: VocabCommands,
+    },
+
+    /// Listen to an external audio source and transcribe (toggle mode)
+    Listen {
+        /// PipeWire/ALSA source name to capture from (e.g. "[Monitor] Speakers"). Defaults to system input.
+        #[arg(short, long)]
+        source: Option<String>,
+
+        /// Max recording duration in seconds before auto-stop
+        #[arg(short = 'd', long, default_value = "300")]
+        max_duration: u32,
+
+        /// Copy to clipboard instead of typing
+        #[arg(short, long)]
+        clipboard: bool,
+
+        /// Cancel a running listen session without transcribing
+        #[arg(long)]
+        cancel: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum VocabCommands {
+    /// Add a term to the vocabulary
+    Add {
+        /// Term to add
+        term: String,
+    },
+
+    /// List all vocabulary terms
+    List,
+
+    /// Remove a term from the vocabulary
+    Remove {
+        /// Term to remove
+        term: String,
+    },
+
+    /// Record a correction (adds the correct term with source='auto')
+    Correct {
+        /// The incorrect transcription
+        wrong: String,
+
+        /// The correct term to add
+        right: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -231,6 +284,13 @@ fn main() -> Result<()> {
             stdout_only,
             report,
         } => cmd_benchmark(samples_dir, output_dir, stdout_only, report)?,
+        Commands::Vocab { command } => cmd_vocab(command)?,
+        Commands::Listen {
+            source,
+            max_duration,
+            clipboard,
+            cancel,
+        } => cmd_listen(source, max_duration, clipboard, cancel)?,
     }
 
     Ok(())
@@ -373,6 +433,16 @@ fn cmd_start_fixed(model_override: Option<String>, duration: u32, clipboard: boo
     let output_mode = output_mode_from_clipboard(clipboard);
     info!("Output mode: {:?}", output_mode);
 
+    if let Some(ref p) = cfg.model.prompt {
+        if !p.is_empty() {
+            warn!("model.prompt in config is deprecated and will be ignored; use mojovoice vocab add instead.");
+        }
+    }
+
+    let vocab_prompt = vocab::VocabStore::open()
+        .and_then(|s| s.get_prompt_string(224))
+        .unwrap_or(None);
+
     info!("Loading whisper model...");
     let mut transcriber = transcribe::candle_engine::CandleEngine::with_options(
         cfg.model
@@ -380,7 +450,7 @@ fn cmd_start_fixed(model_override: Option<String>, duration: u32, clipboard: boo
             .to_str()
             .ok_or_else(|| anyhow::anyhow!("Invalid model path"))?,
         &cfg.model.language,
-        cfg.model.prompt.clone(),
+        vocab_prompt,
     )?;
     info!("Model loaded successfully");
 
@@ -916,6 +986,174 @@ fn cmd_benchmark(
     benchmark::run_benchmark(&samples_dir, &output_dir, stdout_only)
 }
 
+/// Manage vocabulary terms
+fn cmd_vocab(command: VocabCommands) -> Result<()> {
+    let store = vocab::VocabStore::open()?;
+
+    match command {
+        VocabCommands::Add { term } => {
+            store.add_term(&term, "manual")?;
+            println!("Added '{}' to vocabulary.", term);
+        },
+        VocabCommands::List => {
+            let terms: Vec<vocab::VocabEntry> = store.list_terms()?;
+            if terms.is_empty() {
+                println!("No vocabulary terms yet.");
+            } else {
+                println!("{:<30} {:<8} {}", "Term", "Uses", "Source");
+                println!("{}", "-".repeat(50));
+                for entry in &terms {
+                    println!("{:<30} {:<8} {}", entry.term, entry.use_count, entry.source);
+                }
+            }
+        },
+        VocabCommands::Remove { term } => {
+            if store.remove_term(&term)? {
+                println!("Removed {} from vocabulary.", term);
+            } else {
+                println!("Term {} not found in vocabulary.", term);
+            }
+        },
+        VocabCommands::Correct { wrong: _, right } => {
+            store.add_term(&right, "auto")?;
+            println!("Added correction: '{}' added to vocabulary.", right);
+        },
+    }
+
+    Ok(())
+}
+
+fn cmd_listen(source: Option<String>, max_duration: u32, clipboard: bool, cancel: bool) -> Result<()> {
+    if cancel {
+        return cmd_listen_cancel();
+    }
+    if state::toggle::is_listening()?.is_some() {
+        // Second invocation: stop the running session
+        return cmd_listen_stop();
+    }
+    // First invocation: start a new session
+    cmd_listen_start(source, max_duration, clipboard)
+}
+
+/// Check if a listen cancel was requested. Returns true and deletes the sentinel if present.
+fn check_and_clear_cancel_file() -> bool {
+    let Ok(path) = state::paths::get_listen_cancel_file() else {
+        return false;
+    };
+    if path.exists() {
+        let _ = std::fs::remove_file(&path);
+        true
+    } else {
+        false
+    }
+}
+
+/// Capture audio from source, block until stop signal or max_duration, then transcribe
+fn cmd_listen_start(source: Option<String>, max_duration: u32, clipboard: bool) -> Result<()> {
+    if !daemon::is_daemon_running() {
+        anyhow::bail!("daemon is not running — start it first with: mojovoice daemon up");
+    }
+
+    let cfg = config::load()?;
+    let output_mode = output_mode_from_clipboard(clipboard);
+
+    // On Linux: default to monitor of current default sink (captures app audio like Discord)
+    // Falls back to default mic input if pactl unavailable.
+    #[cfg(target_os = "linux")]
+    let source = source.or_else(|| audio::get_default_sink_monitor());
+
+    state::toggle::STOP_RECORDING.store(false, std::sync::atomic::Ordering::SeqCst);
+    state::toggle::setup_signal_handler()?;
+    state::toggle::start_listen()?;
+
+    println!(
+        "Listening on {}. Run 'mojovoice listen' again to stop (max {}s).",
+        source.as_deref().unwrap_or("default input"),
+        max_duration
+    );
+
+    let samples = audio::capture_toggle(max_duration, cfg.audio.sample_rate, source.as_deref());
+
+    // Always clean up PID file, even if capture failed
+    let _ = state::toggle::cleanup_listen();
+
+    // Check if cancel was requested — discard audio without transcribing
+    if check_and_clear_cancel_file() {
+        println!("Listen session cancelled.");
+        return Ok(());
+    }
+
+    let samples = samples?;
+
+    if samples.is_empty() {
+        println!("No audio captured.");
+        return Ok(());
+    }
+
+    info!("Captured {} samples, sending to daemon for transcription...", samples.len());
+
+    let response = daemon::send_request(&daemon::DaemonRequest::TranscribeAudio { samples })?;
+
+    match response {
+        daemon::DaemonResponse::Success { text } => {
+            if text.is_empty() {
+                println!("No speech detected.");
+                return Ok(());
+            }
+            info!("Transcribed: {}", text);
+            output::inject_text(&text, output_mode)?;
+            send_notification("Listen Transcription", &truncate_preview(&text), "normal");
+            Ok(())
+        }
+        daemon::DaemonResponse::Error { message } => {
+            anyhow::bail!("Transcription failed: {}", message)
+        }
+        _ => anyhow::bail!("Unexpected response from daemon"),
+    }
+}
+
+/// Stop a running listen session (sends SIGUSR1 to the listen process)
+fn cmd_listen_stop() -> Result<()> {
+    match state::toggle::is_listening()? {
+        Some(state) => {
+            info!("Sending stop signal to listen session (PID: {})", state.pid);
+            state::toggle::stop_listen(&state)?;
+            println!("Listen session stopped. Transcribing...");
+            Ok(())
+        }
+        None => anyhow::bail!("no listen session active"),
+    }
+}
+
+/// Cancel a running listen session — stops capture and discards audio without transcribing
+fn cmd_listen_cancel() -> Result<()> {
+    match state::toggle::is_listening()? {
+        None => {
+            println!("No listen session active.");
+            Ok(())
+        }
+        Some(state) => {
+            // Write sentinel file so the listen process knows to discard on stop
+            let cancel_file = state::paths::get_listen_cancel_file()?;
+            std::fs::write(&cancel_file, "")?;
+
+            // Clean up sentinel if stop_listen fails (prevents stale cancel on next session)
+            let _cancel_guard = scopeguard::guard(cancel_file.clone(), |f| {
+                let _ = std::fs::remove_file(&f);
+            });
+
+            info!("Cancelling listen session (PID: {})", state.pid);
+            state::toggle::stop_listen(&state)?;
+
+            // Stop succeeded — defuse the guard so sentinel persists for the listen process
+            std::mem::forget(_cancel_guard);
+
+            println!("Listen session cancelled.");
+            Ok(())
+        }
+    }
+}
+
 /// Transcribe a WAV file via daemon (for testing/debugging)
 fn cmd_transcribe_file(path: &std::path::Path, _model_override: Option<String>) -> Result<()> {
     use hound::WavReader;
@@ -1015,4 +1253,98 @@ fn cmd_transcribe_file(path: &std::path::Path, _model_override: Option<String>) 
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod listen_tests {
+    use super::*;
+
+    #[test]
+    fn test_cmd_listen_default_max_duration_is_300() {
+        let cli = Cli::parse_from(["mojovoice", "listen"]);
+        if let Commands::Listen { max_duration, .. } = cli.command {
+            assert_eq!(max_duration, 300);
+        } else {
+            panic!("Expected Listen command");
+        }
+    }
+
+    #[test]
+    fn test_cmd_listen_stop_no_session_returns_error() {
+        // Ensure no listen.pid exists
+        let _ = state::toggle::cleanup_listen();
+
+        let result = cmd_listen_stop();
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("no listen session active"), "got: {}", msg);
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_cmd_listen_start_auto_detects_monitor_source() {
+        // Verify the auto-detection helper returns a valid monitor source name
+        let resolved = audio::get_default_sink_monitor();
+        if let Some(ref source) = resolved {
+            assert!(
+                source.ends_with(".monitor"),
+                "auto-detected source should end with .monitor, got: {}",
+                source
+            );
+        }
+        // None is acceptable if pactl unavailable
+    }
+
+    #[test]
+    fn test_cmd_listen_daemon_not_running_returns_error() {
+        // Ensure no listen session is active
+        let _ = state::toggle::cleanup_listen();
+
+        // This test is meaningful only when daemon is NOT running.
+        // If daemon is running, skip gracefully.
+        if daemon::is_daemon_running() {
+            println!("Skipping: daemon is running");
+            return;
+        }
+
+        let result = cmd_listen_start(None, 300, false);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("daemon is not running"), "got: {}", msg);
+    }
+
+    #[test]
+    fn test_listen_cancel_flag_parses() {
+        let cli = Cli::parse_from(["mojovoice", "listen", "--cancel"]);
+        if let Commands::Listen { cancel, .. } = cli.command {
+            assert!(cancel);
+        } else {
+            panic!("Expected Listen command");
+        }
+    }
+
+    #[test]
+    fn test_cmd_listen_cancel_no_session_prints_message() {
+        let _ = state::toggle::cleanup_listen();
+        // Should succeed (Ok) with a message, not error
+        let result = cmd_listen_cancel();
+        assert!(result.is_ok(), "expected Ok, got: {:?}", result);
+    }
+
+    #[test]
+    fn test_check_and_clear_cancel_file() {
+        let cancel_file = state::paths::get_listen_cancel_file().unwrap();
+
+        // No file → returns false
+        let _ = std::fs::remove_file(&cancel_file); // ensure clean
+        assert!(!check_and_clear_cancel_file());
+
+        // File present → returns true and removes it
+        std::fs::write(&cancel_file, "").unwrap();
+        assert!(check_and_clear_cancel_file());
+        assert!(!cancel_file.exists(), "cancel file should be deleted after check");
+
+        // Second call → false again
+        assert!(!check_and_clear_cancel_file());
+    }
 }

@@ -116,6 +116,25 @@ Expected assets:
 
 **Note:** Intel macOS builds removed from CI (macos-12/13 runners deprecated). ARM binaries run on Intel Macs via Rosetta 2.
 
+## UI Development (Browser Mode)
+
+**Dev server:** `cd ui && npm run dev` (runs at http://localhost:1420)
+
+The UI supports browser-only development with mock data (`ui/src/lib/ipc.ts`). When `window.__TAURI__` is absent, all Tauri API calls return mock data. This allows:
+- Rapid UI iteration with Vite HMR
+- Playwright MCP testing without the Rust backend
+- Visual validation of all components
+
+**Playwright MCP Screenshots:**
+- **Always** save screenshots to `docs/tmp/` (e.g., `docs/tmp/settings-debug.png`)
+- **Never** save screenshots to the repo root or any tracked directory
+- Use descriptive filenames: `docs/tmp/<component>-<state>.png`
+- `docs/tmp/` is gitignored, so screenshots won't pollute the repo
+
+**Playwright MCP Artifacts:**
+- The `.playwright-mcp/` directory is gitignored
+- Console logs and network traces are ephemeral - don't commit them
+
 ## Project-Specific Notes
 
 **Mojo-Audio FFI Integration:**
@@ -131,3 +150,44 @@ Expected assets:
 - Large V3 Turbo: 128 mel bins, max_source_positions=1500 (3000 frames after downsampling)
 - Older models (tiny, base, small, medium, large-v2): 80 mel bins
 - mojo-audio produces correct frame count (~2998 for 30s audio)
+
+## Ralph Loop Workflow (Autonomous Development)
+
+When running in autonomous Ralph Loop mode (`claude -p`), follow these critical rules:
+
+**Task Management:**
+- Read `plan.md` (JSON task list) and `claude-progress.txt` (progress log)
+- Pick the SINGLE next task where `"passes": false`
+- Implement ONLY that one task completely
+- Verify ALL acceptance criteria before marking complete
+- Update ONLY the `"passes"` field in plan.md (never edit descriptions)
+
+**Design System Compliance:**
+- Follow `docs/context/mojovoice-style-guide.md` exactly
+- Use Electric Night color palette (deep navy + electric blue + acid green)
+- Apply neubrutalist styling (thick borders, brutal shadows, sharp corners)
+- Use JetBrains Mono for technical content, Inter for UI text
+- All animations: 150-250ms, GPU-accelerated, honor `prefers-reduced-motion`
+
+**Code Quality:**
+- Keep codebase compilable after every commit
+- Test functionality before marking task complete
+- Use Tailwind CSS v4 utilities
+- Follow React Aria Components patterns for accessibility
+- Ensure WCAG 2.2 Level AA compliance
+
+**Progress Tracking:**
+- Append iteration summary to `claude-progress.txt`
+- Git commit after each task: `feat: [feature name]`
+- Log: iteration number, task ID, changes made, verification steps, commit hash
+
+**Completion:**
+- When ALL tasks have `"passes": true`, output `<promise>COMPLETE</promise>`
+- If blocked, document reason in progress log and exit
+
+**Never:**
+- Attempt multiple tasks in one iteration
+- Mark tasks passing without verification
+- Edit task descriptions in plan.md
+- Break the build
+- Skip acceptance criteria
