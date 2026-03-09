@@ -118,11 +118,19 @@ export function ModelsPanel() {
   useEffect(() => {
     const load = async () => {
       try {
-        const [available, storage] = await Promise.all([
+        const [available, storage, downloaded] = await Promise.all([
           invoke<AvailableModel[]>('list_available_models'),
           invoke<StorageInfo>('get_storage_info'),
+          invoke<{ name: string; filename: string; is_active: boolean }[]>('list_downloaded_models'),
         ]);
-        setModels(available);
+        // Set the full model list first, then reconcile is_downloaded from the
+        // dedicated downloaded-models source of truth to correct any stale flags.
+        const reconciled = available.map(m => {
+          const found = downloaded.find(d => d.name === m.name || d.filename === m.filename);
+          if (found) return { ...m, is_downloaded: true, is_active: found.is_active };
+          return { ...m, is_downloaded: false };
+        });
+        setModels(reconciled);
         setStorageInfo(storage);
       } catch (err) {
         console.error('[ModelsPanel] Failed to load data:', err);
