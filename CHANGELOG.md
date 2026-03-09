@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.6] - 2026-03-08
+
 ### Added
 - **Command Palette (Cmd+K):** Global command bar using cmdk library for model switching, history search, export, clear, and settings access
 - **TranscriptionCard metadata footer:** Displays inference latency, confidence score, and model name below each transcription
