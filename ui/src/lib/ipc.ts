@@ -2,7 +2,9 @@ import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 import { useAppStore } from '../stores/appStore';
 
 // Check if running in Tauri or browser
-const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
+// Tauri v2 uses __TAURI_INTERNALS__ (v1 used __TAURI__)
+const isTauri = typeof window !== 'undefined' &&
+  ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
 
 // Mock data for browser development mode
 const getMockData = (command: string, args?: Record<string, unknown>): any => {
