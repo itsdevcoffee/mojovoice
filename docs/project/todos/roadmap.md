@@ -1,12 +1,19 @@
 # mojovoice Project Roadmap
 
-**Status:** Active Development | **Last Updated:** 2026-02-08
+**Status:** Active Development | **Last Updated:** 2026-10-03
 
 Project roadmap and feature planning.
 
 ---
 
 ## Version Roadmap
+
+### Known Bugs (next patch)
+
+- **Duplicated text at chunk boundaries** (High) — audio over 30s is split into 30s chunks with 5s overlap (`candle_engine.rs` `CHUNK_OVERLAP_SECS`), but overlapping words aren't deduplicated when chunks are joined. Benchmark: `harvard-list57-male.wav` repeats "Footprints showed the path he took up the beach."
+- **`mojovoice download` can't fetch the default model** (Medium) — the default config points at `whisper-large-v3-turbo-safetensors/`, but `download` only knows GGML models, and its error suggests a nonexistent model name.
+- **Benchmark WER doesn't normalize text** (Low) — "one two three" vs "1, 2, 3" and "all right" vs "Alright" count as errors; apply Whisper's English text normalizer before scoring.
+- **Rustfmt and Clippy CI jobs failing** (Low) — failing since v0.5.6.
 
 ### v0.6.0 - UI/UX Overhaul & Platform Maturity
 
@@ -95,6 +102,7 @@ Project roadmap and feature planning.
   - Testing on popular AMD GPUs
 
 - **Windows Support** (Critical)
+  - Scoped 2026-10-03: see `docs/research/2026-10-03-windows-port-scoping.md` (~5–8 days; mel blocker removed in v0.5.8)
   - Full Windows 10/11 support
   - Audio capture validation
   - Text injection via Windows APIs
@@ -146,6 +154,8 @@ Project roadmap and feature planning.
 - ✅ **Transcription History** - Searchable persistent history
 - ✅ **Audio Device Selection** - UI-based device picker
 - ✅ **Daemon Subcommands** - up, down, restart, status, logs
+- ✅ **Pure-Rust Mel Spectrogram** - Matches OpenAI's reference; removes mojo-audio runtime dependency (v0.5.8)
+- ✅ **Release Transcription Smoke Test** - CI transcribes a sample with whisper-tiny before shipping (v0.5.8)
 
 ---
 
