@@ -186,7 +186,9 @@ impl Default for Config {
             output: OutputConfig {
                 display_server: None,
                 append_space: true,
-                refresh_command: Some("pkill -RTMIN+8 waybar".to_string()),
+                // Waybar signal; status bars like this only exist on Linux
+                refresh_command: cfg!(target_os = "linux")
+                    .then(|| "pkill -RTMIN+8 waybar".to_string()),
             },
             ui: UiConfig {
                 scale_preset: default_scale_preset(),
