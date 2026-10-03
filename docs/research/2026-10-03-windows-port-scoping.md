@@ -2,7 +2,8 @@
 
 **Date:** 2026-10-03
 **Target:** Windows 11 x64, NVIDIA GPU (CUDA)
-**Estimate:** ~5–8 working days to a usable build (mel rewrite already done in v0.5.8)
+**Estimate:** ~5–8 working days to a usable build (mel rewrite done in v0.5.8)
+**Status:** In progress on branch `feat/windows-port`
 
 ## Status of blockers
 
@@ -87,9 +88,9 @@ Other `cfg(target_os)` blocks have matching fallbacks (`audio/mod.rs:207`, `outp
 | 3.1 | `release.yml` Windows CLI (CPU + CUDA) zip and NSIS/MSI | S–M (0.5 d) | P1 |
 | 3.2 | Code signing | S (+ account wait) | 3.1 |
 
-## Open decisions
+## Decisions (2026-10-03)
 
-1. CUDA DLLs: bundle (installer ~0.7 GB) or require a CUDA runtime install?
-2. Global hotkey in the daemon (works for CLI-only users) or in the UI?
-3. Code signing: Azure Trusted Signing now, or ship unsigned first?
-4. Installer format: MSI, NSIS, or both?
+1. **CUDA runtime:** Require users to install the CUDA 12 runtime (no bundled DLLs); detect it and fall back to CPU when missing — same as the Linux CUDA build.
+2. **Global hotkey:** In the daemon (`global-hotkey` crate), so it works for CLI-only users and without the desktop window.
+3. **Code signing:** Ship unsigned for now (SmartScreen "Run anyway"); revisit once the port is stable.
+4. **Installer:** NSIS `.exe` only.
