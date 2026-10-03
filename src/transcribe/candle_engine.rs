@@ -8,7 +8,7 @@ use std::path::Path;
 use tokenizers::Tokenizer;
 use tracing::{debug, info, warn};
 
-use super::mojo_ffi;
+use super::mel;
 use crate::transcribe::Transcriber;
 
 /// Validate that a file is a valid GGUF format by checking the magic bytes
@@ -596,20 +596,10 @@ impl CandleEngine {
         let mut padded_audio = audio.to_vec();
         padded_audio.resize(N_SAMPLES, 0.0);
 
-        // Convert audio to mel spectrogram via mojo-audio FFI
-        let (n_mels, frames, mel_data) =
-            mojo_ffi::compute_mel_spectrogram_with_n_mels(&padded_audio, self.num_mel_bins)?;
+        let (mel_data, frames) = mel::log_mel_spectrogram(&padded_audio, self.num_mel_bins)?;
+        debug!("Mel spectrogram: {}x{}", self.num_mel_bins, frames);
 
-        if mel_data.is_empty() || frames == 0 {
-            anyhow::bail!("Invalid mel spectrogram from mojo-audio");
-        }
-
-        debug!(
-            "Mel spectrogram: {}x{} (n_mels={})",
-            n_mels, frames, self.num_mel_bins
-        );
-
-        let mel = Tensor::from_vec(mel_data, (n_mels, frames), &self.device)?;
+        let mel = Tensor::from_vec(mel_data, (self.num_mel_bins, frames), &self.device)?;
         let mel = mel.unsqueeze(0)?;
 
         self.decode_with_fallback(&mel)

@@ -269,11 +269,10 @@ draft_model_path = "~/.local/share/applications/mojovoice/models/ggml-tiny.en.bi
 
 ## 🐛 Known Issues & Limitations
 
-### 1. Mel Spectrogram Frame Count Mismatch
-- **Issue:** Candle's `pcm_to_mel` generates 4500 frames instead of 3000
-- **Cause:** Unknown (possibly hop_length ≈ 107 vs expected 160)
-- **Workaround:** Truncate to 3000 frames (see commit `fad4c5a`)
-- **Impact:** Works correctly, but wastes ~33% of mel computation
+### 1. ~~Mel Spectrogram Frame Count Mismatch~~ (Resolved v0.5.8)
+- **Was:** Candle's `pcm_to_mel` returned 4500 frames for 30s audio
+- **Actual cause:** Not a bug — Candle (like whisper.cpp) deliberately appends a half-chunk of padding (1500 frames); slicing the first 3000 frames was correct
+- **Resolution:** Pure-Rust `src/transcribe/mel.rs` matches OpenAI's `log_mel_spectrogram` exactly (max diff ~1.5e-5 vs reference), replacing both Candle's `pcm_to_mel` and the interim mojo-audio FFI
 
 ### 2. Prompt Biasing Disabled
 - **Issue:** Initial prompts cause decoder token overflow

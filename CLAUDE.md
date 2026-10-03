@@ -137,19 +137,23 @@ The UI supports browser-only development with mock data (`ui/src/lib/ipc.ts`). W
 
 ## Project-Specific Notes
 
-**Mojo-Audio FFI Integration:**
+**Mel Spectrogram:**
 
-- `lib/libmojo_audio.so` - Pre-built mojo-audio shared library
-- Replaces Candle's buggy `pcm_to_mel` (which produced 4500 frames instead of ~3000)
-- FFI bindings in `src/transcribe/mojo_ffi.rs`
-- Config uses `NORM_WHISPER` for Whisper-compatible output
-- Rebuild mojo-audio: `cd ../mojo-audio && pixi run mojo build src/ffi/audio_ffi.mojo -o libmojo_audio.so --emit shared-lib`
+- Pure Rust in `src/transcribe/mel.rs`, matching OpenAI's `whisper.audio.log_mel_spectrogram` exactly (reflect pad, 400-point FFT, Slaney filters from `assets/melfilters{80,128}.bytes`)
+- Tests compare against OpenAI reference output in `tests/fixtures/mel/`; regenerate with `uv run scripts/gen-mel-fixtures.py` (needs ffmpeg)
+- Replaced the mojo-audio FFI in v0.5.8: the `.so` needed Mojo runtime libs that releases never shipped, and its FFT size/mel scale didn't match Whisper's training features
 
 **Whisper Model Compatibility:**
 
 - Large V3 Turbo: 128 mel bins, max_source_positions=1500 (3000 frames after downsampling)
 - Older models (tiny, base, small, medium, large-v2): 80 mel bins
-- mojo-audio produces correct frame count (~2998 for 30s audio)
+- A 30s chunk (480000 samples) produces exactly 3000 mel frames
+
+**CUDA Builds:**
+
+- Build in a container: `./scripts/build-cuda-container.sh` (CUDA 12.8, Ubuntu 22.04) → `target/container/release/mojovoice`
+- Avoids nvcc/glibc header conflicts on Fedora 43 and links against an older glibc for portability
+- Targets compute capability 8.0 by default (`CUDA_COMPUTE_CAP` to override)
 
 ## Ralph Loop Workflow (Autonomous Development)
 

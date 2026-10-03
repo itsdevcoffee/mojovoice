@@ -3,7 +3,6 @@
 
 # Default install location
 install_dir := env_var("HOME") / ".local/bin"
-lib_dir := install_dir / "lib"
 
 # CUDA library paths for linking
 cuda_flags := "-L /usr/lib64 -L /usr/local/lib/ollama"
@@ -34,19 +33,15 @@ ui:
 
 # Install CUDA build to ~/.local/bin (default — use install-cpu for non-GPU machines)
 install: build-cuda
-    @mkdir -p {{lib_dir}}
     rm -f {{install_dir}}/mojovoice  # rm first to handle "Text file busy" when daemon is running
     cp target/release/mojovoice {{install_dir}}/
-    cp lib/libmojo_audio.so {{lib_dir}}/
     @echo "Installed mojovoice (CUDA) to {{install_dir}}"
     @echo "Run 'just daemon-restart' to use the new build"
 
 # Install CPU-only build (fallback for machines without CUDA)
 install-cpu: build
-    @mkdir -p {{lib_dir}}
     rm -f {{install_dir}}/mojovoice
     cp target/release/mojovoice {{install_dir}}/
-    cp lib/libmojo_audio.so {{lib_dir}}/
     @echo "Installed mojovoice (CPU only) to {{install_dir}}"
     @echo "Run 'just daemon-restart' to use the new build"
 
@@ -112,11 +107,3 @@ daemon-logs:
 # Clean build artifacts
 clean:
     cargo clean
-
-# === Mojo Audio ===
-
-# Rebuild mojo-audio library (requires pixi)
-mojo-rebuild:
-    cd ../mojo-audio && pixi run mojo build src/ffi/audio_ffi.mojo -o libmojo_audio.so --emit shared-lib
-    cp ../mojo-audio/libmojo_audio.so lib/
-    @echo "Rebuilt and copied libmojo_audio.so"
