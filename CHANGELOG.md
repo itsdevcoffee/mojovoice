@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.8] - 2026-10-03
+
+### Fixed
+- **Transcription in released builds:** Release binaries could not transcribe at all — every request failed with "Could not find libmojo_audio.so". The mojo-audio library was never included in releases and depended on Mojo runtime libraries that only existed on the development machine.
+- **Transcription accuracy:** The mel spectrogram now matches OpenAI Whisper's reference implementation exactly. mojo-audio's version used a different FFT size and mel scale than Whisper was trained on.
+
+### Changed
+- **Pure-Rust mel spectrogram:** `src/transcribe/mel.rs` replaces the mojo-audio FFI. No external shared libraries are needed, on any platform.
+- **CUDA binary:** Now built in a CUDA 12.8 / Ubuntu 22.04 container for compute capability 8.0+ (RTX 30-series and newer), requiring glibc 2.34+. Previous CUDA builds targeted only RTX 40-series. Requires CUDA 12 runtime libraries (`libcublas.so.12`, `libcurand.so.10`).
+
+### Added
+- **Release smoke test:** CI transcribes a sample with whisper-tiny through the release binary before publishing.
+
 ## [0.5.7] - 2026-10-03
 
 ### Fixed
