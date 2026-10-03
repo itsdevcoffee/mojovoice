@@ -1,6 +1,5 @@
 /// Debug CPAL device enumeration - shows what CPAL can actually see
 /// Usage: cargo run --example debug_cpal_devices
-
 use cpal::traits::{DeviceTrait, HostTrait};
 
 fn main() {
@@ -14,10 +13,10 @@ fn main() {
         Some(device) => {
             println!("✓ Default input device:");
             print_device_info(&device, true);
-        }
+        },
         None => {
             println!("✗ No default input device found!");
-        }
+        },
     }
 
     println!("\n--- All Input Devices ---\n");
@@ -37,10 +36,10 @@ fn main() {
             } else {
                 println!("Total: {} device(s) found", count);
             }
-        }
+        },
         Err(e) => {
             eprintln!("Error enumerating devices: {:?}", e);
-        }
+        },
     }
 }
 
@@ -67,7 +66,7 @@ fn print_device_info(device: &cpal::Device, indent: bool) {
                 );
                 println!("{}  Channels: {}", prefix, first.channels());
             }
-        }
+        },
         Err(e) => println!("{}Configs: <error: {:?}>", prefix, e),
     }
 
@@ -80,7 +79,7 @@ fn print_device_info(device: &cpal::Device, indent: bool) {
                 config.sample_rate().0,
                 config.channels()
             );
-        }
+        },
         Err(e) => println!("{}Default config: <error: {:?}>", prefix, e),
     }
 }

@@ -17,9 +17,7 @@ use crate::state;
 /// Validate configured audio device exists, returns None (system default) if not found.
 /// If the device is stale (no longer available), updates the config file to remove it.
 fn validate_audio_device(configured_device: Option<String>) -> Option<String> {
-    let Some(ref name) = configured_device else {
-        return None;
-    };
+    let name = configured_device.as_ref()?;
 
     match list_input_devices() {
         Ok(devices) => {
@@ -45,11 +43,14 @@ fn validate_audio_device(configured_device: Option<String>) -> Option<String> {
 
                 None
             }
-        }
+        },
         Err(e) => {
-            warn!("Failed to list audio devices: {}. Using configured device anyway.", e);
+            warn!(
+                "Failed to list audio devices: {}. Using configured device anyway.",
+                e
+            );
             configured_device
-        }
+        },
     }
 }
 
@@ -129,7 +130,9 @@ impl DaemonServer {
 
         if let Some(ref p) = config.model.prompt {
             if !p.is_empty() {
-                warn!("model.prompt in config is deprecated and will be ignored; use mojovoice vocab add instead.");
+                warn!(
+                    "model.prompt in config is deprecated and will be ignored; use mojovoice vocab add instead."
+                );
             }
         }
 

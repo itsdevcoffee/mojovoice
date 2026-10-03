@@ -67,7 +67,8 @@ impl VocabStore {
 
     /// Remove a term from the vocabulary. Returns true if deleted, false if not found.
     pub fn remove_term(&self, term: &str) -> Result<bool> {
-        let rows_affected = self.conn
+        let rows_affected = self
+            .conn
             .execute("DELETE FROM vocabulary WHERE term = ?1", params![term])
             .context("Failed to remove term")?;
         Ok(rows_affected > 0)
@@ -150,8 +151,8 @@ mod tests {
 
     fn temp_store() -> (VocabStore, TempDir) {
         let dir = TempDir::new().expect("temp dir");
-        let store = VocabStore::open_with_path(&dir.path().join("test_vocab.db"))
-            .expect("open store");
+        let store =
+            VocabStore::open_with_path(&dir.path().join("test_vocab.db")).expect("open store");
         (store, dir)
     }
 
@@ -203,9 +204,9 @@ mod tests {
         store.increment_use_count("Maximus").unwrap();
 
         let terms = store.list_terms().unwrap();
-        assert_eq!(terms[0].term, "Claude");   // use_count = 2
+        assert_eq!(terms[0].term, "Claude"); // use_count = 2
         assert_eq!(terms[1].term, "Maximus"); // use_count = 1
-        assert_eq!(terms[2].term, "Wolfie");  // use_count = 0
+        assert_eq!(terms[2].term, "Wolfie"); // use_count = 0
     }
 
     #[test]

@@ -6,8 +6,8 @@ use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tracing::info;
 
-use super::paths::get_pid_file;
 use super::paths::get_listen_pid_file;
+use super::paths::get_pid_file;
 
 /// Global flag to signal recording should stop
 pub static STOP_RECORDING: AtomicBool = AtomicBool::new(false);
@@ -175,7 +175,10 @@ pub fn is_listening() -> Result<Option<RecordingState>> {
 
     let process_exists = signal::kill(Pid::from_raw(pid as i32), None).is_ok();
     if !process_exists {
-        info!("Cleaning up stale listen PID file (process {} not running)", pid);
+        info!(
+            "Cleaning up stale listen PID file (process {} not running)",
+            pid
+        );
         let _ = fs::remove_file(&pid_file);
         return Ok(None);
     }
@@ -195,7 +198,11 @@ pub fn start_listen() -> Result<()> {
     let mut file = fs::File::create(&pid_file).context("Failed to create listen PID file")?;
     writeln!(file, "{}", pid)?;
     writeln!(file, "{}", started_at)?;
-    info!("Listen session started (PID: {}, file: {})", pid, pid_file.display());
+    info!(
+        "Listen session started (PID: {}, file: {})",
+        pid,
+        pid_file.display()
+    );
     Ok(())
 }
 
@@ -305,7 +312,10 @@ mod tests {
 
         let result = is_listening().unwrap();
         assert!(result.is_none());
-        assert!(!pid_file.exists(), "stale PID file should have been removed");
+        assert!(
+            !pid_file.exists(),
+            "stale PID file should have been removed"
+        );
     }
 
     #[test]

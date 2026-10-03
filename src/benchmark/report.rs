@@ -334,7 +334,7 @@ fn render_html(results: &[(String, BenchmarkResult)]) -> String {
             .git_branch
             .as_deref()
             .unwrap_or("unknown"),
-        timestamp = &latest.benchmark_info.timestamp[..19].replace('T', " "),
+        timestamp = latest.benchmark_info.timestamp[..19].replace('T', " "),
         css = css,
         models_json = models_json,
         // Speed metrics

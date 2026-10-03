@@ -231,7 +231,7 @@ pub fn load_entries(
     let total = all_entries.len();
 
     // Sort by timestamp descending (newest first)
-    all_entries.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+    all_entries.sort_by_key(|e| std::cmp::Reverse(e.timestamp));
 
     // Apply pagination
     let entries: Vec<HistoryEntry> = all_entries.into_iter().skip(offset).take(limit).collect();
@@ -300,13 +300,13 @@ pub fn enforce_max_entries(max_entries: usize) -> Result<()> {
     let removed_count = entries.len() - max_entries;
 
     // Sort by timestamp descending (keep newest)
-    entries.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+    entries.sort_by_key(|e| std::cmp::Reverse(e.timestamp));
 
     // Keep only the newest max_entries
     entries.truncate(max_entries);
 
     // Sort back to chronological order for file storage
-    entries.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+    entries.sort_by_key(|e| e.timestamp);
 
     // Atomically write back
     write_entries_atomic(&history_file, &entries)?;

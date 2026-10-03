@@ -63,11 +63,11 @@ fn list_cpal_devices() -> Result<Vec<AudioDeviceInfo>> {
                     name: name.clone(),
                     internal_name: Some(name),
                 });
-            }
+            },
             Err(e) => {
                 skipped_count += 1;
                 warn!("Skipped device {}: failed to get name ({})", idx, e);
-            }
+            },
         }
     }
 
@@ -78,7 +78,10 @@ fn list_cpal_devices() -> Result<Vec<AudioDeviceInfo>> {
         );
     }
 
-    info!("Found {} available audio input device(s) via CPAL", devices.len());
+    info!(
+        "Found {} available audio input device(s) via CPAL",
+        devices.len()
+    );
 
     Ok(devices)
 }
@@ -121,7 +124,8 @@ fn list_pipewire_devices() -> Result<Vec<AudioDeviceInfo>> {
             let source_name = parts[1].to_string();
 
             // Get human-readable description
-            let description = get_source_description(&source_name).unwrap_or_else(|| source_name.clone());
+            let description =
+                get_source_description(&source_name).unwrap_or_else(|| source_name.clone());
 
             // Prefix monitor sources (application audio loopbacks) so they're visually distinct
             let display_name = if source_name.ends_with(".monitor") {
@@ -276,10 +280,16 @@ fn setup_audio_device(device_name: Option<&str>) -> Result<AudioSetup> {
         if let Some(name) = device_name {
             // Try to resolve device name (handles both display names and internal names)
             if let Ok(internal_name) = resolve_device_name(name) {
-                info!("Resolved device '{}' to PipeWire source '{}'", name, internal_name);
+                info!(
+                    "Resolved device '{}' to PipeWire source '{}'",
+                    name, internal_name
+                );
                 // Set as default PipeWire source, then use ALSA "default" device
                 if let Err(e) = set_pipewire_source_temporarily(&internal_name) {
-                    warn!("Failed to set PipeWire source: {}. Falling back to default device.", e);
+                    warn!(
+                        "Failed to set PipeWire source: {}. Falling back to default device.",
+                        e
+                    );
                 } else {
                     return setup_cpal_device(Some("default"));
                 }
@@ -295,10 +305,13 @@ fn setup_audio_device(device_name: Option<&str>) -> Result<AudioSetup> {
                     info!("Using PipeWire default source: {}", source);
                     // The source is already the default in PipeWire, just use CPAL's "default"
                     return setup_cpal_device(Some("default"));
-                }
+                },
                 Err(e) => {
-                    warn!("Failed to get PipeWire default source: {}. Using CPAL default.", e);
-                }
+                    warn!(
+                        "Failed to get PipeWire default source: {}. Using CPAL default.",
+                        e
+                    );
+                },
             }
         }
     }
@@ -317,8 +330,7 @@ fn resolve_device_name(name: &str) -> Result<String> {
     }
 
     // Query PipeWire for all sources and match by display name
-    let devices = list_pipewire_devices()
-        .context("Failed to query PipeWire devices")?;
+    let devices = list_pipewire_devices().context("Failed to query PipeWire devices")?;
 
     // Try exact match on display name
     for device in &devices {

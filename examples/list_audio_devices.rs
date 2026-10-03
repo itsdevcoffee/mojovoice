@@ -20,11 +20,7 @@ fn main() {
                     "  [{}] {} {}",
                     idx + 1,
                     device.name,
-                    if device.is_default {
-                        "(default)"
-                    } else {
-                        ""
-                    }
+                    if device.is_default { "(default)" } else { "" }
                 );
             }
 
@@ -34,10 +30,10 @@ fn main() {
                 println!("  - Missing audio permissions");
                 println!("  - CPAL backend issues");
             }
-        }
+        },
         Err(e) => {
             eprintln!("Error listing devices: {}", e);
             std::process::exit(1);
-        }
+        },
     }
 }
