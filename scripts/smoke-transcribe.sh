@@ -22,8 +22,10 @@ DOWNLOAD_LOG="$("$BIN" download tiny 2>&1)" || { echo "$DOWNLOAD_LOG" >&2; exit 
 MODEL_DIR="$(echo "$DOWNLOAD_LOG" | sed 's/\x1b\[[0-9;]*m//g' | sed -n 's/.*Model ready: //p' | tail -1)"
 [ -d "$MODEL_DIR" ] || { echo "FAIL: download did not report a model dir" >&2; echo "$DOWNLOAD_LOG" >&2; exit 1; }
 CONFIG="$("$BIN" config --path)"
-# TOML literal string: Windows paths contain backslashes
-sed -i "0,/^path = .*/s||path = '$MODEL_DIR'|" "$CONFIG"
+# TOML literal string: Windows paths contain backslashes. Write the temp file next to
+# the config (sed -i's temp file in the cwd can't be renamed across Windows drives).
+sed "0,/^path = .*/s||path = '$MODEL_DIR'|" "$CONFIG" > "$CONFIG.tmp"
+mv "$CONFIG.tmp" "$CONFIG"
 
 cleanup() { "$BIN" daemon down >/dev/null 2>&1 || true; }
 trap cleanup EXIT
