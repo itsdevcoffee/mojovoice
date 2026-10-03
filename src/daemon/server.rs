@@ -537,6 +537,18 @@ pub fn run_daemon(model_path: &Path) -> Result<()> {
 
     let server = DaemonServer::new(model_path)?;
 
+    if let Some(hotkey) = crate::config::load().ok().and_then(|c| c.hotkey.toggle) {
+        #[cfg(windows)]
+        if let Err(e) = super::hotkey::spawn(&hotkey) {
+            warn!("{:#}", e);
+        }
+        #[cfg(not(windows))]
+        warn!(
+            "hotkey.toggle ({}) is only supported on Windows; bind 'mojovoice start' in your desktop environment instead",
+            hotkey
+        );
+    }
+
     loop {
         // Check shutdown flag
         if server.shutdown.load(Ordering::SeqCst) {

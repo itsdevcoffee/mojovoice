@@ -19,6 +19,28 @@ pub struct Config {
     pub ui: UiConfig,
     #[serde(default)]
     pub history: HistoryConfig,
+    #[serde(default)]
+    pub hotkey: HotkeyConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HotkeyConfig {
+    /// Global hotkey that toggles recording, registered by the daemon (Windows only;
+    /// on Linux, bind `mojovoice start` in your compositor/desktop instead)
+    #[serde(default = "default_toggle_hotkey")]
+    pub toggle: Option<String>,
+}
+
+fn default_toggle_hotkey() -> Option<String> {
+    cfg!(windows).then(|| "Ctrl+Alt+Space".to_string())
+}
+
+impl Default for HotkeyConfig {
+    fn default() -> Self {
+        Self {
+            toggle: default_toggle_hotkey(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -195,6 +217,7 @@ impl Default for Config {
                 custom_scale: default_custom_scale(),
             },
             history: HistoryConfig::default(),
+            hotkey: HotkeyConfig::default(),
         }
     }
 }
