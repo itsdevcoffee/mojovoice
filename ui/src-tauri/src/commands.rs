@@ -1039,7 +1039,16 @@ pub async fn get_config() -> Result<AppConfig, String> {
 pub async fn save_config(config: AppConfig) -> Result<(), String> {
     let config_path = get_config_path()?;
 
-    let config_str = toml::to_string_pretty(&config)
+    // Replace the sections the app manages; keep any others (e.g. [hotkey]) intact
+    let mut merged: toml::Table = std::fs::read_to_string(&config_path)
+        .ok()
+        .and_then(|existing| existing.parse().ok())
+        .unwrap_or_default();
+    let sections = toml::Table::try_from(&config)
+        .map_err(|e| format!("Failed to serialize config: {}", e))?;
+    merged.extend(sections);
+
+    let config_str = toml::to_string_pretty(&merged)
         .map_err(|e| format!("Failed to serialize config: {}", e))?;
 
     std::fs::write(&config_path, config_str)
