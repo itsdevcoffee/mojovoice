@@ -208,12 +208,6 @@ fn set_pipewire_source_temporarily(source_name: &str) -> Result<()> {
     Ok(())
 }
 
-#[cfg(not(target_os = "linux"))]
-fn set_pipewire_source_temporarily(_source_name: &str) -> Result<()> {
-    // No-op on non-Linux platforms
-    Ok(())
-}
-
 /// Get the current PipeWire/PulseAudio default source name
 #[cfg(target_os = "linux")]
 fn get_pipewire_default_source() -> Result<String> {
