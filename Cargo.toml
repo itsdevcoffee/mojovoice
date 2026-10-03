@@ -47,6 +47,9 @@ ureq = "2.9"
 # Better resampling
 rubato = "0.16"
 
+# Daemon IPC: Unix sockets / Windows named pipes
+interprocess = "2.4"
+
 # FFT for the Whisper mel spectrogram
 realfft = "3.5"
 
@@ -89,6 +92,7 @@ enigo = { version = "0.6" }
 # Windows - uses SendInput API automatically
 [target.'cfg(target_os = "windows")'.dependencies]
 enigo = { version = "0.6" }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading"] }
 
 # Linux - Wayland by default (most modern distros)
 # X11 users: change ["wayland"] to ["x11rb"] below

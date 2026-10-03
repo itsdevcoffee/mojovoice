@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
-use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -9,9 +8,12 @@ use std::thread::{self, JoinHandle};
 use tracing::{error, info, warn};
 
 use crate::audio::{capture_toggle, list_input_devices};
+use crate::daemon::client::is_daemon_running;
 use crate::daemon::protocol::{DaemonRequest, DaemonResponse};
+use crate::daemon::transport;
 use crate::history::{self, HistoryEntry, enforce_max_entries};
 use crate::state;
+use interprocess::local_socket::prelude::*;
 // Transcriber trait is now used via Box<dyn ...>
 
 /// Validate configured audio device exists, returns None (system default) if not found.
@@ -52,57 +54,6 @@ fn validate_audio_device(configured_device: Option<String>) -> Option<String> {
             configured_device
         },
     }
-}
-
-/// Get the path to the daemon socket
-pub fn get_socket_path() -> Result<PathBuf> {
-    let state_dir = state::paths::get_state_dir()?;
-    Ok(state_dir.join("daemon.sock"))
-}
-
-/// Check if daemon is running by pinging it
-pub fn is_daemon_running() -> bool {
-    use crate::daemon::protocol::{DaemonRequest, DaemonResponse};
-    use std::io::{BufRead, BufReader, Write};
-
-    let socket_path = match get_socket_path() {
-        Ok(p) => p,
-        Err(_) => return false,
-    };
-
-    if !socket_path.exists() {
-        return false;
-    }
-
-    // Try to ping the daemon
-    let mut stream = match UnixStream::connect(&socket_path) {
-        Ok(s) => s,
-        Err(_) => return false,
-    };
-
-    // Send ping request (serializing Ping should never fail)
-    let Ok(ping) = serde_json::to_string(&DaemonRequest::Ping) else {
-        return false;
-    };
-    if stream.write_all(ping.as_bytes()).is_err() {
-        return false;
-    }
-    if stream.write_all(b"\n").is_err() {
-        return false;
-    }
-    if stream.flush().is_err() {
-        return false;
-    }
-
-    // Try to read response
-    let mut reader = BufReader::new(stream);
-    let mut line = String::new();
-    if reader.read_line(&mut line).is_err() {
-        return false;
-    }
-
-    // Check if we got a valid pong response
-    serde_json::from_str::<DaemonResponse>(line.trim()).is_ok()
 }
 
 /// Shared state for async recording
@@ -235,8 +186,8 @@ impl DaemonServer {
         Ok(filepath)
     }
 
-    fn handle_client(&self, mut stream: UnixStream) -> Result<()> {
-        let mut reader = BufReader::new(stream.try_clone()?);
+    fn handle_client(&self, stream: transport::Stream) -> Result<()> {
+        let mut reader = BufReader::new(&stream);
         let mut line = String::new();
 
         reader.read_line(&mut line)?;
@@ -283,9 +234,10 @@ impl DaemonServer {
         };
 
         let response_json = serde_json::to_string(&response)?;
-        stream.write_all(response_json.as_bytes())?;
-        stream.write_all(b"\n")?;
-        stream.flush()?;
+        let mut writer = &stream;
+        writer.write_all(response_json.as_bytes())?;
+        writer.write_all(b"\n")?;
+        writer.flush()?;
 
         Ok(())
     }
@@ -546,17 +498,11 @@ impl DaemonServer {
 
 /// Run the daemon server
 pub fn run_daemon(model_path: &Path) -> Result<()> {
-    let socket_path = get_socket_path()?;
-
-    // Check if daemon is already running before removing socket
-    if socket_path.exists() {
-        if is_daemon_running() {
-            anyhow::bail!("Daemon is already running. Stop it first or use the existing daemon.");
-        }
-        // Socket exists but daemon not responding - it's stale, safe to remove
-        info!("Removing stale socket file");
-        fs::remove_file(&socket_path)?;
+    if is_daemon_running() {
+        anyhow::bail!("Daemon is already running. Stop it first or use the existing daemon.");
     }
+    // Nothing answered, so any leftover socket file is stale
+    transport::remove_stale()?;
 
     // Clean up any stale state files from previous session
     // This ensures Waybar starts in idle state, not processing
@@ -567,12 +513,8 @@ pub fn run_daemon(model_path: &Path) -> Result<()> {
         let _ = fs::remove_file(&pid_file);
     }
 
-    let listener = UnixListener::bind(&socket_path).context("Failed to bind Unix socket")?;
-
-    // Set non-blocking so we can check shutdown flag periodically
-    listener
-        .set_nonblocking(true)
-        .context("Failed to set socket non-blocking")?;
+    // Non-blocking accept so we can check the shutdown flag periodically
+    let listener = transport::bind()?;
 
     // Write daemon PID file
     let daemon_pid_file = state::paths::get_daemon_pid_file()?;
@@ -591,7 +533,7 @@ pub fn run_daemon(model_path: &Path) -> Result<()> {
         }
     }
 
-    info!("Daemon listening on {}", socket_path.display());
+    info!("Daemon listening on {}", transport::endpoint());
 
     let server = DaemonServer::new(model_path)?;
 
@@ -603,7 +545,7 @@ pub fn run_daemon(model_path: &Path) -> Result<()> {
         }
 
         match listener.accept() {
-            Ok((stream, _addr)) => {
+            Ok(stream) => {
                 if let Err(e) = server.handle_client(stream) {
                     error!("Error handling client: {}", e);
                 }
@@ -618,10 +560,8 @@ pub fn run_daemon(model_path: &Path) -> Result<()> {
         }
     }
 
-    // Clean up socket and PID file on exit
-    if socket_path.exists() {
-        fs::remove_file(&socket_path)?;
-    }
+    // Dropping the listener removes the Unix socket file
+    drop(listener);
     if daemon_pid_file.exists() {
         fs::remove_file(&daemon_pid_file)?;
     }
