@@ -636,44 +636,94 @@ impl Transcriber for CandleEngine {
         let overlap_samples = (CHUNK_OVERLAP_SECS * SAMPLE_RATE as f32) as usize;
         let stride = chunk_samples - overlap_samples;
 
-        let mut results = Vec::new();
+        let mut merged = String::new();
         let mut offset = 0;
+        let mut chunk_count = 0;
 
-        while offset < audio.len() {
+        loop {
             let end = (offset + chunk_samples).min(audio.len());
-            let chunk = &audio[offset..end];
+            chunk_count += 1;
 
-            match self.transcribe_chunk(chunk) {
-                Ok(text) if !text.is_empty() => results.push(text),
-                Ok(_) => {},
-                Err(e) => warn!("Chunk {} failed: {}", results.len() + 1, e),
+            match self.transcribe_chunk(&audio[offset..end]) {
+                Ok(text) => merged = merge_overlapping(&merged, text.trim()),
+                Err(e) => warn!("Chunk {} failed: {}", chunk_count, e),
             }
 
-            offset += stride;
-
-            // Process remainder if close to end
-            if offset + chunk_samples > audio.len() && offset < audio.len() {
-                let remaining = &audio[offset..];
-                if remaining.len() > overlap_samples {
-                    if let Ok(text) = self.transcribe_chunk(remaining) {
-                        if !text.is_empty() {
-                            results.push(text);
-                        }
-                    }
-                }
+            if end == audio.len() {
                 break;
             }
+            offset += stride;
         }
 
-        let final_text = results.join(" ");
         debug!(
             "Long-form transcription: {} chunks, {} chars",
-            results.len(),
-            final_text.len()
+            chunk_count,
+            merged.len()
         );
 
-        Ok(final_text)
+        Ok(merged)
     }
+}
+
+/// How many words at each side of a chunk boundary to search for the overlap.
+/// 5s of overlapping audio is rarely more than ~20 words.
+const MERGE_WINDOW_WORDS: usize = 40;
+/// Shortest word run treated as the overlap (shorter runs are likely coincidence).
+const MIN_OVERLAP_WORDS: usize = 3;
+
+/// Join the transcripts of two chunks whose audio overlapped, keeping one copy of
+/// the words both chunks transcribed.
+///
+/// Finds the longest run of matching words (ignoring case and punctuation) between
+/// the end of `prev` and the start of `next`, keeps `prev` up to the end of that
+/// run, then continues with `next` after it. Words around the run come from the
+/// chunk edges, where Whisper often cuts a word off, so they are dropped. Without a
+/// confident match the texts are simply concatenated.
+fn merge_overlapping(prev: &str, next: &str) -> String {
+    if prev.is_empty() {
+        return next.to_string();
+    }
+    if next.is_empty() {
+        return prev.to_string();
+    }
+
+    let normalize = |w: &&str| -> String {
+        w.chars()
+            .filter(|c| c.is_alphanumeric())
+            .flat_map(char::to_lowercase)
+            .collect()
+    };
+
+    let prev_words: Vec<&str> = prev.split_whitespace().collect();
+    let next_words: Vec<&str> = next.split_whitespace().collect();
+    let tail_start = prev_words.len().saturating_sub(MERGE_WINDOW_WORDS);
+    let tail: Vec<String> = prev_words[tail_start..].iter().map(normalize).collect();
+    let head: Vec<String> = next_words[..next_words.len().min(MERGE_WINDOW_WORDS)]
+        .iter()
+        .map(normalize)
+        .collect();
+
+    // Longest common run of words (classic longest-common-substring DP)
+    let (mut best_len, mut best_tail_end, mut best_head_end) = (0, 0, 0);
+    let mut run = vec![vec![0usize; head.len() + 1]; tail.len() + 1];
+    for i in 1..=tail.len() {
+        for j in 1..=head.len() {
+            if !tail[i - 1].is_empty() && tail[i - 1] == head[j - 1] {
+                run[i][j] = run[i - 1][j - 1] + 1;
+                if run[i][j] > best_len {
+                    (best_len, best_tail_end, best_head_end) = (run[i][j], i, j);
+                }
+            }
+        }
+    }
+
+    if best_len < MIN_OVERLAP_WORDS {
+        return format!("{} {}", prev, next);
+    }
+
+    let mut words = prev_words[..tail_start + best_tail_end].to_vec();
+    words.extend_from_slice(&next_words[best_head_end..]);
+    words.join(" ")
 }
 
 struct SpecialTokens {
@@ -724,8 +774,70 @@ fn build_decoder_prefix(
 }
 
 #[cfg(test)]
+mod merge_tests {
+    use super::merge_overlapping;
+
+    #[test]
+    fn removes_sentence_repeated_across_chunks() {
+        // Real output from harvard-list57-male.wav (46.9s, two chunks)
+        let prev = "A round hole was drilled through the thin board. Footprints showed the path he took up the beach.";
+        let next =
+            "Footprints showed the path he took up the beach. She was waiting at my front lawn.";
+        assert_eq!(
+            merge_overlapping(prev, next),
+            "A round hole was drilled through the thin board. Footprints showed the path he took up the beach. She was waiting at my front lawn."
+        );
+    }
+
+    #[test]
+    fn drops_cut_off_words_at_chunk_edges() {
+        // prev ends mid-word ("fri"), next starts mid-word ("hip")
+        let prev = "we need to ship the release before fri";
+        let next = "hip the release before Friday so users get the fix";
+        assert_eq!(
+            merge_overlapping(prev, next),
+            "we need to ship the release before Friday so users get the fix"
+        );
+    }
+
+    #[test]
+    fn ignores_case_and_punctuation_when_matching() {
+        let prev = "Glue the sheet to the dark blue background.";
+        let next = "the dark blue background, it's easy to tell";
+        assert_eq!(
+            merge_overlapping(prev, next),
+            "Glue the sheet to the dark blue background. it's easy to tell"
+        );
+    }
+
+    #[test]
+    fn concatenates_when_no_overlap_found() {
+        assert_eq!(
+            merge_overlapping("first part", "second part"),
+            "first part second part"
+        );
+    }
+
+    #[test]
+    fn short_coincidental_matches_are_not_merged() {
+        // Only "of the" matches: below MIN_OVERLAP_WORDS
+        assert_eq!(
+            merge_overlapping("one of the best", "most of the time"),
+            "one of the best most of the time"
+        );
+    }
+
+    #[test]
+    fn handles_empty_chunks() {
+        assert_eq!(merge_overlapping("", "hello world"), "hello world");
+        assert_eq!(merge_overlapping("hello world", ""), "hello world");
+        assert_eq!(merge_overlapping("", ""), "");
+    }
+}
+
+#[cfg(test)]
 mod tests {
-    use super::{build_decoder_prefix, SpecialTokens};
+    use super::{SpecialTokens, build_decoder_prefix};
 
     fn make_special_tokens() -> SpecialTokens {
         SpecialTokens {
@@ -744,11 +856,17 @@ mod tests {
         let prompt_tokens = vec![100u32, 200, 300];
         let result = build_decoder_prefix(&prompt_tokens, &special, false);
 
-        assert_eq!(result[0], special.sot_prev_token, "Should start with sot_prev_token");
+        assert_eq!(
+            result[0], special.sot_prev_token,
+            "Should start with sot_prev_token"
+        );
         assert_eq!(result[1], 100, "Second token should be first prompt token");
         assert_eq!(result[2], 200, "Third token should be second prompt token");
         assert_eq!(result[3], 300, "Fourth token should be third prompt token");
-        assert_eq!(result[4], special.sot_token, "SOT should come after prompt tokens");
+        assert_eq!(
+            result[4], special.sot_token,
+            "SOT should come after prompt tokens"
+        );
     }
 
     #[test]
@@ -757,7 +875,10 @@ mod tests {
         let prompt_tokens: Vec<u32> = vec![];
         let result = build_decoder_prefix(&prompt_tokens, &special, false);
 
-        assert_eq!(result[0], special.sot_token, "Should start with sot_token when no prompt");
+        assert_eq!(
+            result[0], special.sot_token,
+            "Should start with sot_token when no prompt"
+        );
         assert!(
             !result.contains(&special.sot_prev_token),
             "sot_prev_token should not appear with empty prompt"
@@ -821,12 +942,25 @@ mod tests {
         let result = build_decoder_prefix(&prompt_tokens, &special, false);
 
         // Expected: [sot_prev, 224 prompt tokens, sot, lang, transcribe, notimestamps] = 229 total
-        assert_eq!(result.len(), 229, "Expected 229 tokens (1 sot_prev + 224 prompt + 4 control)");
-        assert_eq!(result[0], special.sot_prev_token, "Must start with sot_prev");
-        assert_eq!(result[225], special.sot_token, "SOT must follow prompt tokens");
+        assert_eq!(
+            result.len(),
+            229,
+            "Expected 229 tokens (1 sot_prev + 224 prompt + 4 control)"
+        );
+        assert_eq!(
+            result[0], special.sot_prev_token,
+            "Must start with sot_prev"
+        );
+        assert_eq!(
+            result[225], special.sot_token,
+            "SOT must follow prompt tokens"
+        );
 
         // Verify the decoder budget is always positive: 448 - prefix_len > 0
-        assert!(result.len() < 448, "Prefix must leave room for generated tokens");
+        assert!(
+            result.len() < 448,
+            "Prefix must leave room for generated tokens"
+        );
     }
 
     /// Verify the correct Whisper token ordering with a real-world vocab prompt scenario:
