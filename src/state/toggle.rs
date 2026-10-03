@@ -1,5 +1,7 @@
 use anyhow::{Context, Result};
+#[cfg(unix)]
 use nix::sys::signal::{self, Signal};
+#[cfg(unix)]
 use nix::unistd::Pid;
 use std::fs;
 use std::io::Write;
@@ -11,6 +13,50 @@ use super::paths::get_pid_file;
 
 /// Global flag to signal recording should stop
 pub static STOP_RECORDING: AtomicBool = AtomicBool::new(false);
+
+/// Check whether a process is still running
+#[cfg(unix)]
+fn process_alive(pid: u32) -> bool {
+    signal::kill(Pid::from_raw(pid as i32), None).is_ok()
+}
+
+/// Check whether a process is still running
+#[cfg(windows)]
+fn process_alive(pid: u32) -> bool {
+    use windows_sys::Win32::Foundation::{CloseHandle, STILL_ACTIVE};
+    use windows_sys::Win32::System::Threading::{
+        GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+
+    // SAFETY: plain Win32 calls; the handle is checked and closed before returning
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if handle.is_null() {
+            return false;
+        }
+        let mut exit_code = 0u32;
+        let ok = GetExitCodeProcess(handle, &mut exit_code) != 0;
+        CloseHandle(handle);
+        ok && exit_code == STILL_ACTIVE as u32
+    }
+}
+
+/// Windows has no SIGUSR1, so a stop request is a `stop-<pid>` file that the target
+/// process watches for (see `setup_signal_handler`)
+#[cfg(windows)]
+fn stop_file(pid: u32) -> Result<std::path::PathBuf> {
+    Ok(super::paths::get_state_dir()?.join(format!("stop-{}", pid)))
+}
+
+/// Ask a recording or listen process to stop
+fn send_stop(pid: u32) -> Result<()> {
+    #[cfg(unix)]
+    signal::kill(Pid::from_raw(pid as i32), Signal::SIGUSR1)
+        .context("Failed to send stop signal")?;
+    #[cfg(windows)]
+    fs::write(stop_file(pid)?, "").context("Failed to write stop request")?;
+    Ok(())
+}
 
 /// Recording state information
 #[derive(Debug)]
@@ -44,7 +90,7 @@ pub fn is_recording() -> Result<Option<RecordingState>> {
     }
 
     // Check if process is still running
-    let process_exists = signal::kill(Pid::from_raw(pid as i32), None).is_ok();
+    let process_exists = process_alive(pid);
 
     if !process_exists {
         // Stale PID file, clean up
@@ -128,18 +174,14 @@ pub fn cleanup_processing() -> Result<()> {
     Ok(())
 }
 
-/// Stop a running recording by sending SIGUSR1
+/// Stop a running recording (SIGUSR1 on Unix, stop file on Windows)
 #[allow(dead_code)]
 pub fn stop_recording(state: &RecordingState) -> Result<()> {
     info!(
         "Sending stop signal to recording process (PID: {})",
         state.pid
     );
-
-    signal::kill(Pid::from_raw(state.pid as i32), Signal::SIGUSR1)
-        .context("Failed to send stop signal to recording process")?;
-
-    Ok(())
+    send_stop(state.pid).context("Failed to stop recording process")
 }
 
 /// Clean up PID file (called when recording ends)
@@ -173,7 +215,7 @@ pub fn is_listening() -> Result<Option<RecordingState>> {
         return Ok(None);
     }
 
-    let process_exists = signal::kill(Pid::from_raw(pid as i32), None).is_ok();
+    let process_exists = process_alive(pid);
     if !process_exists {
         info!(
             "Cleaning up stale listen PID file (process {} not running)",
@@ -216,17 +258,16 @@ pub fn cleanup_listen() -> Result<()> {
     Ok(())
 }
 
-/// Stop a running listen session by sending SIGUSR1
+/// Stop a running listen session (SIGUSR1 on Unix, stop file on Windows)
 pub fn stop_listen(state: &RecordingState) -> Result<()> {
     info!("Sending stop signal to listen process (PID: {})", state.pid);
-    signal::kill(Pid::from_raw(state.pid as i32), Signal::SIGUSR1)
-        .context("Failed to send stop signal to listen process")?;
-    Ok(())
+    send_stop(state.pid).context("Failed to stop listen process")
 }
 
-/// Set up signal handler for SIGUSR1
+/// Make stop requests from other processes set `STOP_RECORDING`
+#[cfg(unix)]
 pub fn setup_signal_handler() -> Result<()> {
-    // Register handler for SIGUSR1
+    // SAFETY: the handler only stores to an atomic, which is async-signal-safe
     unsafe {
         signal::signal(
             Signal::SIGUSR1,
@@ -237,7 +278,25 @@ pub fn setup_signal_handler() -> Result<()> {
     Ok(())
 }
 
+/// Make stop requests from other processes set `STOP_RECORDING`
+#[cfg(windows)]
+pub fn setup_signal_handler() -> Result<()> {
+    let file = stop_file(std::process::id())?;
+    let _ = fs::remove_file(&file);
+    std::thread::spawn(move || {
+        loop {
+            if file.exists() {
+                let _ = fs::remove_file(&file);
+                STOP_RECORDING.store(true, Ordering::SeqCst);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    });
+    Ok(())
+}
+
 /// Signal handler function
+#[cfg(unix)]
 extern "C" fn handle_stop_signal(_: i32) {
     STOP_RECORDING.store(true, Ordering::SeqCst);
 }
