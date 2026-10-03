@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.7] - 2026-10-03
+
+### Fixed
+- **AppImage icon:** `.DirIcon` was an absolute symlink into the CI runner's build directory, leaving the AppImage without an icon on every other machine (and failing the AppImageHub catalog test). The release workflow now replaces it with a real copy of the 256px icon and repacks the AppImage.
+- **Desktop entry category:** The bundled `.desktop` file now declares `Categories=Utility;` instead of an empty value.
+
 ## [0.5.6] - 2026-03-08
 
 ### Added

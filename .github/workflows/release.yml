@@ -152,6 +152,24 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
 
+      # Tauri's bundler leaves .DirIcon as an absolute symlink into the runner's
+      # build dir, which is broken on every other machine (AppImageHub rejects it).
+      # Replace it with a real copy of the icon and repack.
+      - name: Fix AppImage .DirIcon
+        working-directory: ui/src-tauri/target/release/bundle/appimage
+        env:
+          APPIMAGE: mojovoice_${{ steps.version.outputs.VERSION }}_amd64.AppImage
+          APPIMAGE_EXTRACT_AND_RUN: 1
+          ARCH: x86_64
+        run: |
+          curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool "$APPIMAGE"
+          ./"$APPIMAGE" --appimage-extract >/dev/null
+          rm -f squashfs-root/.DirIcon
+          cp squashfs-root/mojovoice.png squashfs-root/.DirIcon
+          ./appimagetool --no-appstream squashfs-root "$APPIMAGE"
+          rm -rf squashfs-root appimagetool
+
       - name: Upload AppImage
         uses: actions/upload-release-asset@v1
         env:
