@@ -48,6 +48,15 @@ jobs:
       - name: Build
         run: cargo build --release
 
+      - name: Cache whisper-tiny
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mojovoice-smoke
+          key: whisper-tiny-safetensors-v1
+
+      - name: Smoke test transcription
+        run: ./scripts/smoke-transcribe.sh target/release/mojovoice
+
       - name: Package binary
         run: |
           mkdir -p mojovoice-linux-x64
