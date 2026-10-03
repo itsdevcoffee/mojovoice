@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.9] - 2026-10-03
+
+### Fixed
+- **AppImage permissions:** The AppImage's root directory was only accessible to its owner (a side effect of the v0.5.7 `.DirIcon` repack), so sandboxed launches such as AppImageHub's test failed with "AppRun: Permission denied".
+
 ## [0.5.8] - 2026-10-03
 
 ### Fixed
