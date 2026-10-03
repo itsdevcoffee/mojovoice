@@ -1,308 +1,431 @@
-/// Information about a Whisper model
+/// On-disk format of a model's weights
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModelFormat {
+    /// `model.safetensors` (full precision)
+    Safetensors,
+    /// `model.gguf` (quantized)
+    Gguf,
+}
+
+impl ModelFormat {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ModelFormat::Safetensors => "safetensors",
+            ModelFormat::Gguf => "gguf",
+        }
+    }
+}
+
+/// A Whisper model that can be downloaded from HuggingFace and loaded by the Candle engine.
+///
+/// Each model is stored as a directory (`dir_name`) under the models directory containing
+/// `config.json`, `tokenizer.json`, and `model.safetensors` or `model.gguf`.
 #[derive(Debug, Clone)]
 pub struct ModelInfo {
     pub name: &'static str,
-    pub filename: &'static str,
-    pub url: &'static str,
-    pub sha256: &'static str,
+    /// Directory name under the models directory
+    pub dir_name: &'static str,
     pub size_mb: u32,
+    pub family: &'static str,
+    pub quantization: &'static str,
+    pub format: ModelFormat,
+    /// HuggingFace repo holding the weights (e.g. "openai/whisper-large-v3-turbo")
+    pub repo_id: &'static str,
+    /// GGUF only: repo to fetch config.json and tokenizer.json from
+    pub base_repo_id: Option<&'static str>,
+    /// GGUF only: weights filename inside `repo_id`
+    pub gguf_file: Option<&'static str>,
 }
 
-/// Registry of known Whisper models with their checksums
+/// One file to fetch for a model
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelFile {
+    /// Name inside the model directory
+    pub local_name: &'static str,
+    pub repo_id: &'static str,
+    /// Name inside the HuggingFace repo
+    pub remote_name: &'static str,
+}
+
+impl ModelFile {
+    pub fn url(&self) -> String {
+        format!(
+            "https://huggingface.co/{}/resolve/main/{}",
+            self.repo_id, self.remote_name
+        )
+    }
+}
+
+/// Model used when none is specified
+pub const DEFAULT_MODEL: &str = "large-v3-turbo";
+
+/// Registry of downloadable models (shared by the CLI and the desktop app)
 pub const MODEL_REGISTRY: &[ModelInfo] = &[
-    // ===========================================
-    // Large V3 Turbo (Recommended for most users)
-    // ===========================================
+    // SAFETENSORS MODELS (Full precision)
+
+    // Large V3 Turbo (Recommended - fast and accurate)
     ModelInfo {
         name: "large-v3-turbo",
-        filename: "ggml-large-v3-turbo.bin",
-        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin",
-        sha256: "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69",
-        size_mb: 1625,
+        dir_name: "whisper-large-v3-turbo",
+        size_mb: 1550,
+        family: "Large V3 Turbo",
+        quantization: "Full",
+        format: ModelFormat::Safetensors,
+        repo_id: "openai/whisper-large-v3-turbo",
+        base_repo_id: None,
+        gguf_file: None,
     },
-    ModelInfo {
-        name: "large-v3-turbo-q5_0",
-        filename: "ggml-large-v3-turbo-q5_0.bin",
-        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin",
-        sha256: "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2",
-        size_mb: 547,
-    },
-    ModelInfo {
-        name: "large-v3-turbo-q8_0",
-        filename: "ggml-large-v3-turbo-q8_0.bin",
-        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q8_0.bin",
-        sha256: "317eb69c11673c9de1e1f0d459b253999804ec71ac4c23c17ecf5fbe24e259a1",
-        size_mb: 834,
-    },
-    // ===========================================
-    // Distil-Whisper (Fast, efficient variants)
-    // ===========================================
+    // Distil-Whisper (Faster, English-optimized)
     ModelInfo {
         name: "distil-large-v3.5",
-        filename: "ggml-distil-large-v3.5.bin",
-        url: "https://huggingface.co/distil-whisper/distil-large-v3.5-ggml/resolve/main/ggml-model.bin",
-        sha256: "ec2498919b498c5f6b00041adb45650124b3cd9f26f545fffa8f5d11c28dcf26",
-        size_mb: 1449,
+        dir_name: "distil-large-v3.5",
+        size_mb: 1510,
+        family: "Distil",
+        quantization: "Full",
+        format: ModelFormat::Safetensors,
+        repo_id: "distil-whisper/distil-large-v3.5",
+        base_repo_id: None,
+        gguf_file: None,
     },
     ModelInfo {
         name: "distil-large-v3",
-        filename: "ggml-distil-large-v3.bin",
-        url: "https://huggingface.co/distil-whisper/distil-large-v3-ggml/resolve/main/ggml-distil-large-v3.bin",
-        sha256: "2883a11b90fb10ed592d826edeaee7d2929bf1ab985109fe9e1e7b4d2b69a298",
-        size_mb: 1520,
+        dir_name: "distil-large-v3",
+        size_mb: 1510,
+        family: "Distil",
+        quantization: "Full",
+        format: ModelFormat::Safetensors,
+        repo_id: "distil-whisper/distil-large-v3",
+        base_repo_id: None,
+        gguf_file: None,
     },
     ModelInfo {
         name: "distil-large-v2",
-        filename: "ggml-distil-large-v2.bin",
-        url: "https://huggingface.co/distil-whisper/distil-large-v2/resolve/main/ggml-large-32-2.en.bin",
-        sha256: "2ed2bbe6c4138b3757f292b0622981bdb3d02bcac57f77095670dac85fab3cd6",
-        size_mb: 1449,
-    },
-    ModelInfo {
-        name: "distil-medium.en",
-        filename: "ggml-distil-medium.en.bin",
-        url: "https://huggingface.co/distil-whisper/distil-medium.en/resolve/main/ggml-medium-32-2.en.bin",
-        sha256: "ad53ccb618188b210550e98cc32bf5a13188d86635e395bb11115ed275d6e7aa",
-        size_mb: 757,
+        dir_name: "distil-large-v2",
+        size_mb: 1510,
+        family: "Distil",
+        quantization: "Full",
+        format: ModelFormat::Safetensors,
+        repo_id: "distil-whisper/distil-large-v2",
+        base_repo_id: None,
+        gguf_file: None,
     },
     ModelInfo {
         name: "distil-small.en",
-        filename: "ggml-distil-small.en.bin",
-        url: "https://huggingface.co/distil-whisper/distil-small.en/resolve/main/ggml-distil-small.en.bin",
-        sha256: "7691eb11167ab7aaf6b3e05d8266f2fd9ad89c550e433f86ac266ebdee6c970a",
-        size_mb: 321,
+        dir_name: "distil-small-en",
+        size_mb: 332,
+        family: "Distil",
+        quantization: "Full",
+        format: ModelFormat::Safetensors,
+        repo_id: "distil-whisper/distil-small.en",
+        base_repo_id: None,
+        gguf_file: None,
     },
-    // ===========================================
-    // Large V3 (Full precision and quantized)
-    // ===========================================
+    // Large V3
     ModelInfo {
         name: "large-v3",
-        filename: "ggml-large-v3.bin",
-        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin",
-        sha256: "64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e2",
-        size_mb: 3100,
+        dir_name: "whisper-large-v3",
+        size_mb: 3094,
+        family: "Large V3",
+        quantization: "Full",
+        format: ModelFormat::Safetensors,
+        repo_id: "openai/whisper-large-v3",
+        base_repo_id: None,
+        gguf_file: None,
     },
-    ModelInfo {
-        name: "large-v3-q5_0",
-        filename: "ggml-large-v3-q5_0.bin",
-        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-q5_0.bin",
-        sha256: "d75795ecff3f83b5faa89d1900604ad8c780abd5739fae406de19f23ecd98ad1",
-        size_mb: 1031,
-    },
-    // ===========================================
-    // Large V2 (Stable, well-tested)
-    // ===========================================
+    // Large V2
     ModelInfo {
         name: "large-v2",
-        filename: "ggml-large-v2.bin",
-        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v2.bin",
-        sha256: "9a423fe4d40c82774b6af34115b8b935f34152246eb19e80e376071d3f999487",
-        size_mb: 2950,
+        dir_name: "whisper-large-v2",
+        size_mb: 3094,
+        family: "Large V2",
+        quantization: "Full",
+        format: ModelFormat::Safetensors,
+        repo_id: "openai/whisper-large-v2",
+        base_repo_id: None,
+        gguf_file: None,
     },
+    // Large V1
     ModelInfo {
-        name: "large-v2-q5_0",
-        filename: "ggml-large-v2-q5_0.bin",
-        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v2-q5_0.bin",
-        sha256: "3a214837221e4530dbc1fe8d734f302af393eb30bd0ed046042ebf4baf70f6f2",
-        size_mb: 1031,
+        name: "large",
+        dir_name: "whisper-large",
+        size_mb: 3094,
+        family: "Large",
+        quantization: "Full",
+        format: ModelFormat::Safetensors,
+        repo_id: "openai/whisper-large",
+        base_repo_id: None,
+        gguf_file: None,
     },
-    // ===========================================
-    // Large V1 (Legacy)
-    // ===========================================
-    ModelInfo {
-        name: "large-v1",
-        filename: "ggml-large-v1.bin",
-        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v1.bin",
-        sha256: "7d99f41a10525d0206bddadd86760181fa920438b6b33237e3118ff6c83bb53d",
-        size_mb: 2950,
-    },
-    // ===========================================
-    // Medium (Full precision and quantized)
-    // ===========================================
+    // Medium
     ModelInfo {
         name: "medium",
-        filename: "ggml-medium.bin",
-        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin",
-        sha256: "6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208",
-        size_mb: 1463,
+        dir_name: "whisper-medium",
+        size_mb: 3090,
+        family: "Medium",
+        quantization: "Full",
+        format: ModelFormat::Safetensors,
+        repo_id: "openai/whisper-medium",
+        base_repo_id: None,
+        gguf_file: None,
     },
     ModelInfo {
         name: "medium.en",
-        filename: "ggml-medium.en.bin",
-        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.en.bin",
-        sha256: "cc37e93478338ec7700281a7ac30a10128929eb8f427dda2e865faa8f6da4356",
-        size_mb: 1530,
+        dir_name: "whisper-medium-en",
+        size_mb: 3090,
+        family: "Medium",
+        quantization: "Full",
+        format: ModelFormat::Safetensors,
+        repo_id: "openai/whisper-medium.en",
+        base_repo_id: None,
+        gguf_file: None,
     },
-    ModelInfo {
-        name: "medium-q5_0",
-        filename: "ggml-medium-q5_0.bin",
-        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium-q5_0.bin",
-        sha256: "19fea4b380c3a618ec4723c3eef2eb785ffba0d0538cf43f8f235e7b3b34220f",
-        size_mb: 514,
-    },
-    ModelInfo {
-        name: "medium.en-q5_0",
-        filename: "ggml-medium.en-q5_0.bin",
-        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.en-q5_0.bin",
-        sha256: "76733e26ad8fe1c7a5bf7531a9d41917b2adc0f20f2e4f5531688a8c6cd88eb0",
-        size_mb: 514,
-    },
-    // ===========================================
-    // Small (Full precision and quantized)
-    // ===========================================
+    // Small
     ModelInfo {
         name: "small",
-        filename: "ggml-small.bin",
-        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin",
-        sha256: "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1571299571",
-        size_mb: 488,
+        dir_name: "whisper-small",
+        size_mb: 970,
+        family: "Small",
+        quantization: "Full",
+        format: ModelFormat::Safetensors,
+        repo_id: "openai/whisper-small",
+        base_repo_id: None,
+        gguf_file: None,
     },
     ModelInfo {
         name: "small.en",
-        filename: "ggml-small.en.bin",
-        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin",
-        sha256: "c6138d6d58ecc8322097e0f987c32f1be8bb0a18532a3f88f734d1bbf9c41e5d",
-        size_mb: 488,
+        dir_name: "whisper-small-en",
+        size_mb: 970,
+        family: "Small",
+        quantization: "Full",
+        format: ModelFormat::Safetensors,
+        repo_id: "openai/whisper-small.en",
+        base_repo_id: None,
+        gguf_file: None,
     },
-    ModelInfo {
-        name: "small-q5_1",
-        filename: "ggml-small-q5_1.bin",
-        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q5_1.bin",
-        sha256: "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb",
-        size_mb: 181,
-    },
-    ModelInfo {
-        name: "small.en-q5_1",
-        filename: "ggml-small.en-q5_1.bin",
-        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en-q5_1.bin",
-        sha256: "bfdff4894dcb76bbf647d56263ea2a96645423f1669176f4844a1bf8e478ad30",
-        size_mb: 181,
-    },
-    // ===========================================
-    // Base (Full precision and quantized)
-    // ===========================================
+    // Base
     ModelInfo {
         name: "base",
-        filename: "ggml-base.bin",
-        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
-        sha256: "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe",
-        size_mb: 148,
+        dir_name: "whisper-base",
+        size_mb: 293,
+        family: "Base",
+        quantization: "Full",
+        format: ModelFormat::Safetensors,
+        repo_id: "openai/whisper-base",
+        base_repo_id: None,
+        gguf_file: None,
     },
     ModelInfo {
         name: "base.en",
-        filename: "ggml-base.en.bin",
-        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin",
-        sha256: "a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002",
-        size_mb: 148,
+        dir_name: "whisper-base-en",
+        size_mb: 293,
+        family: "Base",
+        quantization: "Full",
+        format: ModelFormat::Safetensors,
+        repo_id: "openai/whisper-base.en",
+        base_repo_id: None,
+        gguf_file: None,
     },
-    ModelInfo {
-        name: "base-q5_1",
-        filename: "ggml-base-q5_1.bin",
-        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base-q5_1.bin",
-        sha256: "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
-        size_mb: 57,
-    },
-    ModelInfo {
-        name: "base.en-q5_1",
-        filename: "ggml-base.en-q5_1.bin",
-        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en-q5_1.bin",
-        sha256: "4baf70dd0d7c4247ba2b81fafd9c01005ac77c2f9ef064e00dcf195d0e2fdd2f",
-        size_mb: 57,
-    },
-    // ===========================================
-    // Tiny (Full precision and quantized)
-    // ===========================================
+    // Tiny
     ModelInfo {
         name: "tiny",
-        filename: "ggml-tiny.bin",
-        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin",
-        sha256: "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21",
-        size_mb: 78,
+        dir_name: "whisper-tiny",
+        size_mb: 154,
+        family: "Tiny",
+        quantization: "Full",
+        format: ModelFormat::Safetensors,
+        repo_id: "openai/whisper-tiny",
+        base_repo_id: None,
+        gguf_file: None,
     },
     ModelInfo {
         name: "tiny.en",
-        filename: "ggml-tiny.en.bin",
-        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin",
-        sha256: "921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f",
-        size_mb: 78,
+        dir_name: "whisper-tiny-en",
+        size_mb: 154,
+        family: "Tiny",
+        quantization: "Full",
+        format: ModelFormat::Safetensors,
+        repo_id: "openai/whisper-tiny.en",
+        base_repo_id: None,
+        gguf_file: None,
+    },
+    // GGUF MODELS (Quantized - smaller & faster)
+    // Note: These may or may not work with Candle's from_gguf() loader.
+    // The Demonthos model is confirmed to work; others are experimental.
+
+    // Large V3 Turbo GGUF variants
+    ModelInfo {
+        name: "large-v3-turbo-q8",
+        dir_name: "whisper-large-v3-turbo-q8-gguf",
+        size_mb: 478,
+        family: "Large V3 Turbo",
+        quantization: "Q8_0",
+        format: ModelFormat::Gguf,
+        repo_id: "Demonthos/candle-quantized-whisper-large-v3-turbo",
+        base_repo_id: Some("openai/whisper-large-v3-turbo"),
+        gguf_file: Some("model.gguf"),
     },
     ModelInfo {
-        name: "tiny-q5_1",
-        filename: "ggml-tiny-q5_1.bin",
-        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny-q5_1.bin",
-        sha256: "818710568da3ca15689e31a743197b520007872ff9576237bda97bd1b469c3d7",
-        size_mb: 31,
+        name: "large-v3-turbo-q4",
+        dir_name: "whisper-large-v3-turbo-q4-gguf",
+        size_mb: 528,
+        family: "Large V3 Turbo",
+        quantization: "Q4_1",
+        format: ModelFormat::Gguf,
+        repo_id: "xkeyC/whisper-large-v3-turbo-gguf",
+        base_repo_id: Some("openai/whisper-large-v3-turbo"),
+        gguf_file: Some("model_q4_1.gguf"),
     },
     ModelInfo {
-        name: "tiny.en-q5_1",
-        filename: "ggml-tiny.en-q5_1.bin",
-        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en-q5_1.bin",
-        sha256: "c77c5766f1cef09b6b7d47f21b546cbddd4157886b3b5d6d4f709e91e66c7c2b",
-        size_mb: 31,
+        name: "large-v3-turbo-q4k",
+        dir_name: "whisper-large-v3-turbo-q4k-gguf",
+        size_mb: 478,
+        family: "Large V3 Turbo",
+        quantization: "Q4_K",
+        format: ModelFormat::Gguf,
+        repo_id: "xkeyC/whisper-large-v3-turbo-gguf",
+        base_repo_id: Some("openai/whisper-large-v3-turbo"),
+        gguf_file: Some("model_q4_k.gguf"),
+    },
+    // Large V3 GGUF variants
+    ModelInfo {
+        name: "large-v3-q8",
+        dir_name: "whisper-large-v3-q8-gguf",
+        size_mb: 1660,
+        family: "Large V3",
+        quantization: "Q8_0",
+        format: ModelFormat::Gguf,
+        repo_id: "vonjack/whisper-large-v3-gguf",
+        base_repo_id: Some("openai/whisper-large-v3"),
+        gguf_file: Some("whisper-large-v3-q8_0.gguf"),
+    },
+    ModelInfo {
+        name: "large-v3-f16",
+        dir_name: "whisper-large-v3-f16-gguf",
+        size_mb: 3100,
+        family: "Large V3",
+        quantization: "F16",
+        format: ModelFormat::Gguf,
+        repo_id: "vonjack/whisper-large-v3-gguf",
+        base_repo_id: Some("openai/whisper-large-v3"),
+        gguf_file: Some("whisper-large-v3-f16.gguf"),
+    },
+    // Medium GGUF variants
+    ModelInfo {
+        name: "medium-q4k",
+        dir_name: "whisper-medium-q4k-gguf",
+        size_mb: 446,
+        family: "Medium",
+        quantization: "Q4_K",
+        format: ModelFormat::Gguf,
+        repo_id: "OllmOne/whisper-medium-GGUF",
+        base_repo_id: Some("openai/whisper-medium"),
+        gguf_file: Some("model-q4k.gguf"),
     },
 ];
 
 impl ModelInfo {
-    /// Find a model by name (e.g., "base.en", "small")
+    /// Find a model by registry name (e.g. "large-v3-turbo", "base.en")
     pub fn find(name: &str) -> Option<&'static ModelInfo> {
-        // Try exact match first
-        if let Some(info) = MODEL_REGISTRY.iter().find(|m| m.name == name) {
-            return Some(info);
-        }
+        MODEL_REGISTRY.iter().find(|m| m.name == name)
+    }
 
-        // Try matching without ggml- prefix
-        let normalized = name.trim_start_matches("ggml-").trim_end_matches(".bin");
-        MODEL_REGISTRY.iter().find(|m| m.name == normalized)
+    /// Find a model by its directory name (e.g. "whisper-large-v3-turbo")
+    pub fn find_by_dir(dir_name: &str) -> Option<&'static ModelInfo> {
+        MODEL_REGISTRY.iter().find(|m| m.dir_name == dir_name)
     }
 
     /// List all available model names
     pub fn available_models() -> Vec<&'static str> {
         MODEL_REGISTRY.iter().map(|m| m.name).collect()
     }
+
+    /// Files that make up this model, and where to fetch each one
+    pub fn files(&self) -> Vec<ModelFile> {
+        let (weights_name, weights_remote, meta_repo) = match self.format {
+            ModelFormat::Safetensors => ("model.safetensors", "model.safetensors", self.repo_id),
+            ModelFormat::Gguf => (
+                "model.gguf",
+                self.gguf_file.unwrap_or("model.gguf"),
+                self.base_repo_id.unwrap_or(self.repo_id),
+            ),
+        };
+        vec![
+            ModelFile {
+                local_name: weights_name,
+                repo_id: self.repo_id,
+                remote_name: weights_remote,
+            },
+            ModelFile {
+                local_name: "config.json",
+                repo_id: meta_repo,
+                remote_name: "config.json",
+            },
+            ModelFile {
+                local_name: "tokenizer.json",
+                repo_id: meta_repo,
+                remote_name: "tokenizer.json",
+            },
+        ]
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
 
     #[test]
-    fn test_find_model() {
-        // Distil variants
-        assert!(ModelInfo::find("distil-large-v3.5").is_some());
-        assert!(ModelInfo::find("distil-large-v3").is_some());
-        assert!(ModelInfo::find("distil-large-v2").is_some());
-        assert!(ModelInfo::find("distil-medium.en").is_some());
-        assert!(ModelInfo::find("distil-small.en").is_some());
-
-        // Quantized variants
-        assert!(ModelInfo::find("large-v3-turbo-q5_0").is_some());
-        assert!(ModelInfo::find("large-v3-q5_0").is_some());
-        assert!(ModelInfo::find("medium-q5_0").is_some());
-        assert!(ModelInfo::find("small-q5_1").is_some());
-        assert!(ModelInfo::find("base-q5_1").is_some());
-        assert!(ModelInfo::find("tiny-q5_1").is_some());
-
-        // Standard variants
-        assert!(ModelInfo::find("base.en").is_some());
-        assert!(ModelInfo::find("tiny.en").is_some());
-        assert!(ModelInfo::find("large-v2").is_some());
-        assert!(ModelInfo::find("large-v1").is_some());
-
-        // Non-existent
-        assert!(ModelInfo::find("nonexistent").is_none());
+    fn default_model_exists() {
+        assert!(ModelInfo::find(DEFAULT_MODEL).is_some());
     }
 
     #[test]
-    fn test_find_model_with_prefix() {
-        let info = ModelInfo::find("ggml-base.en.bin");
-        assert!(info.is_some());
-        assert_eq!(info.unwrap().name, "base.en");
+    fn names_and_dirs_are_unique() {
+        let names: HashSet<_> = MODEL_REGISTRY.iter().map(|m| m.name).collect();
+        let dirs: HashSet<_> = MODEL_REGISTRY.iter().map(|m| m.dir_name).collect();
+        assert_eq!(names.len(), MODEL_REGISTRY.len());
+        assert_eq!(dirs.len(), MODEL_REGISTRY.len());
     }
 
     #[test]
-    fn test_model_count() {
-        // Ensure we have all expected models (31 total)
-        let count = MODEL_REGISTRY.len();
-        assert!(count >= 25, "Expected at least 25 models, got {}", count);
+    fn gguf_models_have_base_repo_and_file() {
+        for m in MODEL_REGISTRY
+            .iter()
+            .filter(|m| m.format == ModelFormat::Gguf)
+        {
+            assert!(m.base_repo_id.is_some(), "{} missing base_repo_id", m.name);
+            assert!(m.gguf_file.is_some(), "{} missing gguf_file", m.name);
+        }
+    }
+
+    #[test]
+    fn safetensors_files_come_from_one_repo() {
+        let files = ModelInfo::find("tiny").unwrap().files();
+        assert_eq!(
+            files.iter().map(|f| f.local_name).collect::<Vec<_>>(),
+            ["model.safetensors", "config.json", "tokenizer.json"]
+        );
+        assert!(files.iter().all(|f| f.repo_id == "openai/whisper-tiny"));
+        assert_eq!(
+            files[0].url(),
+            "https://huggingface.co/openai/whisper-tiny/resolve/main/model.safetensors"
+        );
+    }
+
+    #[test]
+    fn gguf_metadata_comes_from_base_repo() {
+        let m = ModelInfo::find("large-v3-turbo-q4").unwrap();
+        let files = m.files();
+        assert_eq!(files[0].local_name, "model.gguf");
+        assert_eq!(files[0].remote_name, "model_q4_1.gguf");
+        assert_eq!(files[0].repo_id, "xkeyC/whisper-large-v3-turbo-gguf");
+        assert_eq!(files[1].repo_id, "openai/whisper-large-v3-turbo");
+    }
+
+    #[test]
+    fn find_by_dir_round_trips() {
+        for m in MODEL_REGISTRY {
+            assert_eq!(ModelInfo::find_by_dir(m.dir_name).unwrap().name, m.name);
+        }
     }
 }

@@ -12,23 +12,28 @@ mod config;
 mod daemon;
 mod error;
 mod history;
-mod model;
 mod output;
 mod state;
 mod transcribe;
 mod vocab;
 
+use mojovoice::model;
+
 /// Validate that the model file exists, returning a helpful error if not
 fn validate_model_path(cfg: &config::Config) -> Result<()> {
     if !cfg.model.path.exists() {
+        let dir_name = cfg
+            .model
+            .path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy();
+        let model_name =
+            model::ModelInfo::find_by_dir(&dir_name).map_or(model::DEFAULT_MODEL, |m| m.name);
         anyhow::bail!(
             "Model not found: {}\nRun: mojovoice download {}",
             cfg.model.path.display(),
-            cfg.model
-                .path
-                .file_stem()
-                .unwrap_or_default()
-                .to_string_lossy()
+            model_name
         );
     }
     Ok(())
@@ -90,8 +95,8 @@ enum Commands {
 
     /// Download a whisper model
     Download {
-        /// Model name (e.g. large-v3-turbo, distil-large-v3, base.en)
-        #[arg(default_value = "large-v3-turbo")]
+        /// Model name (e.g. large-v3-turbo, distil-large-v3.5, base.en)
+        #[arg(default_value = model::DEFAULT_MODEL)]
         model: String,
     },
 
@@ -435,7 +440,9 @@ fn cmd_start_fixed(model_override: Option<String>, duration: u32, clipboard: boo
 
     if let Some(ref p) = cfg.model.prompt {
         if !p.is_empty() {
-            warn!("model.prompt in config is deprecated and will be ignored; use mojovoice vocab add instead.");
+            warn!(
+                "model.prompt in config is deprecated and will be ignored; use mojovoice vocab add instead."
+            );
         }
     }
 
@@ -508,20 +515,38 @@ fn cmd_cancel() -> Result<()> {
 }
 
 fn cmd_download(model_name: &str) -> Result<()> {
-    let cfg = config::load()?;
-    let models_dir = cfg.model.path.parent().unwrap_or(std::path::Path::new("."));
+    let mut cfg = config::load()?;
+    let models_dir = cfg
+        .model
+        .path
+        .parent()
+        .unwrap_or(std::path::Path::new("."))
+        .to_path_buf();
 
     let model_info = model::ModelInfo::find(model_name).ok_or_else(|| {
-        let available = model::ModelInfo::available_models();
         anyhow::anyhow!(
             "Unknown model: {}\nAvailable models: {}",
             model_name,
-            available.join(", ")
+            model::ModelInfo::available_models().join(", ")
         )
     })?;
 
-    let dest = model::download_model(model_info, models_dir)?;
+    let dest = model::download_model(model_info, &models_dir)?;
     info!("Model ready: {}", dest.display());
+
+    // Point the config at the new model if the configured one isn't installed
+    if cfg.model.path != dest && !cfg.model.path.exists() {
+        cfg.model.path = dest.clone();
+        cfg.model.model_id = model_info.repo_id.to_string();
+        config::save(&cfg)?;
+        info!("Config updated to use {}", model_info.name);
+    } else if cfg.model.path != dest {
+        info!(
+            "To use it, set model.path = \"{}\" in {}",
+            dest.display(),
+            config::config_path()?.display()
+        );
+    }
 
     Ok(())
 }
@@ -1000,7 +1025,7 @@ fn cmd_vocab(command: VocabCommands) -> Result<()> {
             if terms.is_empty() {
                 println!("No vocabulary terms yet.");
             } else {
-                println!("{:<30} {:<8} {}", "Term", "Uses", "Source");
+                println!("{:<30} {:<8} Source", "Term", "Uses");
                 println!("{}", "-".repeat(50));
                 for entry in &terms {
                     println!("{:<30} {:<8} {}", entry.term, entry.use_count, entry.source);
@@ -1023,7 +1048,12 @@ fn cmd_vocab(command: VocabCommands) -> Result<()> {
     Ok(())
 }
 
-fn cmd_listen(source: Option<String>, max_duration: u32, clipboard: bool, cancel: bool) -> Result<()> {
+fn cmd_listen(
+    source: Option<String>,
+    max_duration: u32,
+    clipboard: bool,
+    cancel: bool,
+) -> Result<()> {
     if cancel {
         return cmd_listen_cancel();
     }
@@ -1060,7 +1090,7 @@ fn cmd_listen_start(source: Option<String>, max_duration: u32, clipboard: bool) 
     // On Linux: default to monitor of current default sink (captures app audio like Discord)
     // Falls back to default mic input if pactl unavailable.
     #[cfg(target_os = "linux")]
-    let source = source.or_else(|| audio::get_default_sink_monitor());
+    let source = source.or_else(audio::get_default_sink_monitor);
 
     state::toggle::STOP_RECORDING.store(false, std::sync::atomic::Ordering::SeqCst);
     state::toggle::setup_signal_handler()?;
@@ -1090,7 +1120,10 @@ fn cmd_listen_start(source: Option<String>, max_duration: u32, clipboard: bool) 
         return Ok(());
     }
 
-    info!("Captured {} samples, sending to daemon for transcription...", samples.len());
+    info!(
+        "Captured {} samples, sending to daemon for transcription...",
+        samples.len()
+    );
 
     let response = daemon::send_request(&daemon::DaemonRequest::TranscribeAudio { samples })?;
 
@@ -1104,10 +1137,10 @@ fn cmd_listen_start(source: Option<String>, max_duration: u32, clipboard: bool) 
             output::inject_text(&text, output_mode)?;
             send_notification("Listen Transcription", &truncate_preview(&text), "normal");
             Ok(())
-        }
+        },
         daemon::DaemonResponse::Error { message } => {
             anyhow::bail!("Transcription failed: {}", message)
-        }
+        },
         _ => anyhow::bail!("Unexpected response from daemon"),
     }
 }
@@ -1120,7 +1153,7 @@ fn cmd_listen_stop() -> Result<()> {
             state::toggle::stop_listen(&state)?;
             println!("Listen session stopped. Transcribing...");
             Ok(())
-        }
+        },
         None => anyhow::bail!("no listen session active"),
     }
 }
@@ -1131,7 +1164,7 @@ fn cmd_listen_cancel() -> Result<()> {
         None => {
             println!("No listen session active.");
             Ok(())
-        }
+        },
         Some(state) => {
             // Write sentinel file so the listen process knows to discard on stop
             let cancel_file = state::paths::get_listen_cancel_file()?;
@@ -1150,7 +1183,7 @@ fn cmd_listen_cancel() -> Result<()> {
 
             println!("Listen session cancelled.");
             Ok(())
-        }
+        },
     }
 }
 
@@ -1342,7 +1375,10 @@ mod listen_tests {
         // File present → returns true and removes it
         std::fs::write(&cancel_file, "").unwrap();
         assert!(check_and_clear_cancel_file());
-        assert!(!cancel_file.exists(), "cancel file should be deleted after check");
+        assert!(
+            !cancel_file.exists(),
+            "cancel file should be deleted after check"
+        );
 
         // Second call → false again
         assert!(!check_and_clear_cancel_file());

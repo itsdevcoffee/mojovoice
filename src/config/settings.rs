@@ -170,7 +170,7 @@ impl Default for Config {
 
         Self {
             model: ModelConfig {
-                path: data_dir.join("models/whisper-large-v3-turbo-safetensors"),
+                path: data_dir.join("models/whisper-large-v3-turbo"),
                 model_id: "openai/whisper-large-v3-turbo".to_string(),
                 draft_model_path: Some(data_dir.join("models/ggml-tiny.en.bin")),
                 language: "en".to_string(),

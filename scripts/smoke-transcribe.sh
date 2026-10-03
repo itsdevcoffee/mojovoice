@@ -12,20 +12,16 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="$(realpath "${1:-$REPO_ROOT/target/release/mojovoice}")"
-MODEL_DIR="${SMOKE_MODEL_DIR:-$HOME/.cache/mojovoice-smoke/whisper-tiny}"
 SAMPLE="$REPO_ROOT/assets/audio/samples/sample-mojovoice-clip-4.wav"
 EXPECTED="testing this one more time"
 LOG="$(mktemp)"
 
-mkdir -p "$MODEL_DIR"
-for f in config.json tokenizer.json model.safetensors; do
-    [ -s "$MODEL_DIR/$f" ] || curl -fsSL -o "$MODEL_DIR/$f" \
-        "https://huggingface.co/openai/whisper-tiny/resolve/main/$f"
-done
-
-# Create the default config, then point it at whisper-tiny
-"$BIN" config >/dev/null
-CONFIG="$HOME/.config/mojovoice/config.toml"
+# Download whisper-tiny through the CLI (exercises `mojovoice download`), then
+# point the config at it
+DOWNLOAD_LOG="$("$BIN" download tiny 2>&1)" || { echo "$DOWNLOAD_LOG" >&2; exit 1; }
+MODEL_DIR="$(echo "$DOWNLOAD_LOG" | sed 's/\x1b\[[0-9;]*m//g' | sed -n 's/.*Model ready: //p' | tail -1)"
+[ -d "$MODEL_DIR" ] || { echo "FAIL: download did not report a model dir" >&2; echo "$DOWNLOAD_LOG" >&2; exit 1; }
+CONFIG="$("$BIN" config --path)"
 sed -i "0,/^path = .*/s||path = \"$MODEL_DIR\"|" "$CONFIG"
 
 cleanup() { "$BIN" daemon down >/dev/null 2>&1 || true; }

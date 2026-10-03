@@ -43,9 +43,6 @@ scopeguard = "1.2"
 # HTTP downloads
 ureq = "2.9"
 
-# Checksum verification
-sha2 = "0.10"
-hex = "0.4"
 
 # Better resampling
 rubato = "0.16"

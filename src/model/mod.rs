@@ -1,6 +1,5 @@
 mod download;
 mod registry;
-mod verify;
 
 pub use download::download_model;
-pub use registry::ModelInfo;
+pub use registry::{DEFAULT_MODEL, MODEL_REGISTRY, ModelFile, ModelFormat, ModelInfo};

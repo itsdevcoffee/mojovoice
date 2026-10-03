@@ -1286,57 +1286,22 @@ pub struct DownloadedModel {
     pub is_active: bool,
 }
 
-/// Embedded model registry - safetensors and GGUF formats from HuggingFace
+/// Model registry, from the shared list in the mojovoice crate
 fn get_model_registry() -> Vec<RegistryModel> {
-    vec![
-        // ===========================================
-        // SAFETENSORS MODELS (Full precision)
-        // ===========================================
-
-        // Large V3 Turbo (Recommended - fast and accurate)
-        RegistryModel { name: "large-v3-turbo".into(), filename: "whisper-large-v3-turbo".into(), size_mb: 1550, family: "Large V3 Turbo".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-large-v3-turbo".into(), base_model_id: None, gguf_file: None },
-        // Distil-Whisper (Faster, English-optimized)
-        RegistryModel { name: "distil-large-v3.5".into(), filename: "distil-large-v3.5".into(), size_mb: 1510, family: "Distil".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "distil-whisper/distil-large-v3.5".into(), base_model_id: None, gguf_file: None },
-        RegistryModel { name: "distil-large-v3".into(), filename: "distil-large-v3".into(), size_mb: 1510, family: "Distil".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "distil-whisper/distil-large-v3".into(), base_model_id: None, gguf_file: None },
-        RegistryModel { name: "distil-large-v2".into(), filename: "distil-large-v2".into(), size_mb: 1510, family: "Distil".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "distil-whisper/distil-large-v2".into(), base_model_id: None, gguf_file: None },
-        RegistryModel { name: "distil-small.en".into(), filename: "distil-small-en".into(), size_mb: 332, family: "Distil".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "distil-whisper/distil-small.en".into(), base_model_id: None, gguf_file: None },
-        // Large V3
-        RegistryModel { name: "large-v3".into(), filename: "whisper-large-v3".into(), size_mb: 3094, family: "Large V3".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-large-v3".into(), base_model_id: None, gguf_file: None },
-        // Large V2
-        RegistryModel { name: "large-v2".into(), filename: "whisper-large-v2".into(), size_mb: 3094, family: "Large V2".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-large-v2".into(), base_model_id: None, gguf_file: None },
-        // Large V1
-        RegistryModel { name: "large".into(), filename: "whisper-large".into(), size_mb: 3094, family: "Large".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-large".into(), base_model_id: None, gguf_file: None },
-        // Medium
-        RegistryModel { name: "medium".into(), filename: "whisper-medium".into(), size_mb: 3090, family: "Medium".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-medium".into(), base_model_id: None, gguf_file: None },
-        RegistryModel { name: "medium.en".into(), filename: "whisper-medium-en".into(), size_mb: 3090, family: "Medium".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-medium.en".into(), base_model_id: None, gguf_file: None },
-        // Small
-        RegistryModel { name: "small".into(), filename: "whisper-small".into(), size_mb: 970, family: "Small".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-small".into(), base_model_id: None, gguf_file: None },
-        RegistryModel { name: "small.en".into(), filename: "whisper-small-en".into(), size_mb: 970, family: "Small".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-small.en".into(), base_model_id: None, gguf_file: None },
-        // Base
-        RegistryModel { name: "base".into(), filename: "whisper-base".into(), size_mb: 293, family: "Base".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-base".into(), base_model_id: None, gguf_file: None },
-        RegistryModel { name: "base.en".into(), filename: "whisper-base-en".into(), size_mb: 293, family: "Base".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-base.en".into(), base_model_id: None, gguf_file: None },
-        // Tiny
-        RegistryModel { name: "tiny".into(), filename: "whisper-tiny".into(), size_mb: 154, family: "Tiny".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-tiny".into(), base_model_id: None, gguf_file: None },
-        RegistryModel { name: "tiny.en".into(), filename: "whisper-tiny-en".into(), size_mb: 154, family: "Tiny".into(), quantization: "Full".into(), format: "safetensors".into(), repo_id: "openai/whisper-tiny.en".into(), base_model_id: None, gguf_file: None },
-
-        // ===========================================
-        // GGUF MODELS (Quantized - smaller & faster)
-        // ===========================================
-        // Note: These may or may not work with Candle's from_gguf() loader.
-        // The Demonthos model is confirmed to work; others are experimental.
-
-        // Large V3 Turbo GGUF variants
-        RegistryModel { name: "large-v3-turbo-q8".into(), filename: "whisper-large-v3-turbo-q8-gguf".into(), size_mb: 478, family: "Large V3 Turbo".into(), quantization: "Q8_0".into(), format: "gguf".into(), repo_id: "Demonthos/candle-quantized-whisper-large-v3-turbo".into(), base_model_id: Some("openai/whisper-large-v3-turbo".into()), gguf_file: Some("model.gguf".into()) },
-        RegistryModel { name: "large-v3-turbo-q4".into(), filename: "whisper-large-v3-turbo-q4-gguf".into(), size_mb: 528, family: "Large V3 Turbo".into(), quantization: "Q4_1".into(), format: "gguf".into(), repo_id: "xkeyC/whisper-large-v3-turbo-gguf".into(), base_model_id: Some("openai/whisper-large-v3-turbo".into()), gguf_file: Some("model_q4_1.gguf".into()) },
-        RegistryModel { name: "large-v3-turbo-q4k".into(), filename: "whisper-large-v3-turbo-q4k-gguf".into(), size_mb: 478, family: "Large V3 Turbo".into(), quantization: "Q4_K".into(), format: "gguf".into(), repo_id: "xkeyC/whisper-large-v3-turbo-gguf".into(), base_model_id: Some("openai/whisper-large-v3-turbo".into()), gguf_file: Some("model_q4_k.gguf".into()) },
-
-        // Large V3 GGUF variants
-        RegistryModel { name: "large-v3-q8".into(), filename: "whisper-large-v3-q8-gguf".into(), size_mb: 1660, family: "Large V3".into(), quantization: "Q8_0".into(), format: "gguf".into(), repo_id: "vonjack/whisper-large-v3-gguf".into(), base_model_id: Some("openai/whisper-large-v3".into()), gguf_file: Some("whisper-large-v3-q8_0.gguf".into()) },
-        RegistryModel { name: "large-v3-f16".into(), filename: "whisper-large-v3-f16-gguf".into(), size_mb: 3100, family: "Large V3".into(), quantization: "F16".into(), format: "gguf".into(), repo_id: "vonjack/whisper-large-v3-gguf".into(), base_model_id: Some("openai/whisper-large-v3".into()), gguf_file: Some("whisper-large-v3-f16.gguf".into()) },
-
-        // Medium GGUF variants
-        RegistryModel { name: "medium-q4k".into(), filename: "whisper-medium-q4k-gguf".into(), size_mb: 446, family: "Medium".into(), quantization: "Q4_K".into(), format: "gguf".into(), repo_id: "OllmOne/whisper-medium-GGUF".into(), base_model_id: Some("openai/whisper-medium".into()), gguf_file: Some("model-q4k.gguf".into()) },
-    ]
+    mojovoice::model::MODEL_REGISTRY
+        .iter()
+        .map(|m| RegistryModel {
+            name: m.name.into(),
+            filename: m.dir_name.into(),
+            size_mb: m.size_mb,
+            family: m.family.into(),
+            quantization: m.quantization.into(),
+            format: m.format.as_str().into(),
+            repo_id: m.repo_id.into(),
+            base_model_id: m.base_repo_id.map(Into::into),
+            gguf_file: m.gguf_file.map(Into::into),
+        })
+        .collect()
 }
 
 /// Get the models directory path from config or use default

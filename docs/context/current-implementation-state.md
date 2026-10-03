@@ -121,7 +121,7 @@ sequenceDiagram
 
 ```toml
 [model]
-path = "~/.local/share/applications/mojovoice/models/whisper-large-v3-turbo-safetensors"
+path = "~/.local/share/applications/mojovoice/models/whisper-large-v3-turbo"
 model_id = "openai/whisper-large-v3-turbo"
 language = "en"
 prompt = null  # Disabled - causes decoder buffer overflow
