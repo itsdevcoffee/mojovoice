@@ -10,10 +10,7 @@ Project roadmap and feature planning.
 
 ### Known Bugs (next patch)
 
-- **Duplicated text at chunk boundaries** (High) — audio over 30s is split into 30s chunks with 5s overlap (`candle_engine.rs` `CHUNK_OVERLAP_SECS`), but overlapping words aren't deduplicated when chunks are joined. Benchmark: `harvard-list57-male.wav` repeats "Footprints showed the path he took up the beach."
-- **`mojovoice download` can't fetch the default model** (Medium) — the default config points at `whisper-large-v3-turbo-safetensors/`, but `download` only knows GGML models, and its error suggests a nonexistent model name.
 - **Benchmark WER doesn't normalize text** (Low) — "one two three" vs "1, 2, 3" and "all right" vs "Alright" count as errors; apply Whisper's English text normalizer before scoring.
-- **Rustfmt and Clippy CI jobs failing** (Low) — failing since v0.5.6.
 
 ### v0.6.0 - UI/UX Overhaul & Platform Maturity
 
@@ -156,6 +153,8 @@ Project roadmap and feature planning.
 - ✅ **Daemon Subcommands** - up, down, restart, status, logs
 - ✅ **Pure-Rust Mel Spectrogram** - Matches OpenAI's reference; removes mojo-audio runtime dependency (v0.5.8)
 - ✅ **Release Transcription Smoke Test** - CI transcribes a sample with whisper-tiny before shipping (v0.5.8)
+- ✅ **Long-Audio Chunk Deduplication** - Overlapping chunk text merged without repeats (v0.5.10)
+- ✅ **Shared Model Registry** - CLI `download` and desktop app use one HuggingFace registry (v0.5.10)
 
 ---
 

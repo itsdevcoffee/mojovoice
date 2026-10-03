@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.10] - 2026-10-03
+
+### Fixed
+- **Repeated text on long recordings:** Audio over 30 seconds is transcribed in overlapping chunks, and words in the overlap appeared twice. Chunks are now merged on the overlapping words.
+- **`mojovoice download`:** The CLI only offered whisper.cpp GGML models, which the transcription engine can't load, and the default configuration pointed at a model nothing could download. `download` now fetches the same HuggingFace models as the desktop app and points the configuration at the downloaded model when the configured one is missing.
+- **"Model not found" hint:** Now suggests a model name that exists (e.g. `mojovoice download large-v3-turbo`).
+
+### Changed
+- **Default model path:** New configurations use `models/whisper-large-v3-turbo` (the directory `download` and the desktop app create) instead of `whisper-large-v3-turbo-safetensors`. Existing configurations are unchanged.
+- **Model registry:** Shared between the CLI and the desktop app. Removed the unused GGML models and checksum code.
+- **Code quality:** Fixed all rustfmt and clippy CI failures.
+
 ## [0.5.9] - 2026-10-03
 
 ### Fixed
