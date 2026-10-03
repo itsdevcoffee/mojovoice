@@ -55,7 +55,7 @@ struct GpuInfo {
 
 /// Detect GPU information (cross-platform)
 fn detect_gpu_info() -> GpuInfo {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
     {
         if let Some(info) = detect_nvidia_gpu() {
             return info;
@@ -72,6 +72,32 @@ fn detect_gpu_info() -> GpuInfo {
     GpuInfo::default()
 }
 
+/// A command for a console program that, on Windows, doesn't flash a console window
+/// (the desktop app is a GUI process, so each console child would get its own)
+fn background_command(program: impl AsRef<std::ffi::OsStr>) -> std::process::Command {
+    #[allow(unused_mut)]
+    let mut cmd = std::process::Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd
+}
+
+/// Start `mojovoice daemon up` detached from the app
+fn spawn_daemon(binary: &str) -> Result<(), String> {
+    background_command(binary)
+        .args(["daemon", "up"])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("Failed to start daemon: {}", e))
+}
+
 /// Maximum output size to prevent DoS from malformed command output
 const MAX_CMD_OUTPUT_SIZE: usize = 10 * 1024; // 10 KB
 
@@ -85,10 +111,10 @@ fn safe_output_to_string(output: &[u8]) -> String {
     String::from_utf8_lossy(truncated).to_string()
 }
 
-/// Detect NVIDIA GPU using nvidia-smi (Linux)
-#[cfg(target_os = "linux")]
+/// Detect NVIDIA GPU using nvidia-smi (ships with the driver on Linux and Windows)
+#[cfg(any(target_os = "linux", target_os = "windows"))]
 fn detect_nvidia_gpu() -> Option<GpuInfo> {
-    let output = std::process::Command::new("nvidia-smi")
+    let output = background_command("nvidia-smi")
         .args(["--query-gpu=name,memory.total", "--format=csv,noheader,nounits"])
         .output()
         .ok()?;
@@ -353,7 +379,7 @@ fn refresh_statusbar() {
     let program = &parts[0];
     let args = &parts[1..];
 
-    let _ = std::process::Command::new(program)
+    let _ = background_command(program)
         .args(args)
         .spawn()
         .map(|mut child| {
@@ -1034,14 +1060,7 @@ pub async fn start_daemon() -> Result<(), String> {
     let binary = find_mojovoice_binary().ok_or("Could not find mojovoice binary")?;
 
     eprintln!("Starting daemon with binary: {}", binary);
-
-    std::process::Command::new(&binary)
-        .args(["daemon", "up"])
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .map_err(|e| format!("Failed to start daemon: {}", e))?;
+    spawn_daemon(&binary)?;
 
     // Wait for daemon to be ready (max 5 seconds)
     for i in 0..50 {
@@ -1083,6 +1102,11 @@ pub async fn stop_daemon() -> Result<(), String> {
 /// Restart the mojovoice daemon with new configuration
 #[tauri::command]
 pub async fn restart_daemon() -> Result<(), String> {
+    // Detect which binary is running before stopping it, or fall back to finding one
+    let binary = detect_running_binary()
+        .or_else(find_mojovoice_binary)
+        .unwrap_or_else(|| "mojovoice".to_string());
+
     // 1. Send shutdown command to daemon
     let shutdown_request = daemon_client::DaemonRequest::Shutdown;
     match daemon_client::send_request(shutdown_request) {
@@ -1103,20 +1127,9 @@ pub async fn restart_daemon() -> Result<(), String> {
         }
     }
 
-    // 3. Detect which binary was actually running, or find it
-    let binary = detect_running_binary()
-        .or_else(find_mojovoice_binary)
-        .unwrap_or_else(|| "mojovoice".to_string());
-
+    // 3. Start it again with the same binary
     eprintln!("Restarting daemon with detected binary: {}", binary);
-
-    std::process::Command::new(&binary)
-        .args(["daemon", "up"])
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .map_err(|e| format!("Failed to start daemon: {}", e))?;
+    spawn_daemon(&binary)?;
 
     // 4. Wait for daemon to be ready (max 5 seconds)
     for i in 0..50 {
@@ -1135,9 +1148,9 @@ pub async fn restart_daemon() -> Result<(), String> {
 pub async fn validate_path(path: String) -> Result<PathValidation, String> {
     // Expand ~ to home directory
     let expanded_path = if path.starts_with('~') {
-        std::env::var("HOME")
-            .map(|home| path.replacen('~', &home, 1))
-            .unwrap_or_else(|_| path.clone())
+        dirs::home_dir()
+            .map(|home| path.replacen('~', &home.to_string_lossy(), 1))
+            .unwrap_or_else(|| path.clone())
     } else {
         path
     };
@@ -1186,66 +1199,42 @@ pub struct PathValidation {
     pub message: String,
 }
 
-/// Find mojovoice binary in common locations
+/// Find the mojovoice CLI: bundled next to the app, in ~/.local/bin, or on PATH
 fn find_mojovoice_binary() -> Option<String> {
-    let home = std::env::var("HOME").ok()?;
-    let path = format!("{}/.local/bin/mojovoice", home);
+    let exe_name = format!("mojovoice{}", std::env::consts::EXE_SUFFIX);
 
-    if std::path::Path::new(&path).exists() {
-        return Some(path);
-    }
+    let bundled = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| dir.join(&exe_name)));
+    let local_bin = dirs::home_dir().map(|home| home.join(".local/bin").join(&exe_name));
+    let on_path = std::env::var_os("PATH")
+        .into_iter()
+        .flat_map(|paths| std::env::split_paths(&paths).collect::<Vec<_>>())
+        .map(|dir| dir.join(&exe_name));
 
-    // Try PATH as fallback
-    if let Ok(output) = std::process::Command::new("which")
-        .arg("mojovoice")
-        .output()
-    {
-        if output.status.success() {
-            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !path.is_empty() {
-                return Some(path);
-            }
-        }
-    }
-
-    None
+    bundled
+        .into_iter()
+        .chain(local_bin)
+        .chain(on_path)
+        .find(|candidate| candidate.is_file())
+        .map(|path| path.to_string_lossy().into_owned())
 }
 
-/// Detect which mojovoice binary is currently running
+/// Executable of the running daemon, from its PID file
 fn detect_running_binary() -> Option<String> {
-    // Run: ps aux | grep mojovoice | grep daemon
-    let output = std::process::Command::new("ps")
-        .args(["aux"])
-        .output()
-        .ok()?;
+    use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let pid_file = mojovoice::state::get_daemon_pid_file().ok()?;
+    let pid = Pid::from(std::fs::read_to_string(pid_file).ok()?.trim().parse::<usize>().ok()?);
 
-    // Find lines with "mojovoice" and "daemon"
-    for line in stdout.lines() {
-        if line.contains("mojovoice") && line.contains("daemon") && !line.contains("grep") {
-            // Extract the command path (usually in the later columns)
-            let parts: Vec<&str> = line.split_whitespace().collect();
-
-            // Find the part that looks like a path to mojovoice
-            for part in &parts {
-                if part.contains("mojovoice") && (part.starts_with('/') || part.starts_with("./")) {
-                    eprintln!("Detected running binary: {}", part);
-                    return Some(part.to_string());
-                }
-            }
-
-            // Fallback: look for just the binary name
-            for part in &parts {
-                if part.contains("mojovoice") {
-                    eprintln!("Detected running binary name: {}", part);
-                    return Some(part.to_string());
-                }
-            }
-        }
-    }
-
-    None
+    let mut system = System::new();
+    system.refresh_processes_specifics(
+        ProcessesToUpdate::Some(&[pid]),
+        ProcessRefreshKind::new().with_exe(UpdateKind::Always),
+    );
+    let exe = system.process(pid)?.exe()?;
+    eprintln!("Detected running binary: {}", exe.display());
+    Some(exe.to_string_lossy().into_owned())
 }
 
 // =============================================================================
