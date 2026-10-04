@@ -9,6 +9,7 @@ use tracing::{error, info, warn};
 
 use crate::audio::{capture_toggle, list_input_devices};
 use crate::daemon::client::is_daemon_running;
+use crate::daemon::indicator::{self, Activity};
 use crate::daemon::protocol::{DaemonRequest, DaemonResponse};
 use crate::daemon::transport;
 use crate::history::{self, HistoryEntry, enforce_max_entries};
@@ -213,11 +214,29 @@ impl DaemonServer {
                 message: "pong".to_string(),
             },
             DaemonRequest::StartRecording { max_duration } => {
-                self.handle_start_recording(max_duration)?
+                let response = self.handle_start_recording(max_duration)?;
+                if matches!(response, DaemonResponse::Recording) {
+                    indicator::set(Activity::Recording);
+                }
+                response
             },
-            DaemonRequest::StopRecording => self.handle_stop_recording()?,
-            DaemonRequest::CancelRecording => self.handle_cancel_recording()?,
-            DaemonRequest::TranscribeAudio { samples } => self.handle_transcribe_audio(samples)?,
+            DaemonRequest::StopRecording => {
+                indicator::set(Activity::Transcribing);
+                let response = self.handle_stop_recording();
+                indicator::set(Activity::Idle);
+                response?
+            },
+            DaemonRequest::CancelRecording => {
+                let response = self.handle_cancel_recording();
+                indicator::set(Activity::Idle);
+                response?
+            },
+            DaemonRequest::TranscribeAudio { samples } => {
+                indicator::set(Activity::Transcribing);
+                let response = self.handle_transcribe_audio(samples);
+                indicator::set(Activity::Idle);
+                response?
+            },
             DaemonRequest::Shutdown => {
                 info!("Shutdown requested");
                 self.shutdown.store(true, Ordering::SeqCst);
@@ -537,12 +556,14 @@ pub fn run_daemon(model_path: &Path) -> Result<()> {
 
     let server = DaemonServer::new(model_path)?;
 
-    if let Some(hotkey) = crate::config::load().ok().and_then(|c| c.hotkey.toggle) {
-        #[cfg(windows)]
-        if let Err(e) = super::hotkey::spawn(&hotkey) {
-            warn!("{:#}", e);
-        }
-        #[cfg(not(windows))]
+    let hotkey = crate::config::load().ok().and_then(|c| c.hotkey.toggle);
+    // Windows: tray icon showing idle/recording/transcribing, plus the global hotkey
+    #[cfg(windows)]
+    if let Err(e) = super::indicator::tray::spawn(hotkey, server.shutdown.clone()) {
+        warn!("{:#}", e);
+    }
+    #[cfg(not(windows))]
+    if let Some(hotkey) = hotkey {
         warn!(
             "hotkey.toggle ({}) is only supported on Windows; bind 'mojovoice start' in your desktop environment instead",
             hotkey

@@ -1,6 +1,5 @@
 pub mod client;
-#[cfg(windows)]
-pub mod hotkey;
+pub mod indicator;
 pub mod protocol;
 pub mod server;
 pub mod transport;
