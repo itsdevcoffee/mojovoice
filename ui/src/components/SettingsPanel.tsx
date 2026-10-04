@@ -112,7 +112,8 @@ export default function SettingsPanel() {
   const handleModelChange = async (path: string) => {
     if (!config) return;
     try {
-      const pathParts = path.split('/');
+      // Windows paths use backslashes
+      const pathParts = path.split(/[\\/]/);
       const filename = pathParts[pathParts.length - 1];
       await invoke('switch_model', { filename });
       const updatedConfig = await invoke<Config>('get_config');

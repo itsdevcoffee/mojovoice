@@ -11,10 +11,10 @@ const getMockData = (command: string, args?: Record<string, unknown>): any => {
     case 'get_daemon_status':
       return {
         running: false,
-        model_loaded: false,
-        gpu_enabled: false,
-        gpu_name: null,
-        uptime_secs: null
+        modelLoaded: false,
+        gpuEnabled: false,
+        gpuName: null,
+        uptimeSecs: null
       };
     case 'get_config':
       return {
@@ -22,7 +22,8 @@ const getMockData = (command: string, args?: Record<string, unknown>): any => {
           path: '/mock/path/model.bin',
           model_id: 'mock-model',
           language: 'en',
-          prompt_biasing: null
+          draft_model_path: null,
+          prompt: null
         },
         audio: {
           sample_rate: 16000,
@@ -43,19 +44,19 @@ const getMockData = (command: string, args?: Record<string, unknown>): any => {
       };
     case 'get_system_info':
       return {
-        cpu_cores: 8,
-        total_ram_gb: 16.0,
-        used_ram_gb: 4.2,
-        gpu_available: false,
-        gpu_name: null,
-        gpu_vram_mb: null,
+        cpuCores: 8,
+        totalRamGb: 16.0,
+        usedRamGb: 4.2,
+        gpuAvailable: false,
+        gpuName: null,
+        gpuVramMb: null,
         platform: 'Browser Development Mode'
       };
     case 'list_models':
     case 'list_downloaded_models':
       return [
-        { name: 'Whisper Large V3 Turbo', filename: 'large-v3-turbo.bin', path: '/mock/models/large-v3-turbo.bin', sizeMb: 1550, isActive: true },
-        { name: 'Whisper Medium', filename: 'medium.bin', path: '/mock/models/medium.bin', sizeMb: 1540, isActive: false },
+        { name: 'large-v3-turbo', filename: 'whisper-large-v3-turbo', path: '/mock/models/whisper-large-v3-turbo', sizeMb: 1550, isActive: true },
+        { name: 'medium', filename: 'whisper-medium', path: '/mock/models/whisper-medium', sizeMb: 3090, isActive: false },
       ];
     case 'get_history':
     case 'get_transcription_history':
@@ -109,17 +110,18 @@ const getMockData = (command: string, args?: Record<string, unknown>): any => {
       ];
     case 'list_available_models':
       return [
-        { name: 'Whisper Large V3 Turbo', filename: 'large-v3-turbo.bin', size_bytes: 1_610_612_736, is_downloaded: true, is_active: true },
-        { name: 'Whisper Medium', filename: 'medium.bin', size_bytes: 1_533_870_080, is_downloaded: true, is_active: false },
-        { name: 'Whisper Small', filename: 'small.bin', size_bytes: 487_587_840, is_downloaded: false, is_active: false },
-        { name: 'Whisper Base', filename: 'base.bin', size_bytes: 147_951_616, is_downloaded: false, is_active: false },
-        { name: 'Whisper Tiny', filename: 'tiny.bin', size_bytes: 77_691_904, is_downloaded: false, is_active: false },
+        { name: 'large-v3-turbo', filename: 'whisper-large-v3-turbo', sizeMb: 1550, family: 'Large V3 Turbo', quantization: 'Full', format: 'safetensors' },
+        { name: 'medium', filename: 'whisper-medium', sizeMb: 3090, family: 'Medium', quantization: 'Full', format: 'safetensors' },
+        { name: 'small', filename: 'whisper-small', sizeMb: 970, family: 'Small', quantization: 'Full', format: 'safetensors' },
+        { name: 'base.en', filename: 'whisper-base-en', sizeMb: 293, family: 'Base', quantization: 'Full', format: 'safetensors' },
+        { name: 'large-v3-turbo-q8', filename: 'whisper-large-v3-turbo-q8-gguf', sizeMb: 478, family: 'Large V3 Turbo', quantization: 'Q8_0', format: 'gguf' },
       ];
     case 'get_storage_info':
+      // Bytes, like the real get_storage_info
       return {
-        available_gb: 50.5,
-        total_gb: 100.0,
-        models_size_gb: 3.2
+        used: 4_865_392_640,
+        free: 54_223_962_112,
+        total: 107_374_182_400
       };
     case 'validate_path':
       return { valid: true, path: args?.path || '/tmp' };

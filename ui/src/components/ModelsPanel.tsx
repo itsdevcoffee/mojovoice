@@ -1,21 +1,40 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Download, Trash2, X, HardDrive } from 'lucide-react';
 import SectionHeader from './ui/SectionHeader';
 import { invoke } from '../lib/ipc';
 import { useModelDownload } from '../hooks/useModelDownload';
 
-interface AvailableModel {
+/** Registry entry from `list_available_models` (Rust RegistryModel, camelCase) */
+interface RegistryModel {
   name: string;
+  /** Directory name under the models directory */
   filename: string;
-  size_bytes: number;
-  is_downloaded: boolean;
-  is_active: boolean;
+  sizeMb: number;
+  family: string;
+  quantization: string;
+  format: string;
 }
 
+/** From `list_downloaded_models` (Rust DownloadedModel, camelCase) */
+interface DownloadedModel {
+  name: string;
+  filename: string;
+  path: string;
+  sizeMb: number;
+  isActive: boolean;
+}
+
+/** Registry entry joined with its local download state */
+interface ModelRowData extends RegistryModel {
+  isDownloaded: boolean;
+  isActive: boolean;
+}
+
+/** From `get_storage_info`, all in bytes */
 interface StorageInfo {
-  available_gb: number;
-  total_gb: number;
-  models_size_gb: number;
+  used: number;
+  free: number;
+  total: number;
 }
 
 function formatBytes(bytes: number): string {
@@ -32,7 +51,7 @@ function formatSpeed(bps: number): string {
 
 export function ModelsPanel() {
   const [isExpanded, setIsExpanded] = useState(true);
-  const [models, setModels] = useState<AvailableModel[]>([]);
+  const [models, setModels] = useState<ModelRowData[]>([]);
   const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
   const [deleting, setDeleting] = useState<Set<string>>(new Set());
 
@@ -45,21 +64,36 @@ export function ModelsPanel() {
     }
   }, []);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [available, storage] = await Promise.all([
-          invoke<AvailableModel[]>('list_available_models'),
-          invoke<StorageInfo>('get_storage_info'),
-        ]);
-        setModels(available);
-        setStorageInfo(storage);
-      } catch (err) {
-        console.error('Failed to load models data:', err);
-      }
-    };
-    load();
+  const load = useCallback(async () => {
+    try {
+      const [available, downloaded, storage] = await Promise.all([
+        invoke<RegistryModel[]>('list_available_models'),
+        invoke<DownloadedModel[]>('list_downloaded_models'),
+        invoke<StorageInfo>('get_storage_info'),
+      ]);
+      const local = new Map(downloaded.map(d => [d.filename, d]));
+      setModels(
+        available.map(m => ({
+          ...m,
+          isDownloaded: local.has(m.filename),
+          isActive: local.get(m.filename)?.isActive ?? false,
+        })),
+      );
+      setStorageInfo(storage);
+    } catch (err) {
+      console.error('Failed to load models data:', err);
+    }
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const handleDownload = async (modelName: string) => {
+    if (await startDownload(modelName)) {
+      await load();
+    }
+  };
 
   const handleToggle = () => {
     const newState = !isExpanded;
@@ -67,30 +101,25 @@ export function ModelsPanel() {
     localStorage.setItem('modelsPanel.collapsed', String(!newState));
   };
 
-  const handleDelete = async (modelName: string) => {
-    setDeleting(prev => new Set(prev).add(modelName));
+  // delete_model takes the model's directory name, not its display name
+  const handleDelete = async (filename: string) => {
+    setDeleting(prev => new Set(prev).add(filename));
     try {
-      await invoke('delete_model', { modelName });
-      setModels(prev =>
-        prev.map(m =>
-          m.name === modelName ? { ...m, is_downloaded: false, is_active: false } : m,
-        ),
-      );
+      await invoke('delete_model', { filename });
+      await load();
     } catch (err) {
       console.error('Failed to delete model:', err);
     } finally {
       setDeleting(prev => {
         const next = new Set(prev);
-        next.delete(modelName);
+        next.delete(filename);
         return next;
       });
     }
   };
 
   const storagePercent =
-    storageInfo && storageInfo.total_gb > 0
-      ? (storageInfo.models_size_gb / storageInfo.total_gb) * 100
-      : 0;
+    storageInfo && storageInfo.total > 0 ? (storageInfo.used / storageInfo.total) * 100 : 0;
 
   return (
     <section className="mt-12">
@@ -120,7 +149,7 @@ export function ModelsPanel() {
               </div>
               <span className="font-mono text-xs text-[var(--text-secondary)]">
                 {storageInfo
-                  ? `${storageInfo.models_size_gb.toFixed(1)} GB used / ${storageInfo.available_gb.toFixed(1)} GB free`
+                  ? `${formatBytes(storageInfo.used)} used / ${formatBytes(storageInfo.free)} free`
                   : '...'}
               </span>
             </div>
@@ -148,10 +177,10 @@ export function ModelsPanel() {
                 model={model}
                 isDownloading={isDownloading(model.name)}
                 progress={getProgress(model.name)}
-                isDeleting={deleting.has(model.name)}
-                onDownload={() => startDownload(model.name)}
+                isDeleting={deleting.has(model.filename)}
+                onDownload={() => handleDownload(model.name)}
                 onCancel={() => cancelDownload(model.name)}
-                onDelete={() => handleDelete(model.name)}
+                onDelete={() => handleDelete(model.filename)}
               />
             ))}
             {models.length === 0 && (
@@ -171,7 +200,7 @@ export function ModelsPanel() {
 /* ── Model Row ─────────────────────────────────────────────────────────── */
 
 interface ModelRowProps {
-  model: AvailableModel;
+  model: ModelRowData;
   isDownloading: boolean;
   progress: ReturnType<ReturnType<typeof useModelDownload>['getProgress']>;
   isDeleting: boolean;
@@ -202,7 +231,7 @@ function ModelRow({
           <span className="font-mono text-xs text-[var(--text-primary)] truncate">
             {model.name}
           </span>
-          {model.is_active && (
+          {model.isActive && (
             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-[var(--success)] bg-opacity-15 border border-[var(--success)] border-opacity-40">
               <span className="w-1 h-1 bg-[var(--success)] shadow-[0_0_4px_rgba(34,197,94,0.6)]" />
               <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--success)]">
@@ -212,8 +241,17 @@ function ModelRow({
           )}
         </div>
         <span className="font-mono text-[10px] text-[var(--text-tertiary)]">
-          {formatBytes(model.size_bytes)}
+          {formatBytes(model.sizeMb * 1_048_576)}
+          {model.format === 'gguf' && ` · ${model.quantization}`}
         </span>
+        {progress?.status === 'error' && (
+          <span
+            className="block font-mono text-[10px] text-[var(--error)] truncate"
+            title={progress.error}
+          >
+            Download failed{progress.error ? `: ${progress.error}` : ''}
+          </span>
+        )}
       </div>
 
       {/* Action area */}
@@ -261,13 +299,13 @@ function ModelRow({
               <X size={10} />
             </button>
           </div>
-        ) : model.is_downloaded ? (
+        ) : model.isDownloaded ? (
           /* Downloaded state: delete button */
           <button
             onClick={onDelete}
-            disabled={isDeleting || model.is_active}
+            disabled={isDeleting || model.isActive}
             aria-label={`Delete ${model.name}`}
-            title={model.is_active ? 'Cannot delete the active model' : `Delete ${model.name}`}
+            title={model.isActive ? 'Cannot delete the active model' : `Delete ${model.name}`}
             className="
               flex items-center gap-1 px-2 py-1
               font-mono text-[10px] uppercase tracking-[0.05em]
