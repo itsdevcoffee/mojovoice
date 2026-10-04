@@ -264,6 +264,10 @@ jobs:
         with:
           key: cuda
 
+      # nvcc needs MSVC's cl.exe on PATH (Visual Studio developer environment)
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Build CLI with CUDA
         env:
           CUDA_COMPUTE_CAP: "80"
