@@ -75,7 +75,7 @@ struct DaemonServer {
 }
 
 impl DaemonServer {
-    fn new(_model_path: &Path) -> Result<Self> {
+    fn new(model_path: &Path) -> Result<Self> {
         let config = crate::config::load()?;
 
         info!("Loading whisper model into GPU memory...");
@@ -92,11 +92,9 @@ impl DaemonServer {
             .and_then(|s| s.get_prompt_string(224))
             .unwrap_or(None);
 
-        let transcriber = crate::transcribe::load_engine(
-            &config.model.path,
-            &config.model.language,
-            vocab_prompt,
-        )?;
+        // `model_path` is the config's model unless overridden with `daemon up --model`
+        let transcriber =
+            crate::transcribe::load_engine(model_path, &config.model.language, vocab_prompt)?;
 
         // GPU status for status reporting, from the engine actually in use
         let (gpu_enabled, gpu_name) = transcriber.device_label();
@@ -105,9 +103,7 @@ impl DaemonServer {
         // Extract model name from path basename (unique per model variant)
         // We use path instead of model_id because model_id is the HuggingFace repo
         // which may be shared by multiple quantization variants (e.g., Q4, Q4K, Q8)
-        let model_name = config
-            .model
-            .path
+        let model_name = model_path
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("unknown")
