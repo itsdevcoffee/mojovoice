@@ -12,6 +12,7 @@ interface CustomSelectProps {
   options: SelectOption[];
   ariaLabel?: string;
   showSaved?: boolean;
+  disabled?: boolean;
 }
 
 export default function CustomSelect({
@@ -20,6 +21,7 @@ export default function CustomSelect({
   options,
   ariaLabel,
   showSaved = false,
+  disabled = false,
 }: CustomSelectProps) {
   const [open, setOpen] = useState(false);
   const selectedLabel = options.find((o) => o.value === value)?.label ?? value;
@@ -28,7 +30,8 @@ export default function CustomSelect({
     <div className="relative w-full">
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => !disabled && setOpen((o) => !o)}
+        disabled={disabled}
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -41,6 +44,8 @@ export default function CustomSelect({
           focus:border-[var(--accent-primary)]
           focus:shadow-[0_0_20px_rgba(59,130,246,0.3)]
           focus:outline-none
+          disabled:opacity-60 disabled:cursor-wait
+          disabled:hover:border-[var(--border-default)]
           transition-all duration-150
         "
       >

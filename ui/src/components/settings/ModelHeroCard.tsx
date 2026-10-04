@@ -1,4 +1,5 @@
 import CustomSelect from '../ui/CustomSelect';
+import { useAppStore } from '../../stores/appStore';
 
 const LANGUAGE_OPTIONS = [
   { code: 'auto', name: 'Auto-detect' },
@@ -25,24 +26,29 @@ interface DownloadedModel {
 
 interface ModelHeroCardProps {
   downloadedModels: DownloadedModel[];
-  activeModelPath: string;
   language: string;
   savedModel?: boolean;
   savedLanguage?: boolean;
-  onModelChange: (path: string) => void;
+  /** Called with the model's directory name */
+  onModelChange: (filename: string) => void;
   onLanguageChange: (language: string) => void;
 }
 
 export default function ModelHeroCard({
   downloadedModels,
-  activeModelPath,
   language,
   savedModel,
   savedLanguage,
   onModelChange,
   onLanguageChange,
 }: ModelHeroCardProps) {
+  const switchingModel = useAppStore((s) => s.switchingModel);
+  const modelSwitchError = useAppStore((s) => s.modelSwitchError);
+  const setActiveView = useAppStore((s) => s.setActiveView);
+
   const activeModel = downloadedModels.find((m) => m.isActive);
+  const pendingModel = downloadedModels.find((m) => m.filename === switchingModel);
+  const hasModels = downloadedModels.length > 0;
 
   return (
     <div
@@ -54,15 +60,31 @@ export default function ModelHeroCard({
         surface-texture
       "
     >
-      {/* [ACTIVE] badge */}
+      {/* Status badge */}
       <div className="absolute top-2.5 right-2.5">
-        <span className="px-1.5 py-0.5 text-[10px] font-mono bg-green-500/20 border border-green-500/30 text-green-400 uppercase">
-          [ACTIVE]
-        </span>
+        {switchingModel ? (
+          <span className="px-1.5 py-0.5 text-[10px] font-mono bg-blue-500/20 border border-blue-500/30 text-[var(--accent-primary)] uppercase">
+            [LOADING]
+          </span>
+        ) : activeModel ? (
+          <span className="px-1.5 py-0.5 text-[10px] font-mono bg-green-500/20 border border-green-500/30 text-green-400 uppercase">
+            [ACTIVE]
+          </span>
+        ) : null}
       </div>
 
       {/* Model name + specs */}
-      {activeModel ? (
+      {switchingModel ? (
+        <div className="mb-3 pr-20" role="status" aria-live="polite">
+          <p className="flex items-center gap-2 font-mono text-sm font-semibold text-[var(--text-primary)] leading-tight">
+            <span className="inline-block w-3 h-3 border-2 border-[var(--accent-primary)] border-t-transparent rounded-full animate-spin" />
+            {pendingModel?.name ?? switchingModel}
+          </p>
+          <p className="font-mono text-[11px] text-[var(--text-tertiary)] mt-0.5">
+            Restarting daemon and loading model…
+          </p>
+        </div>
+      ) : activeModel ? (
         <div className="mb-3 pr-20">
           <p className="font-mono text-sm font-semibold text-[var(--text-primary)] leading-tight">
             {activeModel.name}
@@ -71,25 +93,58 @@ export default function ModelHeroCard({
             {activeModel.sizeMb} MB · whisper
           </p>
         </div>
-      ) : (
+      ) : hasModels ? (
         <p className="font-mono text-xs text-[var(--text-tertiary)] mb-3 italic pr-20">
-          No model loaded
+          No model selected — pick one below
+        </p>
+      ) : (
+        <div className="mb-3 pr-4">
+          <p className="font-mono text-sm font-semibold text-[var(--text-primary)]">
+            No model installed
+          </p>
+          <p className="font-mono text-[11px] text-[var(--text-tertiary)] mt-0.5 mb-2">
+            Download a model to start transcribing. Without a GPU, start with base.en or small.
+          </p>
+          <button
+            type="button"
+            onClick={() => setActiveView('models')}
+            className="
+              px-3 py-1.5 font-mono text-xs uppercase tracking-wide
+              border-2 border-[var(--accent-primary)] text-[var(--accent-primary)]
+              hover:bg-blue-500/10
+              focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-2
+              transition-all duration-150
+            "
+          >
+            [DOWNLOAD A MODEL]
+          </button>
+        </div>
+      )}
+
+      {modelSwitchError && !switchingModel && (
+        <p className="font-mono text-[11px] text-[var(--error)] mb-2 break-words" role="alert">
+          Switch failed: {modelSwitchError}
         </p>
       )}
 
-      {/* Model selector */}
       <div className="space-y-2">
-        <CustomSelect
-          value={activeModelPath}
-          onChange={onModelChange}
-          options={
-            downloadedModels.length === 0
-              ? [{ value: '', label: 'No models downloaded' }]
-              : downloadedModels.map((m) => ({ value: m.path, label: `${m.name} (${m.sizeMb} MB)` }))
-          }
-          ariaLabel="Select model"
-          showSaved={savedModel}
-        />
+        {/* Model selector (hidden until a model is installed) */}
+        {hasModels && (
+          <CustomSelect
+            value={switchingModel ?? activeModel?.filename ?? ''}
+            onChange={onModelChange}
+            options={[
+              ...(activeModel || switchingModel ? [] : [{ value: '', label: 'Select a model…' }]),
+              ...downloadedModels.map((m) => ({
+                value: m.filename,
+                label: `${m.name} (${m.sizeMb} MB)`,
+              })),
+            ]}
+            ariaLabel="Select model"
+            showSaved={savedModel}
+            disabled={switchingModel !== null}
+          />
+        )}
 
         {/* Language selector */}
         <CustomSelect

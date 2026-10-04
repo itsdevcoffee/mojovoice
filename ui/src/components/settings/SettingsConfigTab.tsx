@@ -78,7 +78,6 @@ export default function SettingsConfigTab({
       {/* ── HERO: Active model + language ── */}
       <ModelHeroCard
         downloadedModels={downloadedModels}
-        activeModelPath={config.model.path}
         language={config.model.language}
         savedModel={savedField === 'model'}
         savedLanguage={savedField === 'language'}

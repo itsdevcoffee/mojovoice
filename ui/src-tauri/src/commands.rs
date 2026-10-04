@@ -87,15 +87,47 @@ fn background_command(program: impl AsRef<std::ffi::OsStr>) -> std::process::Com
 }
 
 /// Start `mojovoice daemon up` detached from the app
-fn spawn_daemon(binary: &str) -> Result<(), String> {
+fn spawn_daemon(binary: &str) -> Result<std::process::Child, String> {
     background_command(binary)
         .args(["daemon", "up"])
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()
-        .map(|_| ())
         .map_err(|e| format!("Failed to start daemon: {}", e))
+}
+
+/// How long a freshly started daemon may take to load its model and answer
+/// (large models on CPU take a while)
+const DAEMON_READY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(180);
+
+/// Start `mojovoice daemon up` and wait until it answers, failing fast if it exits
+async fn start_daemon_and_wait(binary: &str) -> Result<(), String> {
+    let mut child = spawn_daemon(binary)?;
+    let started = std::time::Instant::now();
+    loop {
+        // The ping blocks (and has no timeout on Windows), so keep it off the async runtime
+        let ready = tokio::task::spawn_blocking(daemon_client::is_daemon_running)
+            .await
+            .unwrap_or(false);
+        if ready {
+            eprintln!("Daemon ready after {:.1}s", started.elapsed().as_secs_f32());
+            return Ok(());
+        }
+        if let Ok(Some(status)) = child.try_wait() {
+            return Err(format!(
+                "Daemon exited during startup ({}). Check `mojovoice daemon logs`.",
+                status
+            ));
+        }
+        if started.elapsed() > DAEMON_READY_TIMEOUT {
+            return Err(format!(
+                "Daemon didn't become ready within {} seconds",
+                DAEMON_READY_TIMEOUT.as_secs()
+            ));
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    }
 }
 
 /// Maximum output size to prevent DoS from malformed command output
@@ -1011,18 +1043,7 @@ pub async fn start_daemon() -> Result<(), String> {
     let binary = find_mojovoice_binary().ok_or("Could not find mojovoice binary")?;
 
     eprintln!("Starting daemon with binary: {}", binary);
-    spawn_daemon(&binary)?;
-
-    // Wait for daemon to be ready (max 5 seconds)
-    for i in 0..50 {
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        if daemon_client::is_daemon_running() {
-            eprintln!("Daemon started successfully after {}ms", i * 100);
-            return Ok(());
-        }
-    }
-
-    Err("Daemon failed to start within 5 seconds".to_string())
+    start_daemon_and_wait(&binary).await
 }
 
 /// Stop the mojovoice daemon
@@ -1080,18 +1101,7 @@ pub async fn restart_daemon() -> Result<(), String> {
 
     // 3. Start it again with the same binary
     eprintln!("Restarting daemon with detected binary: {}", binary);
-    spawn_daemon(&binary)?;
-
-    // 4. Wait for daemon to be ready (max 5 seconds)
-    for i in 0..50 {
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        if daemon_client::is_daemon_running() {
-            eprintln!("Daemon started successfully after {}ms", i * 100);
-            return Ok(());
-        }
-    }
-
-    Err("Daemon failed to start within 5 seconds".to_string())
+    start_daemon_and_wait(&binary).await
 }
 
 /// Validate if a path exists and return its type

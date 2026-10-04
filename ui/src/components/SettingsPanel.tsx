@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useToast } from './ui/Toast';
 import { invoke } from '../lib/ipc';
+import { useAppStore } from '../stores/appStore';
 import SettingsConfigTab from './settings/SettingsConfigTab';
 import VocabTab from './settings/VocabTab';
 
@@ -49,6 +50,7 @@ interface VocabTerm {
 
 export default function SettingsPanel() {
   const { toast } = useToast();
+  const switchModel = useAppStore((s) => s.switchModel);
   const [config, setConfig] = useState<Config | null>(null);
   const [downloadedModels, setDownloadedModels] = useState<DownloadedModel[]>([]);
   const [audioDevices, setAudioDevices] = useState<AudioDevice[]>([]);
@@ -109,20 +111,23 @@ export default function SettingsPanel() {
     loadVocabTerms();
   }, []);
 
-  const handleModelChange = async (path: string) => {
-    if (!config) return;
+  const handleModelChange = async (filename: string) => {
+    if (!config || !filename) return;
+    const switched = await switchModel(filename);
     try {
-      // Windows paths use backslashes
-      const pathParts = path.split(/[\\/]/);
-      const filename = pathParts[pathParts.length - 1];
-      await invoke('switch_model', { filename });
       const updatedConfig = await invoke<Config>('get_config');
       setConfig(updatedConfig);
       const models = await invoke<DownloadedModel[]>('list_downloaded_models');
       setDownloadedModels(models);
-      flashSaved('model');
+      const name = models.find((m) => m.filename === filename)?.name ?? filename;
+      if (switched) {
+        flashSaved('model');
+        toast({ message: `Now using ${name}`, variant: 'success' });
+      } else {
+        toast({ message: `Couldn't switch to ${name}`, variant: 'error' });
+      }
     } catch (error) {
-      console.error('Failed to switch model:', error);
+      console.error('Failed to reload settings after model switch:', error);
     }
   };
 

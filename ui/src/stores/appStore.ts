@@ -82,6 +82,12 @@ interface AppState {
   clearIPCCalls: () => void;
   setUIScale: (preset: ScalePreset, customValue?: number) => void;
 
+  // Model switching (restarts the daemon, so it takes a while): shared by every
+  // model picker so they all show progress and only one switch runs at a time
+  switchingModel: string | null;
+  modelSwitchError: string | null;
+  switchModel: (filename: string) => Promise<boolean>;
+
   // History actions
   loadHistory: (limit?: number, offset?: number) => Promise<void>;
   loadMoreHistory: () => Promise<void>;
@@ -121,6 +127,23 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // Actions
   setDaemonStatus: (status) => set({ daemonStatus: status }),
+  switchingModel: null,
+  modelSwitchError: null,
+  switchModel: async (filename) => {
+    if (get().switchingModel) return false;
+    set({ switchingModel: filename, modelSwitchError: null });
+    try {
+      await invoke('switch_model', { filename });
+      await get().refreshDaemonStatus();
+      return true;
+    } catch (error) {
+      console.error('Failed to switch model:', error);
+      set({ modelSwitchError: String(error) });
+      return false;
+    } finally {
+      set({ switchingModel: null });
+    }
+  },
   refreshDaemonStatus: async () => {
     try {
       const status = await invoke('get_daemon_status') as DaemonStatus;
