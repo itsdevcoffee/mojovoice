@@ -10,9 +10,20 @@
 | Blocker | Status |
 |---|---|
 | mojo-audio FFI (`libmojo_audio.so`, no Windows build of Mojo) | **Done (v0.5.8)** — replaced by pure-Rust `src/transcribe/mel.rs` |
-| Unix sockets for daemon IPC | Open |
-| `nix` signals in `src/state/toggle.rs` | Open |
-| No `icons/icon.ico` (tauri-build fails on Windows) | Open |
+| Unix sockets for daemon IPC | **Done** — `src/daemon/transport.rs` (interprocess; named pipe on Windows) |
+| `nix` signals in `src/state/toggle.rs` | **Done** — stop file + `OpenProcess` on Windows |
+| No `icons/icon.ico` (tauri-build fails on Windows) | **Done** |
+
+### Progress (branch `feat/windows-port`, PR #7)
+
+- [x] P0: builds — CI `windows-latest` job passes check, unit tests, release build, and the end-to-end transcription smoke test (daemon over named pipe, whisper-tiny)
+- [x] P1.1: CLI shell-outs (Rust log tail; PipeWire/notify-send/Waybar default gated to Linux)
+- [x] P1.2: desktop app — CLI lookup without `which`/`ps`, `CREATE_NO_WINDOW`, nvidia-smi on Windows; config save keeps unmanaged sections
+- [x] P2.1: global hotkey in the daemon (`[hotkey] toggle`, default `Ctrl+Alt+Space`) — compiles/runs in CI; **needs testing on a real desktop**
+- [ ] P1.3: CUDA build on Windows
+- [ ] P3.1: release job — Windows CLI zip + NSIS installer (with bundled CLI sidecar)
+- [ ] Manual test on Windows 11 (Wario): hotkey, typing into apps, desktop app
+- [ ] Later: tray/autostart, WASAPI loopback for `listen`, upgrade global-hotkey 0.7 → 0.8
 
 ## 1. Incompatibility inventory
 
