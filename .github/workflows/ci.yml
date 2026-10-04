@@ -231,15 +231,17 @@ jobs:
       - name: Build CLI
         run: cargo build --release --features whisper-cpp
 
-      # whisper.cpp on Vulkan for AMD/Intel GPUs; needs vulkan-1.dll (GPU driver) at launch
+      # whisper.cpp on Vulkan for AMD/Intel GPUs; needs vulkan-1.dll (GPU driver) at launch.
+      # Short target dirs: whisper.cpp's nested vulkan-shaders-gen build otherwise exceeds
+      # MSBuild's 260-character path limit.
       - name: Build CLI with Vulkan
-        run: cargo build --release --features whisper-vulkan --target-dir target-vulkan
+        run: cargo build --release --features whisper-vulkan --target-dir D:\tv
 
       # Needs the CUDA 12 runtime at launch; the app only uses it when that's installed
       - name: Build CLI with CUDA
         env:
           CUDA_COMPUTE_CAP: "80"
-        run: cargo build --release --features cuda,whisper-vulkan --target-dir target-cuda
+        run: cargo build --release --features cuda,whisper-vulkan --target-dir D:\tc
 
       # Bundled into the installer next to the app (tauri.windows.conf.json externalBin)
       - name: Stage CLIs as Tauri sidecars
@@ -247,8 +249,8 @@ jobs:
         run: |
           mkdir -p ui/src-tauri/binaries
           cp target/release/mojovoice.exe ui/src-tauri/binaries/mojovoice-x86_64-pc-windows-msvc.exe
-          cp target-vulkan/release/mojovoice.exe ui/src-tauri/binaries/mojovoice-vulkan-x86_64-pc-windows-msvc.exe
-          cp target-cuda/release/mojovoice.exe ui/src-tauri/binaries/mojovoice-cuda-x86_64-pc-windows-msvc.exe
+          cp /d/tv/release/mojovoice.exe ui/src-tauri/binaries/mojovoice-vulkan-x86_64-pc-windows-msvc.exe
+          cp /d/tc/release/mojovoice.exe ui/src-tauri/binaries/mojovoice-cuda-x86_64-pc-windows-msvc.exe
 
       - name: Install frontend dependencies
         working-directory: ui
