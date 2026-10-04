@@ -32,6 +32,8 @@ impl WhisperCppEngine {
             backend_name(),
             model_file.display()
         );
+        // CPU features the build uses (AVX2 etc.); handy when diagnosing slow CPUs
+        info!("whisper.cpp system info: {}", whisper_rs::print_system_info().trim());
         let mut ctx_params = WhisperContextParameters::default();
         let gpu = preferred_gpu();
         if let Some((index, name)) = &gpu {
