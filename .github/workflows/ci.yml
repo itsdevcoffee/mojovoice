@@ -229,12 +229,17 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path target/release/mojovoice.exe, README.md, LICENSE -DestinationPath mojovoice-windows-x64.zip
 
+      # Copy to the top level so the artifact isn't nested under the build path
+      - name: Collect installer
+        shell: bash
+        run: cp ui/src-tauri/target/release/bundle/nsis/*-setup.exe MojoVoice-windows-x64-setup.exe
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: mojovoice-windows-x64
           path: |
-            ui/src-tauri/target/release/bundle/nsis/*-setup.exe
+            MojoVoice-windows-x64-setup.exe
             mojovoice-windows-x64.zip
           retention-days: 30
 
