@@ -40,11 +40,11 @@ trap cleanup EXIT
 
 "$BIN" daemon up >"$LOG" 2>&1 &
 for _ in $(seq 1 120); do
-    grep -q "ready for transcription" "$LOG" && break
+    grep -q "accepting connections" "$LOG" && break
     if ! kill -0 $! 2>/dev/null; then break; fi
     sleep 1
 done
-if ! grep -q "ready for transcription" "$LOG"; then
+if ! grep -q "accepting connections" "$LOG"; then
     echo "FAIL: daemon did not become ready" >&2
     cat "$LOG" >&2
     exit 1

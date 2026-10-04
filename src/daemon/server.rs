@@ -611,6 +611,10 @@ pub fn run_daemon(model_path: &Path) -> Result<()> {
         );
     }
 
+    // Clients can only connect from here on (on Windows the pipe refuses connections
+    // until the accept loop runs), so this is the readiness signal
+    info!("Daemon ready - accepting connections");
+
     loop {
         // Check shutdown flag
         if server.shutdown.load(Ordering::SeqCst) {
