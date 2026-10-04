@@ -131,13 +131,13 @@ export function ModelsPanel() {
 
       <div
         className={`
-          overflow-hidden transition-all duration-200
-          ${isExpanded ? 'max-h-[800px] opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}
+          grid overflow-hidden transition-all duration-200
+          ${isExpanded ? 'grid-rows-[1fr] opacity-100 mt-4' : 'grid-rows-[0fr] opacity-0 mt-0'}
         `}
         style={{ transitionTimingFunction: 'var(--ease-out)' }}
         aria-hidden={!isExpanded}
       >
-        <div className="surface-texture border-2 border-[var(--border-default)]">
+        <div className="min-h-0 surface-texture border-2 border-[var(--border-default)]">
           {/* Storage info bar */}
           <div className="bg-[var(--bg-surface)] px-3 py-3 border-b-2 border-[var(--border-default)] relative z-10">
             <div className="flex items-center justify-between mb-2">

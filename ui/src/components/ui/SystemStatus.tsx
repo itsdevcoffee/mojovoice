@@ -116,13 +116,13 @@ export function SystemStatus() {
       <div
         id="system-status-content"
         className={`
-          overflow-hidden transition-all duration-200
-          ${isExpanded ? 'max-h-[400px] opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}
+          grid overflow-hidden transition-all duration-200
+          ${isExpanded ? 'grid-rows-[1fr] opacity-100 mt-4' : 'grid-rows-[0fr] opacity-0 mt-0'}
         `}
         style={{ transitionTimingFunction: 'var(--ease-out)' }}
         aria-hidden={!isExpanded}
       >
-        <div className="surface-texture border-2 border-[var(--border-default)]">
+        <div className="min-h-0 surface-texture border-2 border-[var(--border-default)]">
           {/* Hardware diagnostic grid */}
           <div className="grid grid-cols-3 gap-px bg-[var(--border-default)]">
             {/* CPU */}
