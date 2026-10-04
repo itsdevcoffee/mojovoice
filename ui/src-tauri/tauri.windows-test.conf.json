@@ -1,0 +1,5 @@
+{
+  "bundle": {
+    "externalBin": ["binaries/mojovoice", "binaries/mojovoice-vulkan"]
+  }
+}

@@ -200,14 +200,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install CUDA toolkit
-        uses: Jimver/cuda-toolkit@v0.2.24
-        with:
-          cuda: '12.8.1'
-          method: network
-          sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev", "curand", "curand_dev", "nvrtc", "nvrtc_dev", "visual_studio_integration"]'
-
-      # nvcc needs MSVC's cl.exe on PATH (Visual Studio developer environment)
+      # CUDA is left out of this test build (it adds ~10-15 min); releases include it
       - name: Set up MSVC environment
         uses: ilammy/msvc-dev-cmd@v1
 
@@ -246,11 +239,6 @@ jobs:
       - name: Build CLI with Vulkan
         run: cargo build --release --features whisper-vulkan --target-dir D:\tv
 
-      # Needs the CUDA 12 runtime at launch; the app only uses it when that's installed
-      - name: Build CLI with CUDA
-        env:
-          CUDA_COMPUTE_CAP: "80"
-        run: cargo build --release --features cuda,whisper-vulkan --target-dir D:\tc
 
       # Bundled into the installer next to the app (tauri.windows.conf.json externalBin)
       - name: Stage CLIs as Tauri sidecars
@@ -259,15 +247,15 @@ jobs:
           mkdir -p ui/src-tauri/binaries
           cp target/release/mojovoice.exe ui/src-tauri/binaries/mojovoice-x86_64-pc-windows-msvc.exe
           cp /d/tv/release/mojovoice.exe ui/src-tauri/binaries/mojovoice-vulkan-x86_64-pc-windows-msvc.exe
-          cp /d/tc/release/mojovoice.exe ui/src-tauri/binaries/mojovoice-cuda-x86_64-pc-windows-msvc.exe
 
       - name: Install frontend dependencies
         working-directory: ui
         run: npm ci
 
+      # Test build: bundle only the CPU and Vulkan CLIs (tauri.windows-test.conf.json)
       - name: Build installer
         working-directory: ui
-        run: npm run tauri build
+        run: npm run tauri build -- --config src-tauri/tauri.windows-test.conf.json
 
       - name: Package CLI
         shell: pwsh
