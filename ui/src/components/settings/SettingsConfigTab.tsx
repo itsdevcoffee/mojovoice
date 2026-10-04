@@ -3,6 +3,10 @@ import SettingRow from './SettingRow';
 import BehaviorChip from './BehaviorChip';
 import AdvancedPanel from './AdvancedPanel';
 import CustomSelect from '../ui/CustomSelect';
+import HotkeyInput from './HotkeyInput';
+
+/** The global hotkey is registered by the daemon on Windows only */
+const IS_WINDOWS = typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows');
 
 interface Config {
   model: { path: string; model_id: string; language: string; prompt: string | null };
@@ -14,6 +18,8 @@ interface Config {
     device_name: string | null;
   };
   output: { display_server: string | null; append_space: boolean; refresh_command: string | null };
+  hotkey?: { toggle: string | null; mode?: 'toggle' | 'push_to_talk' };
+  overlay?: { enabled: boolean };
 }
 
 interface DownloadedModel {
@@ -46,6 +52,10 @@ interface SettingsConfigTabProps {
   onSaveAudioClipsToggle: () => void;
   onAudioClipsPathChange: (path: string) => void;
   onAdvancedToggle: () => void;
+  onHotkeyChange: (combo: string) => void;
+  onPushToTalkToggle: () => void;
+  onOverlayToggle: () => void;
+  hotkeyApplying: boolean;
 }
 
 function formatDuration(seconds: number): string {
@@ -72,13 +82,16 @@ export default function SettingsConfigTab({
   onSaveAudioClipsToggle,
   onAudioClipsPathChange,
   onAdvancedToggle,
+  onHotkeyChange,
+  onPushToTalkToggle,
+  onOverlayToggle,
+  hotkeyApplying,
 }: SettingsConfigTabProps) {
   return (
     <div>
       {/* ── HERO: Active model + language ── */}
       <ModelHeroCard
         downloadedModels={downloadedModels}
-        activeModelPath={config.model.path}
         language={config.model.language}
         savedModel={savedField === 'model'}
         savedLanguage={savedField === 'language'}
@@ -90,6 +103,30 @@ export default function SettingsConfigTab({
       <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--text-tertiary)] pt-2 pb-1">
         RECORDING
       </p>
+
+      {/* hotkey */}
+      <SettingRow label="hotkey" saved={savedField === 'hotkey'}>
+        {IS_WINDOWS ? (
+          <HotkeyInput
+            value={config.hotkey?.toggle ?? null}
+            onChange={onHotkeyChange}
+            disabled={hotkeyApplying}
+          />
+        ) : (
+          <p className="font-mono text-[11px] text-[var(--text-tertiary)]">
+            Bind <code>mojovoice start</code> to a key in your desktop environment
+          </p>
+        )}
+      </SettingRow>
+
+      {IS_WINDOWS && (
+        <BehaviorChip
+          label="push_to_talk"
+          value={config.hotkey?.mode === 'push_to_talk'}
+          saved={savedField === 'push_to_talk'}
+          onToggle={onPushToTalkToggle}
+        />
+      )}
 
       {/* timeout_secs */}
       <SettingRow label="timeout_secs" saved={savedField === 'timeout'}>
@@ -156,6 +193,15 @@ export default function SettingsConfigTab({
         saved={savedField === 'append_space'}
         onToggle={onAppendSpaceToggle}
       />
+
+      {IS_WINDOWS && (
+        <BehaviorChip
+          label="status_overlay"
+          value={config.overlay?.enabled ?? true}
+          saved={savedField === 'status_overlay'}
+          onToggle={onOverlayToggle}
+        />
+      )}
 
       {/* ── ADVANCED collapsible ── */}
       <AdvancedPanel

@@ -1,26 +1,31 @@
 use anyhow::{Context, Result};
 use std::io::{BufRead, BufReader, Write};
-use std::os::unix::net::UnixStream;
 use std::time::Duration;
 use tracing::info;
 
 use super::protocol::{DaemonRequest, DaemonResponse};
-use super::server::{get_socket_path, is_daemon_running};
+use super::transport;
 
 const DAEMON_TIMEOUT: Duration = Duration::from_secs(30);
+const PING_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// Write one newline-delimited JSON request and read one response line.
+fn exchange(stream: &transport::Stream, request_json: &str) -> Result<DaemonResponse> {
+    let mut writer = stream;
+    writer.write_all(request_json.as_bytes())?;
+    writer.write_all(b"\n")?;
+    writer.flush()?;
+
+    let mut line = String::new();
+    BufReader::new(stream)
+        .read_line(&mut line)
+        .context("Failed to read daemon response (timeout or connection closed)")?;
+
+    serde_json::from_str(line.trim()).context("Failed to parse daemon response")
+}
 
 pub fn send_request(request: &DaemonRequest) -> Result<DaemonResponse> {
-    let socket_path = get_socket_path()?;
-
-    let mut stream =
-        UnixStream::connect(&socket_path).context("Failed to connect to daemon. Is it running?")?;
-
-    stream
-        .set_read_timeout(Some(DAEMON_TIMEOUT))
-        .context("Failed to set read timeout")?;
-    stream
-        .set_write_timeout(Some(DAEMON_TIMEOUT))
-        .context("Failed to set write timeout")?;
+    let stream = transport::connect(DAEMON_TIMEOUT)?;
 
     let request_json = serde_json::to_string(request)?;
     match request {
@@ -33,17 +38,19 @@ pub fn send_request(request: &DaemonRequest) -> Result<DaemonResponse> {
         },
         _ => info!("Sending to daemon: {}", request_json),
     }
-    stream.write_all(request_json.as_bytes())?;
-    stream.write_all(b"\n")?;
-    stream.flush()?;
 
-    let mut reader = BufReader::new(stream);
-    let mut line = String::new();
-    reader
-        .read_line(&mut line)
-        .context("Failed to read daemon response (timeout or connection closed)")?;
+    exchange(&stream, &request_json)
+}
 
-    serde_json::from_str(line.trim()).context("Failed to parse daemon response")
+/// Check if the daemon is running by pinging it
+pub fn is_daemon_running() -> bool {
+    let Ok(stream) = transport::connect(PING_TIMEOUT) else {
+        return false;
+    };
+    let Ok(ping) = serde_json::to_string(&DaemonRequest::Ping) else {
+        return false;
+    };
+    exchange(&stream, &ping).is_ok()
 }
 
 fn expect_ok_response(response: DaemonResponse, operation: &str) -> Result<()> {

@@ -55,7 +55,7 @@ struct GpuInfo {
 
 /// Detect GPU information (cross-platform)
 fn detect_gpu_info() -> GpuInfo {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
     {
         if let Some(info) = detect_nvidia_gpu() {
             return info;
@@ -72,6 +72,64 @@ fn detect_gpu_info() -> GpuInfo {
     GpuInfo::default()
 }
 
+/// A command for a console program that, on Windows, doesn't flash a console window
+/// (the desktop app is a GUI process, so each console child would get its own)
+fn background_command(program: impl AsRef<std::ffi::OsStr>) -> std::process::Command {
+    #[allow(unused_mut)]
+    let mut cmd = std::process::Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd
+}
+
+/// Start `mojovoice daemon up` detached from the app
+fn spawn_daemon(binary: &str) -> Result<std::process::Child, String> {
+    background_command(binary)
+        .args(["daemon", "up"])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| format!("Failed to start daemon: {}", e))
+}
+
+/// How long a freshly started daemon may take to load its model and answer
+/// (large models on CPU take a while)
+const DAEMON_READY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(180);
+
+/// Start `mojovoice daemon up` and wait until it answers, failing fast if it exits
+async fn start_daemon_and_wait(binary: &str) -> Result<(), String> {
+    let mut child = spawn_daemon(binary)?;
+    let started = std::time::Instant::now();
+    loop {
+        // The ping blocks (and has no timeout on Windows), so keep it off the async runtime
+        let ready = tokio::task::spawn_blocking(daemon_client::is_daemon_running)
+            .await
+            .unwrap_or(false);
+        if ready {
+            eprintln!("Daemon ready after {:.1}s", started.elapsed().as_secs_f32());
+            return Ok(());
+        }
+        if let Ok(Some(status)) = child.try_wait() {
+            return Err(format!(
+                "Daemon exited during startup ({}). Check `mojovoice daemon logs`.",
+                status
+            ));
+        }
+        if started.elapsed() > DAEMON_READY_TIMEOUT {
+            return Err(format!(
+                "Daemon didn't become ready within {} seconds",
+                DAEMON_READY_TIMEOUT.as_secs()
+            ));
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    }
+}
+
 /// Maximum output size to prevent DoS from malformed command output
 const MAX_CMD_OUTPUT_SIZE: usize = 10 * 1024; // 10 KB
 
@@ -85,10 +143,10 @@ fn safe_output_to_string(output: &[u8]) -> String {
     String::from_utf8_lossy(truncated).to_string()
 }
 
-/// Detect NVIDIA GPU using nvidia-smi (Linux)
-#[cfg(target_os = "linux")]
+/// Detect NVIDIA GPU using nvidia-smi (ships with the driver on Linux and Windows)
+#[cfg(any(target_os = "linux", target_os = "windows"))]
 fn detect_nvidia_gpu() -> Option<GpuInfo> {
-    let output = std::process::Command::new("nvidia-smi")
+    let output = background_command("nvidia-smi")
         .args(["--query-gpu=name,memory.total", "--format=csv,noheader,nounits"])
         .output()
         .ok()?;
@@ -353,7 +411,7 @@ fn refresh_statusbar() {
     let program = &parts[0];
     let args = &parts[1..];
 
-    let _ = std::process::Command::new(program)
+    let _ = background_command(program)
         .args(args)
         .spawn()
         .map(|mut child| {
@@ -579,31 +637,24 @@ pub async fn download_model(model_name: String, window: tauri::Window) -> Result
         return Err(format!("Invalid repo_id format (must be org/model): {}", model.repo_id));
     }
 
-    // Determine required files and their source repos based on format
-    // For GGUF: model.gguf from repo_id, config/tokenizer from base_model_id
+    // Files and their source repos come from the shared registry (safetensors, GGUF
+    // and GGML models are laid out differently)
     struct FileSource {
         local_name: &'static str,  // What we save the file as locally
         remote_name: String,        // What the file is called in the HuggingFace repo
         repo_id: String,
     }
 
-    let file_sources: Vec<FileSource> = if model.format == "gguf" {
-        let base_repo = model.base_model_id.clone()
-            .ok_or_else(|| format!("GGUF model '{}' missing base_model_id for config/tokenizer", model.name))?;
-        let gguf_remote = model.gguf_file.clone()
-            .ok_or_else(|| format!("GGUF model '{}' missing gguf_file (remote filename)", model.name))?;
-        vec![
-            FileSource { local_name: "model.gguf", remote_name: gguf_remote, repo_id: model.repo_id.clone() },
-            FileSource { local_name: "config.json", remote_name: "config.json".into(), repo_id: base_repo.clone() },
-            FileSource { local_name: "tokenizer.json", remote_name: "tokenizer.json".into(), repo_id: base_repo },
-        ]
-    } else {
-        vec![
-            FileSource { local_name: "model.safetensors", remote_name: "model.safetensors".into(), repo_id: model.repo_id.clone() },
-            FileSource { local_name: "config.json", remote_name: "config.json".into(), repo_id: model.repo_id.clone() },
-            FileSource { local_name: "tokenizer.json", remote_name: "tokenizer.json".into(), repo_id: model.repo_id.clone() },
-        ]
-    };
+    let file_sources: Vec<FileSource> = mojovoice::model::ModelInfo::find(&model_name)
+        .ok_or_else(|| format!("Model '{}' not found in registry", model_name))?
+        .files()
+        .into_iter()
+        .map(|f| FileSource {
+            local_name: f.local_name,
+            remote_name: f.remote_name.to_string(),
+            repo_id: f.repo_id.to_string(),
+        })
+        .collect();
 
     let required_files: Vec<&str> = file_sources.iter().map(|f| f.local_name).collect();
 
@@ -955,7 +1006,16 @@ pub async fn get_config() -> Result<AppConfig, String> {
 pub async fn save_config(config: AppConfig) -> Result<(), String> {
     let config_path = get_config_path()?;
 
-    let config_str = toml::to_string_pretty(&config)
+    // Replace the sections the app manages; keep any others (e.g. [hotkey]) intact
+    let mut merged: toml::Table = std::fs::read_to_string(&config_path)
+        .ok()
+        .and_then(|existing| existing.parse().ok())
+        .unwrap_or_default();
+    let sections = toml::Table::try_from(&config)
+        .map_err(|e| format!("Failed to serialize config: {}", e))?;
+    merged.extend(sections);
+
+    let config_str = toml::to_string_pretty(&merged)
         .map_err(|e| format!("Failed to serialize config: {}", e))?;
 
     std::fs::write(&config_path, config_str)
@@ -976,25 +1036,7 @@ pub async fn start_daemon() -> Result<(), String> {
     let binary = find_mojovoice_binary().ok_or("Could not find mojovoice binary")?;
 
     eprintln!("Starting daemon with binary: {}", binary);
-
-    std::process::Command::new(&binary)
-        .args(["daemon", "up"])
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .map_err(|e| format!("Failed to start daemon: {}", e))?;
-
-    // Wait for daemon to be ready (max 5 seconds)
-    for i in 0..50 {
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        if daemon_client::is_daemon_running() {
-            eprintln!("Daemon started successfully after {}ms", i * 100);
-            return Ok(());
-        }
-    }
-
-    Err("Daemon failed to start within 5 seconds".to_string())
+    start_daemon_and_wait(&binary).await
 }
 
 /// Stop the mojovoice daemon
@@ -1025,6 +1067,11 @@ pub async fn stop_daemon() -> Result<(), String> {
 /// Restart the mojovoice daemon with new configuration
 #[tauri::command]
 pub async fn restart_daemon() -> Result<(), String> {
+    // Detect which binary is running before stopping it, or fall back to finding one
+    let binary = detect_running_binary()
+        .or_else(find_mojovoice_binary)
+        .unwrap_or_else(|| "mojovoice".to_string());
+
     // 1. Send shutdown command to daemon
     let shutdown_request = daemon_client::DaemonRequest::Shutdown;
     match daemon_client::send_request(shutdown_request) {
@@ -1045,31 +1092,9 @@ pub async fn restart_daemon() -> Result<(), String> {
         }
     }
 
-    // 3. Detect which binary was actually running, or find it
-    let binary = detect_running_binary()
-        .or_else(find_mojovoice_binary)
-        .unwrap_or_else(|| "mojovoice".to_string());
-
+    // 3. Start it again with the same binary
     eprintln!("Restarting daemon with detected binary: {}", binary);
-
-    std::process::Command::new(&binary)
-        .args(["daemon", "up"])
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .map_err(|e| format!("Failed to start daemon: {}", e))?;
-
-    // 4. Wait for daemon to be ready (max 5 seconds)
-    for i in 0..50 {
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        if daemon_client::is_daemon_running() {
-            eprintln!("Daemon started successfully after {}ms", i * 100);
-            return Ok(());
-        }
-    }
-
-    Err("Daemon failed to start within 5 seconds".to_string())
+    start_daemon_and_wait(&binary).await
 }
 
 /// Validate if a path exists and return its type
@@ -1077,9 +1102,9 @@ pub async fn restart_daemon() -> Result<(), String> {
 pub async fn validate_path(path: String) -> Result<PathValidation, String> {
     // Expand ~ to home directory
     let expanded_path = if path.starts_with('~') {
-        std::env::var("HOME")
-            .map(|home| path.replacen('~', &home, 1))
-            .unwrap_or_else(|_| path.clone())
+        dirs::home_dir()
+            .map(|home| path.replacen('~', &home.to_string_lossy(), 1))
+            .unwrap_or_else(|| path.clone())
     } else {
         path
     };
@@ -1128,66 +1153,98 @@ pub struct PathValidation {
     pub message: String,
 }
 
-/// Find mojovoice binary in common locations
+/// Find the mojovoice CLI: bundled next to the app, in ~/.local/bin, or on PATH.
+/// On Windows the installer bundles GPU builds too, which can't even start without
+/// their DLLs: the CUDA build (NVIDIA + CUDA 12 runtime) and the Vulkan build
+/// (whisper.cpp; any GPU driver with Vulkan). Prefer CUDA, then Vulkan, then CPU.
 fn find_mojovoice_binary() -> Option<String> {
-    let home = std::env::var("HOME").ok()?;
-    let path = format!("{}/.local/bin/mojovoice", home);
-
-    if std::path::Path::new(&path).exists() {
-        return Some(path);
-    }
-
-    // Try PATH as fallback
-    if let Ok(output) = std::process::Command::new("which")
-        .arg("mojovoice")
-        .output()
+    let mut names = Vec::new();
+    #[cfg(windows)]
     {
-        if output.status.success() {
-            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !path.is_empty() {
-                return Some(path);
-            }
+        if dlls_loadable(&CUDA_BUILD_DLLS) {
+            names.push(format!("mojovoice-cuda{}", std::env::consts::EXE_SUFFIX));
+        }
+        if dlls_loadable(&VULKAN_BUILD_DLLS) {
+            names.push(format!("mojovoice-vulkan{}", std::env::consts::EXE_SUFFIX));
         }
     }
+    names.push(format!("mojovoice{}", std::env::consts::EXE_SUFFIX));
 
-    None
+    names.iter().find_map(|name| find_cli(name))
 }
 
-/// Detect which mojovoice binary is currently running
-fn detect_running_binary() -> Option<String> {
-    // Run: ps aux | grep mojovoice | grep daemon
-    let output = std::process::Command::new("ps")
-        .args(["aux"])
-        .output()
-        .ok()?;
+/// Look for one CLI executable name next to the app, in ~/.local/bin, then on PATH
+fn find_cli(exe_name: &str) -> Option<String> {
+    let bundled = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| dir.join(exe_name)));
+    let local_bin = dirs::home_dir().map(|home| home.join(".local/bin").join(exe_name));
+    let on_path = std::env::var_os("PATH")
+        .into_iter()
+        .flat_map(|paths| std::env::split_paths(&paths).collect::<Vec<_>>())
+        .map(|dir| dir.join(exe_name));
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    bundled
+        .into_iter()
+        .chain(local_bin)
+        .chain(on_path)
+        .find(|candidate| candidate.is_file())
+        .map(|path| path.to_string_lossy().into_owned())
+}
 
-    // Find lines with "mojovoice" and "daemon"
-    for line in stdout.lines() {
-        if line.contains("mojovoice") && line.contains("daemon") && !line.contains("grep") {
-            // Extract the command path (usually in the later columns)
-            let parts: Vec<&str> = line.split_whitespace().collect();
+/// DLLs the CUDA build imports: nvcuda (NVIDIA driver), cuBLAS/cuBLASLt and cuRAND
+/// (CUDA 12 toolkit/runtime, usually on PATH). It also imports vulkan-1.dll for
+/// whisper.cpp, which every NVIDIA driver installs.
+#[cfg(windows)]
+const CUDA_BUILD_DLLS: [&str; 5] = [
+    "nvcuda.dll",
+    "cublas64_12.dll",
+    "cublasLt64_12.dll",
+    "curand64_10.dll",
+    "vulkan-1.dll",
+];
 
-            // Find the part that looks like a path to mojovoice
-            for part in &parts {
-                if part.contains("mojovoice") && (part.starts_with('/') || part.starts_with("./")) {
-                    eprintln!("Detected running binary: {}", part);
-                    return Some(part.to_string());
-                }
+/// The Vulkan loader, installed by AMD, Intel and NVIDIA graphics drivers
+#[cfg(windows)]
+const VULKAN_BUILD_DLLS: [&str; 1] = ["vulkan-1.dll"];
+
+/// Whether every DLL can be loaded with the normal search order (the same one the
+/// exe loader uses)
+#[cfg(windows)]
+fn dlls_loadable(dlls: &[&str]) -> bool {
+    use windows_sys::Win32::Foundation::FreeLibrary;
+    use windows_sys::Win32::System::LibraryLoader::LoadLibraryW;
+
+    dlls.iter().all(|dll| {
+        let wide: Vec<u16> = dll.encode_utf16().chain(std::iter::once(0)).collect();
+        // SAFETY: null-terminated UTF-16 name; the handle is freed right away
+        unsafe {
+            let handle = LoadLibraryW(wide.as_ptr());
+            if handle.is_null() {
+                eprintln!("{} not found", dll);
+                return false;
             }
-
-            // Fallback: look for just the binary name
-            for part in &parts {
-                if part.contains("mojovoice") {
-                    eprintln!("Detected running binary name: {}", part);
-                    return Some(part.to_string());
-                }
-            }
+            FreeLibrary(handle);
+            true
         }
-    }
+    })
+}
 
-    None
+/// Executable of the running daemon, from its PID file
+fn detect_running_binary() -> Option<String> {
+    use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+
+    let pid_file = mojovoice::state::get_daemon_pid_file().ok()?;
+    let pid = Pid::from(std::fs::read_to_string(pid_file).ok()?.trim().parse::<usize>().ok()?);
+
+    let mut system = System::new();
+    system.refresh_processes_specifics(
+        ProcessesToUpdate::Some(&[pid]),
+        ProcessRefreshKind::new().with_exe(UpdateKind::Always),
+    );
+    let exe = system.process(pid)?.exe()?;
+    eprintln!("Detected running binary: {}", exe.display());
+    Some(exe.to_string_lossy().into_owned())
 }
 
 // =============================================================================
@@ -1204,17 +1261,11 @@ pub struct RegistryModel {
     pub size_mb: u32,
     pub family: String,
     pub quantization: String,
-    /// Model format: "safetensors" or "gguf"
+    /// Model format: "safetensors", "gguf" or "ggml"
     pub format: String,
     /// HuggingFace model ID (e.g., "openai/whisper-large-v3-turbo")
     #[serde(skip_serializing)]
     pub repo_id: String,
-    /// For GGUF models: HuggingFace model ID to fetch config/tokenizer from
-    #[serde(skip_serializing)]
-    pub base_model_id: Option<String>,
-    /// For GGUF models: actual filename in the HuggingFace repo (e.g., "whisper-large-v3-q8_0.gguf")
-    #[serde(skip_serializing)]
-    pub gguf_file: Option<String>,
 }
 
 /// Model that's been downloaded locally
@@ -1240,8 +1291,6 @@ fn get_model_registry() -> Vec<RegistryModel> {
             quantization: m.quantization.into(),
             format: m.format.as_str().into(),
             repo_id: m.repo_id.into(),
-            base_model_id: m.base_repo_id.map(Into::into),
-            gguf_file: m.gguf_file.map(Into::into),
         })
         .collect()
 }
@@ -1392,8 +1441,10 @@ pub async fn list_downloaded_models() -> Result<Vec<DownloadedModel>, String> {
                     let is_gguf = path.join("model.gguf").exists()
                         && path.join("config.json").exists()
                         && path.join("tokenizer.json").exists();
+                    // GGML (whisper.cpp): a single self-contained model.bin
+                    let is_ggml = path.join("model.bin").exists();
 
-                    if is_safetensors || is_gguf {
+                    if is_safetensors || is_gguf || is_ggml {
                         // Match against registry to get metadata
                         if let Some(reg_model) = registry.iter().find(|m| m.filename == dirname) {
                             downloaded.push(DownloadedModel {

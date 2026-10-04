@@ -202,6 +202,130 @@ jobs:
           asset_name: MojoVoice-linux-x64.deb
           asset_content_type: application/vnd.debian.binary-package
 
+  build-windows:
+    name: Build Windows (CLI + installer)
+    needs: create-release
+    # CUDA 12.x only supports host compilers up to Visual Studio 2022
+    runs-on: windows-2022
+    # Portable whisper.cpp CPU code: GGML_NATIVE would bake in the CI runner's CPU
+    # features (it picked AVX-512, which most desktop CPUs lack)
+    env:
+      GGML_NATIVE: "OFF"
+      GGML_AVX: "ON"
+      GGML_AVX2: "ON"
+      GGML_FMA: "ON"
+      GGML_F16C: "ON"
+      GGML_BMI2: "ON"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install CUDA toolkit
+        uses: Jimver/cuda-toolkit@v0.2.24
+        with:
+          cuda: '12.8.1'
+          method: network
+          sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev", "curand", "curand_dev", "nvrtc", "nvrtc_dev", "visual_studio_integration"]'
+
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      # whisper.cpp's Vulkan backend needs the Vulkan headers and glslc at build time
+      - name: Install Vulkan SDK
+        uses: jakoch/install-vulkan-sdk-action@v1
+        with:
+          vulkan_version: latest
+          install_runtime: true
+          cache: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          cache: 'npm'
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Get version without v prefix
+        id: version
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      # CPU build: Candle + whisper.cpp (CPU) for GGML models
+      - name: Build CLI
+        run: cargo build --release --features whisper-cpp
+
+      - name: Smoke test transcription
+        shell: bash
+        run: ./scripts/smoke-transcribe.sh target/release/mojovoice.exe
+
+      - name: Package CLI
+        shell: pwsh
+        run: Compress-Archive -Path target/release/mojovoice.exe, README.md, LICENSE -DestinationPath mojovoice-windows-x64.zip
+
+      # whisper.cpp on Vulkan for AMD/Intel GPUs; needs vulkan-1.dll (GPU driver) at launch.
+      # Short target dirs: whisper.cpp's nested vulkan-shaders-gen build otherwise exceeds
+      # MSBuild's 260-character path limit.
+      - name: Build CLI with Vulkan
+        run: cargo build --release --features whisper-vulkan --target-dir D:\tv
+
+      - name: Build CLI with CUDA
+        env:
+          CUDA_COMPUTE_CAP: "80"
+        run: cargo build --release --features cuda,whisper-vulkan --target-dir D:\tc
+
+      - name: Package CUDA CLI
+        shell: pwsh
+        run: Compress-Archive -Path D:\tc\release\mojovoice.exe, README.md, LICENSE -DestinationPath mojovoice-windows-x64-cuda.zip
+
+      # Bundled into the installer next to the app (tauri.windows.conf.json externalBin)
+      - name: Stage CLIs as Tauri sidecars
+        shell: bash
+        run: |
+          mkdir -p ui/src-tauri/binaries
+          cp target/release/mojovoice.exe ui/src-tauri/binaries/mojovoice-x86_64-pc-windows-msvc.exe
+          cp /d/tv/release/mojovoice.exe ui/src-tauri/binaries/mojovoice-vulkan-x86_64-pc-windows-msvc.exe
+          cp /d/tc/release/mojovoice.exe ui/src-tauri/binaries/mojovoice-cuda-x86_64-pc-windows-msvc.exe
+
+      - name: Install frontend dependencies
+        working-directory: ui
+        run: npm ci
+
+      - name: Build installer
+        working-directory: ui
+        run: npm run tauri build
+
+      - name: Upload CLI
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./mojovoice-windows-x64.zip
+          asset_name: mojovoice-windows-x64.zip
+          asset_content_type: application/zip
+
+      - name: Upload CUDA CLI
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./mojovoice-windows-x64-cuda.zip
+          asset_name: mojovoice-windows-x64-cuda.zip
+          asset_content_type: application/zip
+
+      - name: Upload installer
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./ui/src-tauri/target/release/bundle/nsis/mojovoice_${{ steps.version.outputs.VERSION }}_x64-setup.exe
+          asset_name: MojoVoice-windows-x64-setup.exe
+          asset_content_type: application/octet-stream
+
   build-tauri-macos-arm:
     name: Build Desktop App (macOS ARM)
     needs: create-release

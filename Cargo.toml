@@ -47,6 +47,12 @@ ureq = "2.9"
 # Better resampling
 rubato = "0.16"
 
+# Daemon IPC: Unix sockets / Windows named pipes
+interprocess = "2.4"
+
+# whisper.cpp bindings (optional engine, see features)
+whisper-rs = { version = "0.16", optional = true }
+
 # FFT for the Whisper mel spectrogram
 realfft = "3.5"
 
@@ -73,6 +79,10 @@ default = []
 cuda = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda"]
 metal = ["candle-core/metal", "candle-nn/metal", "candle-transformers/metal"]
 # rocm/hip and vulkan are currently experimental in Candle v0.9+; disabled for stability
+# whisper.cpp engine for GGML models (CPU), optionally with its Vulkan GPU backend
+# (AMD/Intel/NVIDIA GPUs via the graphics driver)
+whisper-cpp = ["dep:whisper-rs", "whisper-rs/tracing_backend", "whisper-rs/raw-api"]
+whisper-vulkan = ["whisper-cpp", "whisper-rs/vulkan"]
 
 # =============================================================================
 # Platform-specific dependencies
@@ -89,6 +99,16 @@ enigo = { version = "0.6" }
 # Windows - uses SendInput API automatically
 [target.'cfg(target_os = "windows")'.dependencies]
 enigo = { version = "0.6" }
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Threading",
+    "Win32_UI_HiDpi",
+    "Win32_UI_WindowsAndMessaging",
+] }
+global-hotkey = "0.7"
+tray-icon = "0.21"
 
 # Linux - Wayland by default (most modern distros)
 # X11 users: change ["wayland"] to ["x11rb"] below

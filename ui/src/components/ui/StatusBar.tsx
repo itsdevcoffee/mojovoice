@@ -36,7 +36,7 @@ interface StatusBarProps {
 }
 
 export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
-  const { setActiveView } = useAppStore();
+  const { setActiveView, switchingModel, switchModel } = useAppStore();
   const [daemonStatus, setDaemonStatus] = useState<DaemonStatus>({
     running: false,
     modelLoaded: false,
@@ -88,13 +88,9 @@ export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
   };
 
   const handleModelSwitch = async (filename: string) => {
-    try {
-      await invoke('switch_model', { filename });
-      await loadConfig();
-      setIsModelDropdownOpen(false);
-    } catch (error) {
-      console.error('Failed to switch model:', error);
-    }
+    setIsModelDropdownOpen(false);
+    await switchModel(filename);
+    await Promise.all([loadConfig(), loadModels(), loadStatus()]);
   };
 
   const [isStarting, setIsStarting] = useState(false);
@@ -110,8 +106,14 @@ export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
     }
   };
 
-  // Extract model display name from config
-  const currentModelName = config?.model.model_id || 'No model loaded';
+  // Name of the model that is actually installed and active (the config may name a
+  // model that was never downloaded, e.g. on first run)
+  const activeModel = downloadedModels.find((m) => m.isActive);
+  const pendingModel = downloadedModels.find((m) => m.filename === switchingModel);
+  const currentModelName = switchingModel
+    ? `Loading ${pendingModel?.name ?? switchingModel}…`
+    : (activeModel?.name ??
+      (downloadedModels.length === 0 ? 'No model installed' : 'No model selected'));
   const currentLanguage = config?.model.language || 'auto';
   const currentMicrophone = config?.audio.device_name || 'Default';
 
@@ -172,7 +174,10 @@ export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
       <div className="relative flex-1 max-w-xs">
         <button
           onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
+          disabled={switchingModel !== null}
+          aria-busy={switchingModel !== null}
           className="
+            disabled:opacity-60 disabled:cursor-wait
             w-full
             flex items-center justify-between gap-2
             px-3 py-2
@@ -185,7 +190,10 @@ export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
             transition-all duration-150
           "
         >
-          <span className="font-mono text-sm text-[var(--text-primary)] truncate">
+          <span className="flex items-center gap-2 font-mono text-sm text-[var(--text-primary)] truncate">
+            {switchingModel && (
+              <span className="inline-block w-3 h-3 shrink-0 border-2 border-[var(--accent-primary)] border-t-transparent rounded-full animate-spin" />
+            )}
             {currentModelName}
           </span>
           <ChevronDown

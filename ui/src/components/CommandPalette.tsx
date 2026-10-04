@@ -1,6 +1,7 @@
 import { Command } from 'cmdk';
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '../lib/ipc';
+import { useAppStore } from '../stores/appStore';
 
 interface DownloadedModel {
   name: string;
@@ -57,13 +58,10 @@ export default function CommandPalette({ isOpen, onClose, onOpenHistory, onOpenS
     };
   }, [isOpen, onClose]);
 
-  const handleSwitchModel = async (filename: string) => {
-    try {
-      await invoke('switch_model', { filename });
-      onClose();
-    } catch (err) {
-      console.error('Failed to switch model:', err);
-    }
+  // Close right away; the status bar and settings show switch progress
+  const handleSwitchModel = (filename: string) => {
+    onClose();
+    void useAppStore.getState().switchModel(filename);
   };
 
   const handleExportHistory = async () => {

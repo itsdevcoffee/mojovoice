@@ -19,6 +19,61 @@ pub struct Config {
     pub ui: UiConfig,
     #[serde(default)]
     pub history: HistoryConfig,
+    #[serde(default)]
+    pub hotkey: HotkeyConfig,
+    #[serde(default)]
+    pub overlay: OverlayConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HotkeyConfig {
+    /// Global hotkey that toggles recording, registered by the daemon (Windows only;
+    /// on Linux, bind `mojovoice start` in your compositor/desktop instead)
+    #[serde(default = "default_toggle_hotkey")]
+    pub toggle: Option<String>,
+    /// Press to start and press again to stop (default), or hold to record
+    #[serde(default)]
+    pub mode: HotkeyMode,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HotkeyMode {
+    #[default]
+    Toggle,
+    /// Hold the hotkey while speaking; release to transcribe
+    PushToTalk,
+}
+
+fn default_toggle_hotkey() -> Option<String> {
+    // Ctrl+Alt+Space is often swallowed by other software's keyboard hooks
+    cfg!(windows).then(|| "Alt+Shift+Digit1".to_string())
+}
+
+impl Default for HotkeyConfig {
+    fn default() -> Self {
+        Self {
+            toggle: default_toggle_hotkey(),
+            mode: HotkeyMode::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OverlayConfig {
+    /// Show a small on-screen status pill while recording/transcribing (Windows)
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl Default for OverlayConfig {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,6 +105,13 @@ pub struct AudioConfig {
     /// Audio input device name (None = system default)
     #[serde(default)]
     pub device_name: Option<String>,
+    /// Keep recording this long after stop so the last words aren't cut off
+    #[serde(default = "default_trailing_buffer_ms")]
+    pub trailing_buffer_ms: u32,
+}
+
+fn default_trailing_buffer_ms() -> u32 {
+    400
 }
 
 fn default_audio_clips_path() -> PathBuf {
@@ -182,17 +244,22 @@ impl Default for Config {
                 save_audio_clips: false,
                 audio_clips_path: default_audio_clips_path(),
                 device_name: None,
+                trailing_buffer_ms: default_trailing_buffer_ms(),
             },
             output: OutputConfig {
                 display_server: None,
                 append_space: true,
-                refresh_command: Some("pkill -RTMIN+8 waybar".to_string()),
+                // Waybar signal; status bars like this only exist on Linux
+                refresh_command: cfg!(target_os = "linux")
+                    .then(|| "pkill -RTMIN+8 waybar".to_string()),
             },
             ui: UiConfig {
                 scale_preset: default_scale_preset(),
                 custom_scale: default_custom_scale(),
             },
             history: HistoryConfig::default(),
+            hotkey: HotkeyConfig::default(),
+            overlay: OverlayConfig::default(),
         }
     }
 }

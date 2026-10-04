@@ -105,6 +105,7 @@ Expected assets:
 **CLI (from CI):**
 - `mojovoice-linux-x64.tar.gz` (CPU)
 - `mojovoice-macos-arm64.tar.gz` (works on Intel Macs via Rosetta 2)
+- `mojovoice-windows-x64.zip` (CPU)
 
 **CLI (manual upload):**
 - `mojovoice-linux-x64-cuda.tar.gz` (CUDA) — See step 3 above
@@ -113,6 +114,7 @@ Expected assets:
 - `MojoVoice-linux-x64.AppImage`
 - `MojoVoice-linux-x64.deb`
 - `MojoVoice-macos-arm64.dmg` (works on Intel Macs via Rosetta 2)
+- `MojoVoice-windows-x64-setup.exe` (NSIS, unsigned; bundles the CLI as a sidecar)
 
 **Note:** Intel macOS builds removed from CI (macos-12/13 runners deprecated). ARM binaries run on Intel Macs via Rosetta 2.
 

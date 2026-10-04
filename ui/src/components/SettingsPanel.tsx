@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useToast } from './ui/Toast';
 import { invoke } from '../lib/ipc';
+import { useAppStore } from '../stores/appStore';
+import { formatHotkey } from './settings/HotkeyInput';
 import SettingsConfigTab from './settings/SettingsConfigTab';
 import VocabTab from './settings/VocabTab';
 
@@ -23,6 +25,8 @@ interface Config {
     append_space: boolean;
     refresh_command: string | null;
   };
+  hotkey?: { toggle: string | null; mode?: 'toggle' | 'push_to_talk' };
+  overlay?: { enabled: boolean };
 }
 
 interface DownloadedModel {
@@ -49,6 +53,8 @@ interface VocabTerm {
 
 export default function SettingsPanel() {
   const { toast } = useToast();
+  const switchModel = useAppStore((s) => s.switchModel);
+  const [hotkeyApplying, setHotkeyApplying] = useState(false);
   const [config, setConfig] = useState<Config | null>(null);
   const [downloadedModels, setDownloadedModels] = useState<DownloadedModel[]>([]);
   const [audioDevices, setAudioDevices] = useState<AudioDevice[]>([]);
@@ -109,20 +115,23 @@ export default function SettingsPanel() {
     loadVocabTerms();
   }, []);
 
-  const handleModelChange = async (path: string) => {
-    if (!config) return;
+  const handleModelChange = async (filename: string) => {
+    if (!config || !filename) return;
+    const switched = await switchModel(filename);
     try {
-      // Windows paths use backslashes
-      const pathParts = path.split(/[\\/]/);
-      const filename = pathParts[pathParts.length - 1];
-      await invoke('switch_model', { filename });
       const updatedConfig = await invoke<Config>('get_config');
       setConfig(updatedConfig);
       const models = await invoke<DownloadedModel[]>('list_downloaded_models');
       setDownloadedModels(models);
-      flashSaved('model');
+      const name = models.find((m) => m.filename === filename)?.name ?? filename;
+      if (switched) {
+        flashSaved('model');
+        toast({ message: `Now using ${name}`, variant: 'success' });
+      } else {
+        toast({ message: `Couldn't switch to ${name}`, variant: 'error' });
+      }
     } catch (error) {
-      console.error('Failed to switch model:', error);
+      console.error('Failed to reload settings after model switch:', error);
     }
   };
 
@@ -223,6 +232,57 @@ export default function SettingsPanel() {
     } catch (error) {
       console.error('Failed to toggle save audio clips:', error);
     }
+  };
+
+  // Hotkey, push-to-talk and overlay are read by the daemon at startup, so save and
+  // restart it (if running) to apply
+  const saveAndRestartDaemon = async (updatedConfig: Config, field: string, message: string) => {
+    setHotkeyApplying(true);
+    try {
+      await invoke('save_config', { config: updatedConfig });
+      setConfig(updatedConfig);
+      const status = await invoke<{ running: boolean }>('get_daemon_status');
+      if (status.running) {
+        await invoke('restart_daemon');
+      }
+      flashSaved(field);
+      toast({ message, variant: 'success' });
+    } catch (error) {
+      console.error(`Failed to apply ${field}:`, error);
+      toast({ message: `Couldn't apply setting: ${error}`, variant: 'error' });
+    } finally {
+      setHotkeyApplying(false);
+    }
+  };
+
+  const handleHotkeyChange = (combo: string) => {
+    if (!config) return;
+    const hotkey = { toggle: combo, ...(config.hotkey?.mode ? { mode: config.hotkey.mode } : {}) };
+    void saveAndRestartDaemon({ ...config, hotkey }, 'hotkey', `Hotkey set to ${formatHotkey(combo)}`);
+  };
+
+  const handlePushToTalkToggle = () => {
+    if (!config) return;
+    const pushToTalk = config.hotkey?.mode !== 'push_to_talk';
+    const hotkey = {
+      toggle: config.hotkey?.toggle ?? null,
+      mode: pushToTalk ? ('push_to_talk' as const) : ('toggle' as const),
+    };
+    void saveAndRestartDaemon(
+      { ...config, hotkey },
+      'push_to_talk',
+      pushToTalk ? 'Push-to-talk on: hold the hotkey while speaking' : 'Push-to-talk off: press to start, press to stop',
+    );
+  };
+
+  const handleOverlayToggle = () => {
+    if (!config) return;
+    const enabled = !(config.overlay?.enabled ?? true);
+    void saveAndRestartDaemon(
+      { ...config, overlay: { enabled } },
+      'status_overlay',
+      enabled ? 'Status overlay on' : 'Status overlay off',
+    );
   };
 
   const handleAudioClipsPathChange = async (path: string) => {
@@ -379,6 +439,10 @@ export default function SettingsPanel() {
             onSaveAudioClipsToggle={handleSaveAudioClipsToggle}
             onAudioClipsPathChange={handleAudioClipsPathChange}
             onAdvancedToggle={toggleAdvancedSection}
+            onHotkeyChange={handleHotkeyChange}
+            onPushToTalkToggle={handlePushToTalkToggle}
+            onOverlayToggle={handleOverlayToggle}
+            hotkeyApplying={hotkeyApplying}
           />
         )}
       </div>

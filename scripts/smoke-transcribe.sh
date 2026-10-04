@@ -22,18 +22,29 @@ DOWNLOAD_LOG="$("$BIN" download tiny 2>&1)" || { echo "$DOWNLOAD_LOG" >&2; exit 
 MODEL_DIR="$(echo "$DOWNLOAD_LOG" | sed 's/\x1b\[[0-9;]*m//g' | sed -n 's/.*Model ready: //p' | tail -1)"
 [ -d "$MODEL_DIR" ] || { echo "FAIL: download did not report a model dir" >&2; echo "$DOWNLOAD_LOG" >&2; exit 1; }
 CONFIG="$("$BIN" config --path)"
-sed -i "0,/^path = .*/s||path = \"$MODEL_DIR\"|" "$CONFIG"
+# Replace the first `path = ...` line in plain bash: sed would treat the backslashes in
+# Windows paths as escapes. A TOML literal string ('...') keeps them verbatim.
+replaced=0
+while IFS= read -r line || [ -n "$line" ]; do
+    if [ "$replaced" = 0 ] && [[ "$line" == "path = "* ]]; then
+        printf "path = '%s'\n" "$MODEL_DIR"
+        replaced=1
+    else
+        printf '%s\n' "$line"
+    fi
+done < "$CONFIG" > "$CONFIG.tmp"
+mv "$CONFIG.tmp" "$CONFIG"
 
 cleanup() { "$BIN" daemon down >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
 "$BIN" daemon up >"$LOG" 2>&1 &
 for _ in $(seq 1 120); do
-    grep -q "ready for transcription" "$LOG" && break
+    grep -q "accepting connections" "$LOG" && break
     if ! kill -0 $! 2>/dev/null; then break; fi
     sleep 1
 done
-if ! grep -q "ready for transcription" "$LOG"; then
+if ! grep -q "accepting connections" "$LOG"; then
     echo "FAIL: daemon did not become ready" >&2
     cat "$LOG" >&2
     exit 1

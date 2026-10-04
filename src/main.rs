@@ -425,8 +425,6 @@ fn cmd_start_recording(timeout_secs: u32) -> Result<()> {
 
 /// Fixed duration recording mode
 fn cmd_start_fixed(model_override: Option<String>, duration: u32, clipboard: bool) -> Result<()> {
-    use transcribe::Transcriber;
-
     info!("Loading configuration...");
     let mut cfg = config::load()?;
     if let Some(model_path) = model_override {
@@ -451,14 +449,8 @@ fn cmd_start_fixed(model_override: Option<String>, duration: u32, clipboard: boo
         .unwrap_or(None);
 
     info!("Loading whisper model...");
-    let mut transcriber = transcribe::candle_engine::CandleEngine::with_options(
-        cfg.model
-            .path
-            .to_str()
-            .ok_or_else(|| anyhow::anyhow!("Invalid model path"))?,
-        &cfg.model.language,
-        vocab_prompt,
-    )?;
+    let mut transcriber =
+        transcribe::load_engine(&cfg.model.path, &cfg.model.language, vocab_prompt)?;
     info!("Model loaded successfully");
 
     info!("Recording for {} seconds...", duration);
@@ -750,7 +742,8 @@ fn cmd_config_migrate() -> Result<()> {
     Ok(())
 }
 
-/// Send desktop notification
+/// Send desktop notification (Linux only for now; elsewhere the typed text is the feedback)
+#[cfg(target_os = "linux")]
 fn send_notification(title: &str, body: &str, urgency: &str) {
     let _ = std::process::Command::new("notify-send")
         .args([
@@ -764,6 +757,46 @@ fn send_notification(title: &str, body: &str, urgency: &str) {
             body,
         ])
         .spawn();
+}
+
+#[cfg(not(target_os = "linux"))]
+fn send_notification(_title: &str, _body: &str, _urgency: &str) {}
+
+/// Print the last `lines` lines of a file
+fn print_last_lines(path: &std::path::Path, lines: usize) -> Result<()> {
+    let content = std::fs::read_to_string(path)?;
+    let all: Vec<&str> = content.lines().collect();
+    for line in &all[all.len().saturating_sub(lines)..] {
+        println!("{}", line);
+    }
+    Ok(())
+}
+
+/// Print a file's last lines, then keep printing what gets appended (like `tail -f`)
+fn follow_file(path: &std::path::Path, lines: usize) -> Result<()> {
+    use std::io::{Read, Seek, SeekFrom, Write};
+
+    print_last_lines(path, lines)?;
+    let mut file = std::fs::File::open(path)?;
+    let mut pos = file.seek(SeekFrom::End(0))?;
+    let mut buf = Vec::new();
+
+    loop {
+        std::thread::sleep(std::time::Duration::from_millis(250));
+        let len = std::fs::metadata(path)?.len();
+        if len < pos {
+            // Truncated: start over from the beginning
+            pos = 0;
+        }
+        if len > pos {
+            file.seek(SeekFrom::Start(pos))?;
+            buf.clear();
+            file.read_to_end(&mut buf)?;
+            pos += buf.len() as u64;
+            std::io::stdout().write_all(&buf)?;
+            std::io::stdout().flush()?;
+        }
+    }
 }
 
 fn cmd_daemon(command: Option<DaemonCommands>) -> Result<()> {
@@ -908,26 +941,10 @@ fn cmd_daemon_logs(follow: bool, lines: usize) -> Result<()> {
     println!("Log file: {}\n", log_file.display());
 
     if follow {
-        // Use tail -f for following
-        let status = std::process::Command::new("tail")
-            .args(["-f", "-n", &lines.to_string()])
-            .arg(&log_file)
-            .status()?;
-
-        if !status.success() {
-            anyhow::bail!("tail command failed");
-        }
+        follow_file(&log_file, lines)
     } else {
-        // Just show last N lines
-        let output = std::process::Command::new("tail")
-            .args(["-n", &lines.to_string()])
-            .arg(&log_file)
-            .output()?;
-
-        print!("{}", String::from_utf8_lossy(&output.stdout));
+        print_last_lines(&log_file, lines)
     }
-
-    Ok(())
 }
 
 fn cmd_daemon_pid() -> Result<()> {
@@ -963,15 +980,23 @@ fn cmd_doctor() -> Result<()> {
     );
 
     if !model_ok {
-        println!("\nDownload a model with: mojovoice download base.en");
+        println!(
+            "\nDownload a model with: mojovoice download {}",
+            model::DEFAULT_MODEL
+        );
     }
 
-    let pw_ok = std::process::Command::new("pw-cli")
-        .arg("info")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-    println!("\n[{}] PipeWire", if pw_ok { "OK" } else { "MISSING" });
+    #[cfg(target_os = "linux")]
+    {
+        let pw_ok = std::process::Command::new("pw-cli")
+            .arg("info")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        println!("\n[{}] PipeWire", if pw_ok { "OK" } else { "MISSING" });
+    }
+    #[cfg(not(target_os = "linux"))]
+    println!("\n[OK] Audio capture (cpal - cross-platform, built-in)");
 
     // Show log location
     if let Ok(log_dir) = state::get_log_dir() {
@@ -1102,7 +1127,12 @@ fn cmd_listen_start(source: Option<String>, max_duration: u32, clipboard: bool) 
         max_duration
     );
 
-    let samples = audio::capture_toggle(max_duration, cfg.audio.sample_rate, source.as_deref());
+    let samples = audio::capture_toggle(
+        max_duration,
+        cfg.audio.sample_rate,
+        source.as_deref(),
+        std::time::Duration::from_millis(cfg.audio.trailing_buffer_ms as u64),
+    );
 
     // Always clean up PID file, even if capture failed
     let _ = state::toggle::cleanup_listen();

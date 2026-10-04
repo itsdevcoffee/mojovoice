@@ -23,6 +23,11 @@ export default function MissionControl() {
   const { historyEntries, loadHistory, activeView, setActiveView } = useAppStore();
   const { handleCopy: handleCopyTranscription, handleDelete: handleDeleteTranscription } = useTranscriptionActions(5);
 
+  // Navigating to a full-page view (e.g. "Download a model" in settings) closes the drawer
+  useEffect(() => {
+    if (activeView === 'models' || activeView === 'history') setIsSettingsOpen(false);
+  }, [activeView]);
+
   // Load recent transcriptions on mount
   useEffect(() => {
     loadHistory(5, 0);
@@ -178,17 +183,17 @@ export default function MissionControl() {
 
               <div
                 className={`
-                  overflow-hidden transition-all duration-200
-                  ${isTranscriptionsExpanded ? 'max-h-[2000px] opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}
+                  grid overflow-hidden transition-all duration-200
+                  ${isTranscriptionsExpanded ? 'grid-rows-[1fr] opacity-100 mt-4' : 'grid-rows-[0fr] opacity-0 mt-0'}
                 `}
                 style={{ transitionTimingFunction: 'var(--ease-out)' }}
               >
                 {historyEntries.length === 0 ? (
-                  <div className="text-center py-12">
+                  <div className="min-h-0 text-center py-12">
                     <p className="text-sm text-[var(--text-tertiary)] font-ui">No transcriptions yet</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="min-h-0 space-y-4">
                     {historyEntries.slice(0, 5).map((entry) => (
                       <TranscriptionCard
                         key={entry.id}

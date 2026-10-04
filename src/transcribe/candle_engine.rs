@@ -607,6 +607,14 @@ impl CandleEngine {
 }
 
 impl Transcriber for CandleEngine {
+    fn device_label(&self) -> (bool, String) {
+        match &self.device {
+            Device::Cpu => (false, "CPU".to_string()),
+            Device::Cuda(_) => (true, "CUDA".to_string()),
+            Device::Metal(_) => (true, "Metal".to_string()),
+        }
+    }
+
     fn transcribe(&mut self, audio: &[f32]) -> Result<String> {
         if audio.is_empty() {
             return Ok(String::new());

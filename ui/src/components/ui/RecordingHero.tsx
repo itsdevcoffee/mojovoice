@@ -1,39 +1,82 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from './Button';
 import { invoke } from '../../lib/ipc';
 import { useAppStore } from '../../stores/appStore';
 
+/** Test recordings stop on their own after this long */
+const MAX_TEST_SECS = 30;
+
 export default function RecordingHero() {
   const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
   const [transcription, setTranscription] = useState('');
+  const [transcribeSecs, setTranscribeSecs] = useState<number | null>(null);
   const [error, setError] = useState('');
   const { loadHistory } = useAppStore();
 
-  const handleTestRecording = async () => {
-    try {
-      setError('');
-      setTranscription('');
-      setIsRecording(true);
+  // Refs so timer callbacks see the current state (not a stale closure)
+  const recordingRef = useRef(false);
+  const startedAt = useRef(0);
+  const timers = useRef<{ tick?: number; autoStop?: number }>({});
 
-      await invoke('start_recording');
-      await new Promise(resolve => setTimeout(resolve, 5000));
+  const clearTimers = () => {
+    window.clearInterval(timers.current.tick);
+    window.clearTimeout(timers.current.autoStop);
+    timers.current = {};
+  };
+
+  useEffect(() => clearTimers, []);
+
+  const stopAndTranscribe = async () => {
+    if (!recordingRef.current) return;
+    recordingRef.current = false;
+    clearTimers();
+    setIsRecording(false);
+    setIsTranscribing(true);
+    const stoppedAt = performance.now();
+    try {
       const result = await invoke<string>('stop_recording');
-      setTranscription(result);
+      setTranscribeSecs((performance.now() - stoppedAt) / 1000);
+      setTranscription(result.trim() || '(no speech detected)');
       loadHistory(5, 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setIsRecording(false);
+      setIsTranscribing(false);
     }
   };
 
+  const handleTestRecording = async () => {
+    setError('');
+    setTranscription('');
+    setTranscribeSecs(null);
+    try {
+      await invoke('start_recording');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      return;
+    }
+    recordingRef.current = true;
+    startedAt.current = performance.now();
+    setElapsed(0);
+    setIsRecording(true);
+    timers.current.tick = window.setInterval(
+      () => setElapsed((performance.now() - startedAt.current) / 1000),
+      100,
+    );
+    timers.current.autoStop = window.setTimeout(() => void stopAndTranscribe(), MAX_TEST_SECS * 1000);
+  };
+
+  // Discard the recording; any pending auto-stop is cleared so it can't fire later
   const handleCancel = async () => {
+    recordingRef.current = false;
+    clearTimers();
+    setIsRecording(false);
     try {
       await invoke('cancel_recording');
     } catch {
       // ignore cancel errors
-    } finally {
-      setIsRecording(false);
     }
   };
 
@@ -52,12 +95,17 @@ export default function RecordingHero() {
         <Button
           variant="primary"
           size="sm"
-          loading={isRecording}
-          onClick={handleTestRecording}
-          disabled={isRecording}
+          loading={isTranscribing}
+          onClick={isRecording ? stopAndTranscribe : handleTestRecording}
+          disabled={isTranscribing}
+          aria-label={isRecording ? 'Stop recording and transcribe' : 'Test microphone'}
           className={isRecording ? 'border-[var(--success)] shadow-[0_0_12px_rgba(34,197,94,0.4)]' : ''}
         >
-          {isRecording ? 'RECORDING...' : '⏺ TEST MIC'}
+          {isTranscribing
+            ? 'TRANSCRIBING...'
+            : isRecording
+              ? `■ STOP & TRANSCRIBE (${elapsed.toFixed(1)}s)`
+              : '⏺ TEST MIC'}
         </Button>
 
         {isRecording && (
@@ -76,7 +124,9 @@ export default function RecordingHero() {
       {transcription && (
         <div className="w-full max-w-[600px]" role="status" aria-live="polite" aria-atomic="true">
           <div className="p-6 bg-[var(--bg-surface)] border-2 border-[var(--border-default)]">
-            <p className="text-sm text-[var(--text-tertiary)] font-ui mb-2">Transcription:</p>
+            <p className="text-sm text-[var(--text-tertiary)] font-ui mb-2">
+              Transcription{transcribeSecs !== null && ` · ${transcribeSecs.toFixed(1)}s`}:
+            </p>
             <p className="text-base text-[var(--text-primary)] font-ui leading-relaxed">{transcription}</p>
           </div>
         </div>

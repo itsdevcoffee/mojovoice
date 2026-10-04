@@ -1,5 +1,5 @@
-/// Simple example to list all available audio input devices
-/// Usage: cargo run --example list_audio_devices
+//! Simple example to list all available audio input devices
+//! Usage: cargo run --example list_audio_devices
 
 fn main() {
     // Initialize logging

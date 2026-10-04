@@ -1,0 +1,6 @@
+{
+  "bundle": {
+    "targets": ["nsis"],
+    "externalBin": ["binaries/mojovoice", "binaries/mojovoice-vulkan", "binaries/mojovoice-cuda"]
+  }
+}

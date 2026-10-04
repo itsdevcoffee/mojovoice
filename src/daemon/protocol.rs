@@ -40,6 +40,8 @@ pub enum DaemonResponse {
         model_name: String,
         gpu_enabled: bool,
         gpu_name: String,
+        /// Defaulted for compatibility with daemons older than v0.5
+        #[serde(default)]
         uptime_secs: u64,
     },
 }

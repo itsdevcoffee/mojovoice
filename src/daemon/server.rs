@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
-use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -9,9 +8,13 @@ use std::thread::{self, JoinHandle};
 use tracing::{error, info, warn};
 
 use crate::audio::{capture_toggle, list_input_devices};
+use crate::daemon::client::is_daemon_running;
+use crate::daemon::indicator::{self, Activity, Outcome};
 use crate::daemon::protocol::{DaemonRequest, DaemonResponse};
+use crate::daemon::transport;
 use crate::history::{self, HistoryEntry, enforce_max_entries};
 use crate::state;
+use interprocess::local_socket::prelude::*;
 // Transcriber trait is now used via Box<dyn ...>
 
 /// Validate configured audio device exists, returns None (system default) if not found.
@@ -54,57 +57,6 @@ fn validate_audio_device(configured_device: Option<String>) -> Option<String> {
     }
 }
 
-/// Get the path to the daemon socket
-pub fn get_socket_path() -> Result<PathBuf> {
-    let state_dir = state::paths::get_state_dir()?;
-    Ok(state_dir.join("daemon.sock"))
-}
-
-/// Check if daemon is running by pinging it
-pub fn is_daemon_running() -> bool {
-    use crate::daemon::protocol::{DaemonRequest, DaemonResponse};
-    use std::io::{BufRead, BufReader, Write};
-
-    let socket_path = match get_socket_path() {
-        Ok(p) => p,
-        Err(_) => return false,
-    };
-
-    if !socket_path.exists() {
-        return false;
-    }
-
-    // Try to ping the daemon
-    let mut stream = match UnixStream::connect(&socket_path) {
-        Ok(s) => s,
-        Err(_) => return false,
-    };
-
-    // Send ping request (serializing Ping should never fail)
-    let Ok(ping) = serde_json::to_string(&DaemonRequest::Ping) else {
-        return false;
-    };
-    if stream.write_all(ping.as_bytes()).is_err() {
-        return false;
-    }
-    if stream.write_all(b"\n").is_err() {
-        return false;
-    }
-    if stream.flush().is_err() {
-        return false;
-    }
-
-    // Try to read response
-    let mut reader = BufReader::new(stream);
-    let mut line = String::new();
-    if reader.read_line(&mut line).is_err() {
-        return false;
-    }
-
-    // Check if we got a valid pong response
-    serde_json::from_str::<DaemonResponse>(line.trim()).is_ok()
-}
-
 /// Shared state for async recording
 struct RecordingState {
     handle: Option<JoinHandle<Result<Vec<f32>>>>,
@@ -123,7 +75,7 @@ struct DaemonServer {
 }
 
 impl DaemonServer {
-    fn new(_model_path: &Path) -> Result<Self> {
+    fn new(model_path: &Path) -> Result<Self> {
         let config = crate::config::load()?;
 
         info!("Loading whisper model into GPU memory...");
@@ -140,35 +92,25 @@ impl DaemonServer {
             .and_then(|s| s.get_prompt_string(224))
             .unwrap_or(None);
 
-        // Use CandleEngine (new Candle-based implementation)
-        let transcriber = crate::transcribe::candle_engine::CandleEngine::with_options(
-            config
-                .model
-                .path
-                .to_str()
-                .ok_or_else(|| anyhow::anyhow!("Invalid model path"))?,
-            &config.model.language,
-            vocab_prompt,
-        )?;
+        // `model_path` is the config's model unless overridden with `daemon up --model`
+        let transcriber =
+            crate::transcribe::load_engine(model_path, &config.model.language, vocab_prompt)?;
 
-        info!("Model loaded and resident in GPU VRAM");
-
-        // Detect GPU status for status reporting
-        let (gpu_enabled, gpu_name) = Self::detect_gpu();
+        // GPU status for status reporting, from the engine actually in use
+        let (gpu_enabled, gpu_name) = transcriber.device_label();
+        info!("Model loaded ({})", gpu_name);
 
         // Extract model name from path basename (unique per model variant)
         // We use path instead of model_id because model_id is the HuggingFace repo
         // which may be shared by multiple quantization variants (e.g., Q4, Q4K, Q8)
-        let model_name = config
-            .model
-            .path
+        let model_name = model_path
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("unknown")
             .to_string();
 
         Ok(Self {
-            transcriber: Arc::new(Mutex::new(Box::new(transcriber))),
+            transcriber: Arc::new(Mutex::new(transcriber)),
             recording_state: Arc::new(Mutex::new(RecordingState {
                 handle: None,
                 audio: None,
@@ -179,22 +121,6 @@ impl DaemonServer {
             gpu_name,
             start_time: std::time::Instant::now(),
         })
-    }
-
-    /// Detect GPU availability and name
-    fn detect_gpu() -> (bool, String) {
-        // Try CUDA first
-        if candle_core::utils::cuda_is_available() {
-            return (true, "CUDA".to_string());
-        }
-
-        // Try Metal (macOS)
-        if candle_core::utils::metal_is_available() {
-            return (true, "Metal".to_string());
-        }
-
-        // Fallback to CPU
-        (false, "CPU".to_string())
     }
 
     /// Save audio recording as WAV file with timestamp
@@ -235,8 +161,8 @@ impl DaemonServer {
         Ok(filepath)
     }
 
-    fn handle_client(&self, mut stream: UnixStream) -> Result<()> {
-        let mut reader = BufReader::new(stream.try_clone()?);
+    fn handle_client(&self, stream: transport::Stream) -> Result<()> {
+        let mut reader = BufReader::new(&stream);
         let mut line = String::new();
 
         reader.read_line(&mut line)?;
@@ -262,11 +188,37 @@ impl DaemonServer {
                 message: "pong".to_string(),
             },
             DaemonRequest::StartRecording { max_duration } => {
-                self.handle_start_recording(max_duration)?
+                let response = self.handle_start_recording(max_duration)?;
+                if matches!(response, DaemonResponse::Recording) {
+                    indicator::set(Activity::Recording);
+                }
+                response
             },
-            DaemonRequest::StopRecording => self.handle_stop_recording()?,
-            DaemonRequest::CancelRecording => self.handle_cancel_recording()?,
-            DaemonRequest::TranscribeAudio { samples } => self.handle_transcribe_audio(samples)?,
+            DaemonRequest::StopRecording => {
+                indicator::set(Activity::Transcribing);
+                let response = self.handle_stop_recording();
+                indicator::finish(match &response {
+                    Ok(DaemonResponse::Success { text }) if text.trim().is_empty() => {
+                        Outcome::NoSpeech
+                    },
+                    Ok(DaemonResponse::Success { text }) => Outcome::Transcribed(text.clone()),
+                    Ok(DaemonResponse::Error { message }) => Outcome::Failed(message.clone()),
+                    Err(e) => Outcome::Failed(format!("{:#}", e)),
+                    Ok(_) => Outcome::NoSpeech,
+                });
+                response?
+            },
+            DaemonRequest::CancelRecording => {
+                let response = self.handle_cancel_recording();
+                indicator::set(Activity::Idle);
+                response?
+            },
+            DaemonRequest::TranscribeAudio { samples } => {
+                indicator::set(Activity::Transcribing);
+                let response = self.handle_transcribe_audio(samples);
+                indicator::set(Activity::Idle);
+                response?
+            },
             DaemonRequest::Shutdown => {
                 info!("Shutdown requested");
                 self.shutdown.store(true, Ordering::SeqCst);
@@ -283,9 +235,10 @@ impl DaemonServer {
         };
 
         let response_json = serde_json::to_string(&response)?;
-        stream.write_all(response_json.as_bytes())?;
-        stream.write_all(b"\n")?;
-        stream.flush()?;
+        let mut writer = &stream;
+        writer.write_all(response_json.as_bytes())?;
+        writer.write_all(b"\n")?;
+        writer.flush()?;
 
         Ok(())
     }
@@ -309,6 +262,7 @@ impl DaemonServer {
         // Load config and validate device exists
         let config = crate::config::load()?;
         let device_name = validate_audio_device(config.audio.device_name.clone());
+        let trailing = std::time::Duration::from_millis(config.audio.trailing_buffer_ms as u64);
 
         // Create PID file for UI state (Waybar uses this)
         state::toggle::start_recording()?;
@@ -317,8 +271,9 @@ impl DaemonServer {
         state::toggle::setup_signal_handler()?;
 
         // Spawn recording thread
-        let handle =
-            thread::spawn(move || capture_toggle(max_duration, 16000, device_name.as_deref()));
+        let handle = thread::spawn(move || {
+            capture_toggle(max_duration, 16000, device_name.as_deref(), trailing)
+        });
 
         state.handle = Some(handle);
         state.audio = None;
@@ -345,7 +300,8 @@ impl DaemonServer {
 
         info!("Cancel requested - discarding recording");
 
-        // Send stop signal
+        // Send stop signal (discarding: no trailing buffer)
+        state::toggle::DISCARD_RECORDING.store(true, Ordering::SeqCst);
         state::toggle::STOP_RECORDING.store(true, Ordering::SeqCst);
 
         // Wait for recording thread to finish and discard samples
@@ -354,8 +310,9 @@ impl DaemonServer {
             .join()
             .map_err(|_| anyhow::anyhow!("Recording thread panicked"))?;
 
-        // Reset stop flag for next recording
+        // Reset stop flags for next recording
         state::toggle::STOP_RECORDING.store(false, Ordering::SeqCst);
+        state::toggle::DISCARD_RECORDING.store(false, Ordering::SeqCst);
 
         // CRITICAL: Clean up state files so waybar returns to idle
         // Remove recording.pid file (waybar checks this first)
@@ -405,8 +362,9 @@ impl DaemonServer {
             .join()
             .map_err(|_| anyhow::anyhow!("Recording thread panicked"))??;
 
-        // Reset stop flag for next recording
+        // Reset stop flags for next recording
         state::toggle::STOP_RECORDING.store(false, Ordering::SeqCst);
+        state::toggle::DISCARD_RECORDING.store(false, Ordering::SeqCst);
 
         info!("Captured {} samples", samples.len());
 
@@ -544,19 +502,52 @@ impl DaemonServer {
     }
 }
 
+/// Opt the daemon out of Windows power throttling (EcoQoS). Windows 11 throttles
+/// background processes without a window, like the daemon, which can make
+/// transcription many times slower.
+#[cfg(windows)]
+fn disable_power_throttling() {
+    use windows_sys::Win32::System::Threading::{
+        GetCurrentProcess, PROCESS_POWER_THROTTLING_CURRENT_VERSION,
+        PROCESS_POWER_THROTTLING_EXECUTION_SPEED, PROCESS_POWER_THROTTLING_STATE,
+        ProcessPowerThrottling, SetProcessInformation,
+    };
+
+    let state = PROCESS_POWER_THROTTLING_STATE {
+        Version: PROCESS_POWER_THROTTLING_CURRENT_VERSION,
+        // Control execution speed throttling, and turn it off
+        ControlMask: PROCESS_POWER_THROTTLING_EXECUTION_SPEED,
+        StateMask: 0,
+    };
+    // SAFETY: passes a correctly sized PROCESS_POWER_THROTTLING_STATE for the current process
+    let ok = unsafe {
+        SetProcessInformation(
+            GetCurrentProcess(),
+            ProcessPowerThrottling,
+            &state as *const _ as *const std::ffi::c_void,
+            std::mem::size_of::<PROCESS_POWER_THROTTLING_STATE>() as u32,
+        )
+    };
+    if ok == 0 {
+        warn!(
+            "Couldn't disable power throttling: {}",
+            std::io::Error::last_os_error()
+        );
+    } else {
+        info!("Power throttling disabled for the daemon");
+    }
+}
+
 /// Run the daemon server
 pub fn run_daemon(model_path: &Path) -> Result<()> {
-    let socket_path = get_socket_path()?;
+    #[cfg(windows)]
+    disable_power_throttling();
 
-    // Check if daemon is already running before removing socket
-    if socket_path.exists() {
-        if is_daemon_running() {
-            anyhow::bail!("Daemon is already running. Stop it first or use the existing daemon.");
-        }
-        // Socket exists but daemon not responding - it's stale, safe to remove
-        info!("Removing stale socket file");
-        fs::remove_file(&socket_path)?;
+    if is_daemon_running() {
+        anyhow::bail!("Daemon is already running. Stop it first or use the existing daemon.");
     }
+    // Nothing answered, so any leftover socket file is stale
+    transport::remove_stale()?;
 
     // Clean up any stale state files from previous session
     // This ensures Waybar starts in idle state, not processing
@@ -567,12 +558,8 @@ pub fn run_daemon(model_path: &Path) -> Result<()> {
         let _ = fs::remove_file(&pid_file);
     }
 
-    let listener = UnixListener::bind(&socket_path).context("Failed to bind Unix socket")?;
-
-    // Set non-blocking so we can check shutdown flag periodically
-    listener
-        .set_nonblocking(true)
-        .context("Failed to set socket non-blocking")?;
+    // Non-blocking accept so we can check the shutdown flag periodically
+    let listener = transport::bind()?;
 
     // Write daemon PID file
     let daemon_pid_file = state::paths::get_daemon_pid_file()?;
@@ -591,9 +578,38 @@ pub fn run_daemon(model_path: &Path) -> Result<()> {
         }
     }
 
-    info!("Daemon listening on {}", socket_path.display());
+    info!("Daemon listening on {}", transport::endpoint());
 
     let server = DaemonServer::new(model_path)?;
+
+    let config = crate::config::load().ok();
+    let hotkey = config.as_ref().and_then(|c| c.hotkey.toggle.clone());
+    // Windows: tray icon and status overlay showing idle/recording/transcribing, plus
+    // the global hotkey
+    #[cfg(windows)]
+    {
+        let options = super::indicator::tray::UiOptions {
+            hotkey,
+            push_to_talk: config
+                .as_ref()
+                .is_some_and(|c| c.hotkey.mode == crate::config::HotkeyMode::PushToTalk),
+            overlay: config.as_ref().is_none_or(|c| c.overlay.enabled),
+        };
+        if let Err(e) = super::indicator::tray::spawn(options, server.shutdown.clone()) {
+            warn!("{:#}", e);
+        }
+    }
+    #[cfg(not(windows))]
+    if let Some(hotkey) = hotkey {
+        warn!(
+            "hotkey.toggle ({}) is only supported on Windows; bind 'mojovoice start' in your desktop environment instead",
+            hotkey
+        );
+    }
+
+    // Clients can only connect from here on (on Windows the pipe refuses connections
+    // until the accept loop runs), so this is the readiness signal
+    info!("Daemon ready - accepting connections");
 
     loop {
         // Check shutdown flag
@@ -603,7 +619,7 @@ pub fn run_daemon(model_path: &Path) -> Result<()> {
         }
 
         match listener.accept() {
-            Ok((stream, _addr)) => {
+            Ok(stream) => {
                 if let Err(e) = server.handle_client(stream) {
                     error!("Error handling client: {}", e);
                 }
@@ -618,10 +634,8 @@ pub fn run_daemon(model_path: &Path) -> Result<()> {
         }
     }
 
-    // Clean up socket and PID file on exit
-    if socket_path.exists() {
-        fs::remove_file(&socket_path)?;
-    }
+    // Dropping the listener removes the Unix socket file
+    drop(listener);
     if daemon_pid_file.exists() {
         fs::remove_file(&daemon_pid_file)?;
     }
