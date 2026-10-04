@@ -14,6 +14,8 @@ use super::Transcriber;
 pub struct WhisperCppEngine {
     // Owns the model; `state` holds the per-transcription buffers
     _ctx: WhisperContext,
+    /// GPU in use, if any (e.g. "AMD Radeon RX 6600")
+    gpu: Option<String>,
     state: whisper_rs::WhisperState,
     language: String,
     initial_prompt: Option<String>,
@@ -30,7 +32,13 @@ impl WhisperCppEngine {
             backend_name(),
             model_file.display()
         );
-        let ctx = WhisperContext::new_with_params(model_file, WhisperContextParameters::default())
+        let mut ctx_params = WhisperContextParameters::default();
+        let gpu = preferred_gpu();
+        if let Some((index, name)) = &gpu {
+            info!("Using GPU: {}", name);
+            ctx_params.gpu_device(*index);
+        }
+        let ctx = WhisperContext::new_with_params(model_file, ctx_params)
             .with_context(|| format!("Failed to load GGML model {}", model_file.display()))?;
         let state = ctx
             .create_state()
@@ -43,12 +51,56 @@ impl WhisperCppEngine {
 
         Ok(Self {
             _ctx: ctx,
+            gpu: gpu.map(|(_, name)| name),
             state,
             language: language.to_string(),
             initial_prompt: initial_prompt.filter(|p| !p.is_empty()),
             n_threads,
         })
     }
+}
+
+/// The GPU whisper.cpp should use, as (`gpu_device` index, description): the first
+/// discrete GPU, else the first integrated one. whisper.cpp itself just takes the first
+/// GPU it enumerates, which on machines with integrated graphics plus a discrete card
+/// is often the integrated one. `gpu_device` counts only GPU/iGPU devices, in order.
+fn preferred_gpu() -> Option<(i32, String)> {
+    use std::ffi::CStr;
+    use whisper_rs::whisper_rs_sys as sys;
+
+    let mut gpu_count = 0;
+    let mut first_igpu = None;
+    // SAFETY: read-only queries of ggml's static device registry; returned strings are
+    // owned by ggml and copied immediately
+    unsafe {
+        for i in 0..sys::ggml_backend_dev_count() {
+            let dev = sys::ggml_backend_dev_get(i);
+            let kind = sys::ggml_backend_dev_type(dev);
+            let is_gpu = kind == sys::ggml_backend_dev_type_GGML_BACKEND_DEVICE_TYPE_GPU;
+            let is_igpu = kind == sys::ggml_backend_dev_type_GGML_BACKEND_DEVICE_TYPE_IGPU;
+            if !is_gpu && !is_igpu {
+                continue;
+            }
+            let desc = sys::ggml_backend_dev_description(dev);
+            let name = if desc.is_null() {
+                format!("GPU {}", gpu_count)
+            } else {
+                CStr::from_ptr(desc).to_string_lossy().into_owned()
+            };
+            info!(
+                "GPU {}: {} ({})",
+                gpu_count,
+                name,
+                if is_gpu { "discrete" } else { "integrated" }
+            );
+            if is_gpu {
+                return Some((gpu_count, name));
+            }
+            first_igpu.get_or_insert((gpu_count, name));
+            gpu_count += 1;
+        }
+    }
+    first_igpu
 }
 
 /// The compute backend this build of whisper.cpp uses
@@ -99,9 +151,9 @@ impl Transcriber for WhisperCppEngine {
     }
 
     fn device_label(&self) -> (bool, String) {
-        (
-            cfg!(feature = "whisper-vulkan"),
-            format!("whisper.cpp ({})", backend_name()),
-        )
+        match &self.gpu {
+            Some(name) => (true, format!("whisper.cpp ({}: {})", backend_name(), name)),
+            None => (false, "whisper.cpp (CPU)".to_string()),
+        }
     }
 }

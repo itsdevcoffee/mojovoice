@@ -81,7 +81,7 @@ metal = ["candle-core/metal", "candle-nn/metal", "candle-transformers/metal"]
 # rocm/hip and vulkan are currently experimental in Candle v0.9+; disabled for stability
 # whisper.cpp engine for GGML models (CPU), optionally with its Vulkan GPU backend
 # (AMD/Intel/NVIDIA GPUs via the graphics driver)
-whisper-cpp = ["dep:whisper-rs", "whisper-rs/tracing_backend"]
+whisper-cpp = ["dep:whisper-rs", "whisper-rs/tracing_backend", "whisper-rs/raw-api"]
 whisper-vulkan = ["whisper-cpp", "whisper-rs/vulkan"]
 
 # =============================================================================
