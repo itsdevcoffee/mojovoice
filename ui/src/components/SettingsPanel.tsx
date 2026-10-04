@@ -25,7 +25,8 @@ interface Config {
     append_space: boolean;
     refresh_command: string | null;
   };
-  hotkey?: { toggle: string | null };
+  hotkey?: { toggle: string | null; mode?: 'toggle' | 'push_to_talk' };
+  overlay?: { enabled: boolean };
 }
 
 interface DownloadedModel {
@@ -233,26 +234,55 @@ export default function SettingsPanel() {
     }
   };
 
-  // The daemon registers the hotkey at startup, so restart it (if running) to apply
-  const handleHotkeyChange = async (combo: string) => {
-    if (!config) return;
+  // Hotkey, push-to-talk and overlay are read by the daemon at startup, so save and
+  // restart it (if running) to apply
+  const saveAndRestartDaemon = async (updatedConfig: Config, field: string, message: string) => {
     setHotkeyApplying(true);
     try {
-      const updatedConfig = { ...config, hotkey: { ...(config.hotkey ?? {}), toggle: combo } };
       await invoke('save_config', { config: updatedConfig });
       setConfig(updatedConfig);
       const status = await invoke<{ running: boolean }>('get_daemon_status');
       if (status.running) {
         await invoke('restart_daemon');
       }
-      flashSaved('hotkey');
-      toast({ message: `Hotkey set to ${formatHotkey(combo)}`, variant: 'success' });
+      flashSaved(field);
+      toast({ message, variant: 'success' });
     } catch (error) {
-      console.error('Failed to set hotkey:', error);
-      toast({ message: `Couldn't apply hotkey: ${error}`, variant: 'error' });
+      console.error(`Failed to apply ${field}:`, error);
+      toast({ message: `Couldn't apply setting: ${error}`, variant: 'error' });
     } finally {
       setHotkeyApplying(false);
     }
+  };
+
+  const handleHotkeyChange = (combo: string) => {
+    if (!config) return;
+    const hotkey = { toggle: combo, ...(config.hotkey?.mode ? { mode: config.hotkey.mode } : {}) };
+    void saveAndRestartDaemon({ ...config, hotkey }, 'hotkey', `Hotkey set to ${formatHotkey(combo)}`);
+  };
+
+  const handlePushToTalkToggle = () => {
+    if (!config) return;
+    const pushToTalk = config.hotkey?.mode !== 'push_to_talk';
+    const hotkey = {
+      toggle: config.hotkey?.toggle ?? null,
+      mode: pushToTalk ? ('push_to_talk' as const) : ('toggle' as const),
+    };
+    void saveAndRestartDaemon(
+      { ...config, hotkey },
+      'push_to_talk',
+      pushToTalk ? 'Push-to-talk on: hold the hotkey while speaking' : 'Push-to-talk off: press to start, press to stop',
+    );
+  };
+
+  const handleOverlayToggle = () => {
+    if (!config) return;
+    const enabled = !(config.overlay?.enabled ?? true);
+    void saveAndRestartDaemon(
+      { ...config, overlay: { enabled } },
+      'status_overlay',
+      enabled ? 'Status overlay on' : 'Status overlay off',
+    );
   };
 
   const handleAudioClipsPathChange = async (path: string) => {
@@ -410,6 +440,8 @@ export default function SettingsPanel() {
             onAudioClipsPathChange={handleAudioClipsPathChange}
             onAdvancedToggle={toggleAdvancedSection}
             onHotkeyChange={handleHotkeyChange}
+            onPushToTalkToggle={handlePushToTalkToggle}
+            onOverlayToggle={handleOverlayToggle}
             hotkeyApplying={hotkeyApplying}
           />
         )}

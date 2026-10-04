@@ -18,7 +18,8 @@ interface Config {
     device_name: string | null;
   };
   output: { display_server: string | null; append_space: boolean; refresh_command: string | null };
-  hotkey?: { toggle: string | null };
+  hotkey?: { toggle: string | null; mode?: 'toggle' | 'push_to_talk' };
+  overlay?: { enabled: boolean };
 }
 
 interface DownloadedModel {
@@ -52,6 +53,8 @@ interface SettingsConfigTabProps {
   onAudioClipsPathChange: (path: string) => void;
   onAdvancedToggle: () => void;
   onHotkeyChange: (combo: string) => void;
+  onPushToTalkToggle: () => void;
+  onOverlayToggle: () => void;
   hotkeyApplying: boolean;
 }
 
@@ -80,6 +83,8 @@ export default function SettingsConfigTab({
   onAudioClipsPathChange,
   onAdvancedToggle,
   onHotkeyChange,
+  onPushToTalkToggle,
+  onOverlayToggle,
   hotkeyApplying,
 }: SettingsConfigTabProps) {
   return (
@@ -113,6 +118,15 @@ export default function SettingsConfigTab({
           </p>
         )}
       </SettingRow>
+
+      {IS_WINDOWS && (
+        <BehaviorChip
+          label="push_to_talk"
+          value={config.hotkey?.mode === 'push_to_talk'}
+          saved={savedField === 'push_to_talk'}
+          onToggle={onPushToTalkToggle}
+        />
+      )}
 
       {/* timeout_secs */}
       <SettingRow label="timeout_secs" saved={savedField === 'timeout'}>
@@ -179,6 +193,15 @@ export default function SettingsConfigTab({
         saved={savedField === 'append_space'}
         onToggle={onAppendSpaceToggle}
       />
+
+      {IS_WINDOWS && (
+        <BehaviorChip
+          label="status_overlay"
+          value={config.overlay?.enabled ?? true}
+          saved={savedField === 'status_overlay'}
+          onToggle={onOverlayToggle}
+        />
+      )}
 
       {/* ── ADVANCED collapsible ── */}
       <AdvancedPanel
