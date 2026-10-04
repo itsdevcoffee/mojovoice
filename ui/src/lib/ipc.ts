@@ -1,8 +1,9 @@
-import { invoke as tauriInvoke } from '@tauri-apps/api/core';
+import { invoke as tauriInvoke, isTauri as detectTauri } from '@tauri-apps/api/core';
 import { useAppStore } from '../stores/appStore';
 
-// Check if running in Tauri or browser
-const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
+// Check if running in Tauri or browser. Tauri v2 only defines window.__TAURI__ when
+// app.withGlobalTauri is enabled (it isn't), so use the API's own check.
+const isTauri = detectTauri();
 
 // Mock data for browser development mode
 const getMockData = (command: string, args?: Record<string, unknown>): any => {
