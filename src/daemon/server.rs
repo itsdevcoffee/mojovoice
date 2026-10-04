@@ -258,6 +258,7 @@ impl DaemonServer {
         // Load config and validate device exists
         let config = crate::config::load()?;
         let device_name = validate_audio_device(config.audio.device_name.clone());
+        let trailing = std::time::Duration::from_millis(config.audio.trailing_buffer_ms as u64);
 
         // Create PID file for UI state (Waybar uses this)
         state::toggle::start_recording()?;
@@ -266,8 +267,9 @@ impl DaemonServer {
         state::toggle::setup_signal_handler()?;
 
         // Spawn recording thread
-        let handle =
-            thread::spawn(move || capture_toggle(max_duration, 16000, device_name.as_deref()));
+        let handle = thread::spawn(move || {
+            capture_toggle(max_duration, 16000, device_name.as_deref(), trailing)
+        });
 
         state.handle = Some(handle);
         state.audio = None;
@@ -294,7 +296,8 @@ impl DaemonServer {
 
         info!("Cancel requested - discarding recording");
 
-        // Send stop signal
+        // Send stop signal (discarding: no trailing buffer)
+        state::toggle::DISCARD_RECORDING.store(true, Ordering::SeqCst);
         state::toggle::STOP_RECORDING.store(true, Ordering::SeqCst);
 
         // Wait for recording thread to finish and discard samples
@@ -303,8 +306,9 @@ impl DaemonServer {
             .join()
             .map_err(|_| anyhow::anyhow!("Recording thread panicked"))?;
 
-        // Reset stop flag for next recording
+        // Reset stop flags for next recording
         state::toggle::STOP_RECORDING.store(false, Ordering::SeqCst);
+        state::toggle::DISCARD_RECORDING.store(false, Ordering::SeqCst);
 
         // CRITICAL: Clean up state files so waybar returns to idle
         // Remove recording.pid file (waybar checks this first)
@@ -354,8 +358,9 @@ impl DaemonServer {
             .join()
             .map_err(|_| anyhow::anyhow!("Recording thread panicked"))??;
 
-        // Reset stop flag for next recording
+        // Reset stop flags for next recording
         state::toggle::STOP_RECORDING.store(false, Ordering::SeqCst);
+        state::toggle::DISCARD_RECORDING.store(false, Ordering::SeqCst);
 
         info!("Captured {} samples", samples.len());
 

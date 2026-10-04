@@ -14,6 +14,10 @@ use super::paths::get_pid_file;
 /// Global flag to signal recording should stop
 pub static STOP_RECORDING: AtomicBool = AtomicBool::new(false);
 
+/// Set with `STOP_RECORDING` when the recording is being cancelled: the audio is
+/// thrown away, so there's no point buffering trailing audio first
+pub static DISCARD_RECORDING: AtomicBool = AtomicBool::new(false);
+
 /// Check whether a process is still running
 #[cfg(unix)]
 fn process_alive(pid: u32) -> bool {
@@ -278,19 +282,23 @@ pub fn setup_signal_handler() -> Result<()> {
     Ok(())
 }
 
-/// Make stop requests from other processes set `STOP_RECORDING`
+/// Make stop requests from other processes set `STOP_RECORDING`. The daemon calls
+/// this for every recording, so the watcher thread is started only once.
 #[cfg(windows)]
 pub fn setup_signal_handler() -> Result<()> {
+    static WATCHER: std::sync::Once = std::sync::Once::new();
     let file = stop_file(std::process::id())?;
     let _ = fs::remove_file(&file);
-    std::thread::spawn(move || {
-        loop {
-            if file.exists() {
-                let _ = fs::remove_file(&file);
-                STOP_RECORDING.store(true, Ordering::SeqCst);
+    WATCHER.call_once(|| {
+        std::thread::spawn(move || {
+            loop {
+                if file.exists() {
+                    let _ = fs::remove_file(&file);
+                    STOP_RECORDING.store(true, Ordering::SeqCst);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
             }
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
+        });
     });
     Ok(())
 }

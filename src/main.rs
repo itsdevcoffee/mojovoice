@@ -1127,7 +1127,12 @@ fn cmd_listen_start(source: Option<String>, max_duration: u32, clipboard: bool) 
         max_duration
     );
 
-    let samples = audio::capture_toggle(max_duration, cfg.audio.sample_rate, source.as_deref());
+    let samples = audio::capture_toggle(
+        max_duration,
+        cfg.audio.sample_rate,
+        source.as_deref(),
+        std::time::Duration::from_millis(cfg.audio.trailing_buffer_ms as u64),
+    );
 
     // Always clean up PID file, even if capture failed
     let _ = state::toggle::cleanup_listen();

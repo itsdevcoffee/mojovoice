@@ -72,6 +72,13 @@ pub struct AudioConfig {
     /// Audio input device name (None = system default)
     #[serde(default)]
     pub device_name: Option<String>,
+    /// Keep recording this long after stop so the last words aren't cut off
+    #[serde(default = "default_trailing_buffer_ms")]
+    pub trailing_buffer_ms: u32,
+}
+
+fn default_trailing_buffer_ms() -> u32 {
+    400
 }
 
 fn default_audio_clips_path() -> PathBuf {
@@ -204,6 +211,7 @@ impl Default for Config {
                 save_audio_clips: false,
                 audio_clips_path: default_audio_clips_path(),
                 device_name: None,
+                trailing_buffer_ms: default_trailing_buffer_ms(),
             },
             output: OutputConfig {
                 display_server: None,

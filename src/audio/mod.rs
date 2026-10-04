@@ -469,12 +469,15 @@ pub fn capture(
 }
 
 /// Capture in toggle mode - stops when signal received or max duration reached
+/// Record until stopped (or `max_duration_secs`), then keep recording for
+/// `trailing_buffer` so words spoken as the stop key is pressed aren't cut off
 pub fn capture_toggle(
     max_duration_secs: u32,
     _sample_rate: u32,
     device_name: Option<&str>,
+    trailing_buffer: Duration,
 ) -> Result<Vec<f32>> {
-    use crate::state::toggle::should_stop;
+    use crate::state::toggle::{DISCARD_RECORDING, should_stop};
 
     info!("Starting toggle mode capture (max {}s)", max_duration_secs);
 
@@ -504,9 +507,14 @@ pub fn capture_toggle(
         }
     }
 
-    // Buffer trailing words for 1 second after stop
-    info!("Buffering trailing audio (1s)...");
-    std::thread::sleep(Duration::from_secs(1));
+    // Cancelled recordings are discarded, so skip the trailing buffer
+    if !DISCARD_RECORDING.load(std::sync::atomic::Ordering::SeqCst) {
+        info!(
+            "Buffering trailing audio ({}ms)...",
+            trailing_buffer.as_millis()
+        );
+        std::thread::sleep(trailing_buffer);
+    }
 
     drop(stream);
 
