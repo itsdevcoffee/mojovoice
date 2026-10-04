@@ -493,8 +493,47 @@ impl DaemonServer {
     }
 }
 
+/// Opt the daemon out of Windows power throttling (EcoQoS). Windows 11 throttles
+/// background processes without a window, like the daemon, which can make
+/// transcription many times slower.
+#[cfg(windows)]
+fn disable_power_throttling() {
+    use windows_sys::Win32::System::Threading::{
+        GetCurrentProcess, PROCESS_POWER_THROTTLING_CURRENT_VERSION,
+        PROCESS_POWER_THROTTLING_EXECUTION_SPEED, PROCESS_POWER_THROTTLING_STATE,
+        ProcessPowerThrottling, SetProcessInformation,
+    };
+
+    let state = PROCESS_POWER_THROTTLING_STATE {
+        Version: PROCESS_POWER_THROTTLING_CURRENT_VERSION,
+        // Control execution speed throttling, and turn it off
+        ControlMask: PROCESS_POWER_THROTTLING_EXECUTION_SPEED,
+        StateMask: 0,
+    };
+    // SAFETY: passes a correctly sized PROCESS_POWER_THROTTLING_STATE for the current process
+    let ok = unsafe {
+        SetProcessInformation(
+            GetCurrentProcess(),
+            ProcessPowerThrottling,
+            &state as *const _ as *const std::ffi::c_void,
+            std::mem::size_of::<PROCESS_POWER_THROTTLING_STATE>() as u32,
+        )
+    };
+    if ok == 0 {
+        warn!(
+            "Couldn't disable power throttling: {}",
+            std::io::Error::last_os_error()
+        );
+    } else {
+        info!("Power throttling disabled for the daemon");
+    }
+}
+
 /// Run the daemon server
 pub fn run_daemon(model_path: &Path) -> Result<()> {
+    #[cfg(windows)]
+    disable_power_throttling();
+
     if is_daemon_running() {
         anyhow::bail!("Daemon is already running. Stop it first or use the existing daemon.");
     }
