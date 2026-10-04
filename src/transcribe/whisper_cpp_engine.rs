@@ -20,6 +20,19 @@ pub struct WhisperCppEngine {
     language: String,
     initial_prompt: Option<String>,
     n_threads: i32,
+    /// Encode only as much of the 30s window as the audio needs (faster for short
+    /// clips; opt-in via MOJOVOICE_WHISPER_AUDIO_CTX=auto while it's evaluated)
+    trim_audio_ctx: bool,
+}
+
+/// Boolean tuning switch from the environment ("1"/"true"/"on" or "0"/"false"/"off")
+fn env_flag(name: &str) -> Option<bool> {
+    let value = std::env::var(name).ok()?.to_ascii_lowercase();
+    match value.as_str() {
+        "1" | "true" | "on" | "auto" => Some(true),
+        "0" | "false" | "off" => Some(false),
+        _ => None,
+    }
 }
 
 impl WhisperCppEngine {
@@ -43,6 +56,14 @@ impl WhisperCppEngine {
             info!("Using GPU: {}", name);
             ctx_params.gpu_device(*index);
         }
+        // Flash attention makes the encoder's 1500-frame attention much cheaper on GPUs
+        let flash_attn = env_flag("MOJOVOICE_WHISPER_FLASH_ATTN").unwrap_or(gpu.is_some());
+        ctx_params.flash_attn(flash_attn);
+        let trim_audio_ctx = env_flag("MOJOVOICE_WHISPER_AUDIO_CTX").unwrap_or(false);
+        info!(
+            "whisper.cpp tuning: flash_attn={}, trim_audio_ctx={}",
+            flash_attn, trim_audio_ctx
+        );
         let ctx = WhisperContext::new_with_params(model_file, ctx_params)
             .with_context(|| format!("Failed to load GGML model {}", model_file.display()))?;
         let state = ctx
@@ -61,6 +82,7 @@ impl WhisperCppEngine {
             language: language.to_string(),
             initial_prompt: initial_prompt.filter(|p| !p.is_empty()),
             n_threads,
+            trim_audio_ctx,
         })
     }
 }
@@ -108,6 +130,14 @@ fn preferred_gpu() -> Option<(i32, String)> {
     first_igpu
 }
 
+/// Encoder context (in 20ms frames, max 1500 = 30s) covering `samples` of 16kHz audio,
+/// plus a little headroom; longer audio uses the full window
+fn audio_ctx_for(samples: usize) -> i32 {
+    const FULL: usize = 1500;
+    let frames = samples.div_ceil(320) + 64;
+    frames.min(FULL) as i32
+}
+
 /// The compute backend this build of whisper.cpp uses
 pub fn backend_name() -> &'static str {
     if cfg!(feature = "whisper-vulkan") {
@@ -136,6 +166,9 @@ impl Transcriber for WhisperCppEngine {
         if let Some(prompt) = &self.initial_prompt {
             params.set_initial_prompt(prompt);
         }
+        if self.trim_audio_ctx {
+            params.set_audio_ctx(audio_ctx_for(audio.len()));
+        }
 
         info!(
             "Transcribing {} samples ({:.2}s) with whisper.cpp [lang={}, prompt={}]",
@@ -160,5 +193,19 @@ impl Transcriber for WhisperCppEngine {
             Some(name) => (true, format!("whisper.cpp ({}: {})", backend_name(), name)),
             None => (false, "whisper.cpp (CPU)".to_string()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::audio_ctx_for;
+
+    #[test]
+    fn audio_ctx_covers_the_clip_with_headroom() {
+        // 6.1s of audio = 305 frames of 20ms, + 64 headroom
+        assert_eq!(audio_ctx_for(97_600), 369);
+        // 30s or more uses the whole window
+        assert_eq!(audio_ctx_for(480_000), 1500);
+        assert_eq!(audio_ctx_for(1_000_000), 1500);
     }
 }

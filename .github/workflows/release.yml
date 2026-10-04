@@ -207,6 +207,15 @@ jobs:
     needs: create-release
     # CUDA 12.x only supports host compilers up to Visual Studio 2022
     runs-on: windows-2022
+    # Portable whisper.cpp CPU code: GGML_NATIVE would bake in the CI runner's CPU
+    # features (it picked AVX-512, which most desktop CPUs lack)
+    env:
+      GGML_NATIVE: "OFF"
+      GGML_AVX: "ON"
+      GGML_AVX2: "ON"
+      GGML_FMA: "ON"
+      GGML_F16C: "ON"
+      GGML_BMI2: "ON"
     steps:
       - uses: actions/checkout@v4
 
