@@ -186,9 +186,21 @@ jobs:
 
   windows-desktop:
     name: Windows desktop installer
-    runs-on: windows-latest
+    # CUDA 12.x only supports host compilers up to Visual Studio 2022
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install CUDA toolkit
+        uses: Jimver/cuda-toolkit@v0.2.24
+        with:
+          cuda: '12.8.1'
+          method: network
+          sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev", "curand", "curand_dev", "nvrtc", "nvrtc_dev", "visual_studio_integration"]'
+
+      # nvcc needs MSVC's cl.exe on PATH (Visual Studio developer environment)
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -210,12 +222,19 @@ jobs:
       - name: Build CLI
         run: cargo build --release
 
+      # Needs the CUDA 12 runtime at launch; the app only uses it when that's installed
+      - name: Build CLI with CUDA
+        env:
+          CUDA_COMPUTE_CAP: "80"
+        run: cargo build --release --features cuda --target-dir target-cuda
+
       # Bundled into the installer next to the app (tauri.windows.conf.json externalBin)
-      - name: Stage CLI as Tauri sidecar
+      - name: Stage CLIs as Tauri sidecars
         shell: bash
         run: |
           mkdir -p ui/src-tauri/binaries
           cp target/release/mojovoice.exe ui/src-tauri/binaries/mojovoice-x86_64-pc-windows-msvc.exe
+          cp target-cuda/release/mojovoice.exe ui/src-tauri/binaries/mojovoice-cuda-x86_64-pc-windows-msvc.exe
 
       - name: Install frontend dependencies
         working-directory: ui
@@ -242,50 +261,6 @@ jobs:
             MojoVoice-windows-x64-setup.exe
             mojovoice-windows-x64.zip
           retention-days: 30
-
-  windows-cuda:
-    name: Windows CUDA build
-    # CUDA 12.x only supports host compilers up to Visual Studio 2022
-    runs-on: windows-2022
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install CUDA toolkit
-        uses: Jimver/cuda-toolkit@v0.2.24
-        with:
-          cuda: '12.8.1'
-          method: network
-          sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev", "curand", "curand_dev", "nvrtc", "nvrtc_dev", "visual_studio_integration"]'
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
-        with:
-          key: cuda
-
-      # nvcc needs MSVC's cl.exe on PATH (Visual Studio developer environment)
-      - name: Set up MSVC environment
-        uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Build CLI with CUDA
-        env:
-          CUDA_COMPUTE_CAP: "80"
-        run: cargo build --release --features cuda
-
-      - name: Show CUDA DLL imports
-        shell: bash
-        run: |
-          ls -la target/release/mojovoice.exe
-          (command -v dumpbin && dumpbin //DEPENDENTS target/release/mojovoice.exe) || objdump -p target/release/mojovoice.exe | grep "DLL Name" || true
-
-      - name: Upload CUDA CLI
-        uses: actions/upload-artifact@v4
-        with:
-          name: mojovoice-windows-x64-cuda
-          path: target/release/mojovoice.exe
-          retention-days: 14
 
   build-cuda:
     name: Build CUDA (Linux)

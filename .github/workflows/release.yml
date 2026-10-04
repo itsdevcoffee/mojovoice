@@ -205,9 +205,20 @@ jobs:
   build-windows:
     name: Build Windows (CLI + installer)
     needs: create-release
-    runs-on: windows-latest
+    # CUDA 12.x only supports host compilers up to Visual Studio 2022
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install CUDA toolkit
+        uses: Jimver/cuda-toolkit@v0.2.24
+        with:
+          cuda: '12.8.1'
+          method: network
+          sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev", "curand", "curand_dev", "nvrtc", "nvrtc_dev", "visual_studio_integration"]'
+
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -235,12 +246,22 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path target/release/mojovoice.exe, README.md, LICENSE -DestinationPath mojovoice-windows-x64.zip
 
+      - name: Build CLI with CUDA
+        env:
+          CUDA_COMPUTE_CAP: "80"
+        run: cargo build --release --features cuda --target-dir target-cuda
+
+      - name: Package CUDA CLI
+        shell: pwsh
+        run: Compress-Archive -Path target-cuda/release/mojovoice.exe, README.md, LICENSE -DestinationPath mojovoice-windows-x64-cuda.zip
+
       # Bundled into the installer next to the app (tauri.windows.conf.json externalBin)
-      - name: Stage CLI as Tauri sidecar
+      - name: Stage CLIs as Tauri sidecars
         shell: bash
         run: |
           mkdir -p ui/src-tauri/binaries
           cp target/release/mojovoice.exe ui/src-tauri/binaries/mojovoice-x86_64-pc-windows-msvc.exe
+          cp target-cuda/release/mojovoice.exe ui/src-tauri/binaries/mojovoice-cuda-x86_64-pc-windows-msvc.exe
 
       - name: Install frontend dependencies
         working-directory: ui
@@ -258,6 +279,16 @@ jobs:
           upload_url: ${{ needs.create-release.outputs.upload_url }}
           asset_path: ./mojovoice-windows-x64.zip
           asset_name: mojovoice-windows-x64.zip
+          asset_content_type: application/zip
+
+      - name: Upload CUDA CLI
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./mojovoice-windows-x64-cuda.zip
+          asset_name: mojovoice-windows-x64-cuda.zip
           asset_content_type: application/zip
 
       - name: Upload installer

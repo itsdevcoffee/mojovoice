@@ -1160,18 +1160,30 @@ pub struct PathValidation {
     pub message: String,
 }
 
-/// Find the mojovoice CLI: bundled next to the app, in ~/.local/bin, or on PATH
+/// Find the mojovoice CLI: bundled next to the app, in ~/.local/bin, or on PATH.
+/// On Windows the installer bundles a CUDA build too, used when the CUDA runtime is
+/// installed (it can't even start without those DLLs).
 fn find_mojovoice_binary() -> Option<String> {
-    let exe_name = format!("mojovoice{}", std::env::consts::EXE_SUFFIX);
+    let mut names = Vec::new();
+    #[cfg(windows)]
+    if cuda_runtime_available() {
+        names.push(format!("mojovoice-cuda{}", std::env::consts::EXE_SUFFIX));
+    }
+    names.push(format!("mojovoice{}", std::env::consts::EXE_SUFFIX));
 
+    names.iter().find_map(|name| find_cli(name))
+}
+
+/// Look for one CLI executable name next to the app, in ~/.local/bin, then on PATH
+fn find_cli(exe_name: &str) -> Option<String> {
     let bundled = std::env::current_exe()
         .ok()
-        .and_then(|exe| exe.parent().map(|dir| dir.join(&exe_name)));
-    let local_bin = dirs::home_dir().map(|home| home.join(".local/bin").join(&exe_name));
+        .and_then(|exe| exe.parent().map(|dir| dir.join(exe_name)));
+    let local_bin = dirs::home_dir().map(|home| home.join(".local/bin").join(exe_name));
     let on_path = std::env::var_os("PATH")
         .into_iter()
         .flat_map(|paths| std::env::split_paths(&paths).collect::<Vec<_>>())
-        .map(|dir| dir.join(&exe_name));
+        .map(|dir| dir.join(exe_name));
 
     bundled
         .into_iter()
@@ -1179,6 +1191,34 @@ fn find_mojovoice_binary() -> Option<String> {
         .chain(on_path)
         .find(|candidate| candidate.is_file())
         .map(|path| path.to_string_lossy().into_owned())
+}
+
+/// Whether the DLLs the CUDA build imports can be loaded: nvcuda (NVIDIA driver),
+/// cuBLAS/cuBLASLt and cuRAND (CUDA 12 toolkit/runtime, usually on PATH)
+#[cfg(windows)]
+fn cuda_runtime_available() -> bool {
+    use windows_sys::Win32::Foundation::FreeLibrary;
+    use windows_sys::Win32::System::LibraryLoader::LoadLibraryW;
+
+    const REQUIRED: [&str; 4] = [
+        "nvcuda.dll",
+        "cublas64_12.dll",
+        "cublasLt64_12.dll",
+        "curand64_10.dll",
+    ];
+    REQUIRED.iter().all(|dll| {
+        let wide: Vec<u16> = dll.encode_utf16().chain(std::iter::once(0)).collect();
+        // SAFETY: null-terminated UTF-16 name; the handle is freed right away
+        unsafe {
+            let handle = LoadLibraryW(wide.as_ptr());
+            if handle.is_null() {
+                eprintln!("CUDA runtime not available: {} not found", dll);
+                return false;
+            }
+            FreeLibrary(handle);
+            true
+        }
+    })
 }
 
 /// Executable of the running daemon, from its PID file

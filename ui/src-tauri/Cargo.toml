@@ -41,6 +41,10 @@ uuid = { version = "1", features = ["v4"] }
 # Core library for shared history functionality
 mojovoice = { path = "../.." }
 
+[target.'cfg(windows)'.dependencies]
+# Probe for the CUDA runtime before launching the CUDA build of the CLI
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_LibraryLoader"] }
+
 [features]
 # This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!
 custom-protocol = ["tauri/custom-protocol"]
