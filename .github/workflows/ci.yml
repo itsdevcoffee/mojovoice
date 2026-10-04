@@ -243,6 +243,45 @@ jobs:
             mojovoice-windows-x64.zip
           retention-days: 30
 
+  windows-cuda:
+    name: Windows CUDA build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install CUDA toolkit
+        uses: Jimver/cuda-toolkit@v0.2.24
+        with:
+          cuda: '12.8.1'
+          method: network
+          sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev", "curand", "curand_dev", "nvrtc", "nvrtc_dev", "visual_studio_integration"]'
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          key: cuda
+
+      - name: Build CLI with CUDA
+        env:
+          CUDA_COMPUTE_CAP: "80"
+        run: cargo build --release --features cuda
+
+      - name: Show CUDA DLL imports
+        shell: bash
+        run: |
+          ls -la target/release/mojovoice.exe
+          (command -v dumpbin && dumpbin //DEPENDENTS target/release/mojovoice.exe) || objdump -p target/release/mojovoice.exe | grep "DLL Name" || true
+
+      - name: Upload CUDA CLI
+        uses: actions/upload-artifact@v4
+        with:
+          name: mojovoice-windows-x64-cuda
+          path: target/release/mojovoice.exe
+          retention-days: 14
+
   build-cuda:
     name: Build CUDA (Linux)
     runs-on: ubuntu-latest
