@@ -9,7 +9,7 @@ use tracing::{error, info, warn};
 
 use crate::audio::{capture_toggle, list_input_devices};
 use crate::daemon::client::is_daemon_running;
-use crate::daemon::indicator::{self, Activity};
+use crate::daemon::indicator::{self, Activity, Outcome};
 use crate::daemon::protocol::{DaemonRequest, DaemonResponse};
 use crate::daemon::transport;
 use crate::history::{self, HistoryEntry, enforce_max_entries};
@@ -201,7 +201,15 @@ impl DaemonServer {
             DaemonRequest::StopRecording => {
                 indicator::set(Activity::Transcribing);
                 let response = self.handle_stop_recording();
-                indicator::set(Activity::Idle);
+                indicator::finish(match &response {
+                    Ok(DaemonResponse::Success { text }) if text.trim().is_empty() => {
+                        Outcome::NoSpeech
+                    },
+                    Ok(DaemonResponse::Success { text }) => Outcome::Transcribed(text.clone()),
+                    Ok(DaemonResponse::Error { message }) => Outcome::Failed(message.clone()),
+                    Err(e) => Outcome::Failed(format!("{:#}", e)),
+                    Ok(_) => Outcome::NoSpeech,
+                });
                 response?
             },
             DaemonRequest::CancelRecording => {
@@ -578,11 +586,22 @@ pub fn run_daemon(model_path: &Path) -> Result<()> {
 
     let server = DaemonServer::new(model_path)?;
 
-    let hotkey = crate::config::load().ok().and_then(|c| c.hotkey.toggle);
-    // Windows: tray icon showing idle/recording/transcribing, plus the global hotkey
+    let config = crate::config::load().ok();
+    let hotkey = config.as_ref().and_then(|c| c.hotkey.toggle.clone());
+    // Windows: tray icon and status overlay showing idle/recording/transcribing, plus
+    // the global hotkey
     #[cfg(windows)]
-    if let Err(e) = super::indicator::tray::spawn(hotkey, server.shutdown.clone()) {
-        warn!("{:#}", e);
+    {
+        let options = super::indicator::tray::UiOptions {
+            hotkey,
+            push_to_talk: config
+                .as_ref()
+                .is_some_and(|c| c.hotkey.mode == crate::config::HotkeyMode::PushToTalk),
+            overlay: config.as_ref().is_none_or(|c| c.overlay.enabled),
+        };
+        if let Err(e) = super::indicator::tray::spawn(options, server.shutdown.clone()) {
+            warn!("{:#}", e);
+        }
     }
     #[cfg(not(windows))]
     if let Some(hotkey) = hotkey {

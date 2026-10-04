@@ -21,6 +21,8 @@ pub struct Config {
     pub history: HistoryConfig,
     #[serde(default)]
     pub hotkey: HotkeyConfig,
+    #[serde(default)]
+    pub overlay: OverlayConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,17 +31,48 @@ pub struct HotkeyConfig {
     /// on Linux, bind `mojovoice start` in your compositor/desktop instead)
     #[serde(default = "default_toggle_hotkey")]
     pub toggle: Option<String>,
+    /// Press to start and press again to stop (default), or hold to record
+    #[serde(default)]
+    pub mode: HotkeyMode,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HotkeyMode {
+    #[default]
+    Toggle,
+    /// Hold the hotkey while speaking; release to transcribe
+    PushToTalk,
 }
 
 fn default_toggle_hotkey() -> Option<String> {
-    cfg!(windows).then(|| "Ctrl+Alt+Space".to_string())
+    // Ctrl+Alt+Space is often swallowed by other software's keyboard hooks
+    cfg!(windows).then(|| "Alt+Shift+Digit1".to_string())
 }
 
 impl Default for HotkeyConfig {
     fn default() -> Self {
         Self {
             toggle: default_toggle_hotkey(),
+            mode: HotkeyMode::default(),
         }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OverlayConfig {
+    /// Show a small on-screen status pill while recording/transcribing (Windows)
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl Default for OverlayConfig {
+    fn default() -> Self {
+        Self { enabled: true }
     }
 }
 
@@ -226,6 +259,7 @@ impl Default for Config {
             },
             history: HistoryConfig::default(),
             hotkey: HotkeyConfig::default(),
+            overlay: OverlayConfig::default(),
         }
     }
 }
