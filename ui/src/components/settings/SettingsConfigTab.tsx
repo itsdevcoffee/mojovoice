@@ -3,6 +3,10 @@ import SettingRow from './SettingRow';
 import BehaviorChip from './BehaviorChip';
 import AdvancedPanel from './AdvancedPanel';
 import CustomSelect from '../ui/CustomSelect';
+import HotkeyInput from './HotkeyInput';
+
+/** The global hotkey is registered by the daemon on Windows only */
+const IS_WINDOWS = typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows');
 
 interface Config {
   model: { path: string; model_id: string; language: string; prompt: string | null };
@@ -14,6 +18,7 @@ interface Config {
     device_name: string | null;
   };
   output: { display_server: string | null; append_space: boolean; refresh_command: string | null };
+  hotkey?: { toggle: string | null };
 }
 
 interface DownloadedModel {
@@ -46,6 +51,8 @@ interface SettingsConfigTabProps {
   onSaveAudioClipsToggle: () => void;
   onAudioClipsPathChange: (path: string) => void;
   onAdvancedToggle: () => void;
+  onHotkeyChange: (combo: string) => void;
+  hotkeyApplying: boolean;
 }
 
 function formatDuration(seconds: number): string {
@@ -72,6 +79,8 @@ export default function SettingsConfigTab({
   onSaveAudioClipsToggle,
   onAudioClipsPathChange,
   onAdvancedToggle,
+  onHotkeyChange,
+  hotkeyApplying,
 }: SettingsConfigTabProps) {
   return (
     <div>
@@ -89,6 +98,21 @@ export default function SettingsConfigTab({
       <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--text-tertiary)] pt-2 pb-1">
         RECORDING
       </p>
+
+      {/* hotkey */}
+      <SettingRow label="hotkey" saved={savedField === 'hotkey'}>
+        {IS_WINDOWS ? (
+          <HotkeyInput
+            value={config.hotkey?.toggle ?? null}
+            onChange={onHotkeyChange}
+            disabled={hotkeyApplying}
+          />
+        ) : (
+          <p className="font-mono text-[11px] text-[var(--text-tertiary)]">
+            Bind <code>mojovoice start</code> to a key in your desktop environment
+          </p>
+        )}
+      </SettingRow>
 
       {/* timeout_secs */}
       <SettingRow label="timeout_secs" saved={savedField === 'timeout'}>

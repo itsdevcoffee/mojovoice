@@ -114,6 +114,7 @@ pub mod tray {
             .name("hotkey-events".into())
             .spawn(|| {
                 for event in GlobalHotKeyEvent::receiver().iter() {
+                    info!("Hotkey {:?}", event.state());
                     if event.state() == HotKeyState::Pressed {
                         run_toggle();
                     }
@@ -229,8 +230,12 @@ pub mod tray {
         {
             // Reap the child in the background so its handle doesn't linger
             Ok(mut child) => {
-                thread::spawn(move || {
-                    let _ = child.wait();
+                info!("Hotkey: started 'mojovoice start' (pid {})", child.id());
+                thread::spawn(move || match child.wait() {
+                    Ok(status) if !status.success() => {
+                        warn!("Hotkey: 'mojovoice start' exited with {}", status)
+                    },
+                    _ => {},
                 });
             },
             Err(e) => error!("Hotkey: failed to run 'mojovoice start': {}", e),

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useToast } from './ui/Toast';
 import { invoke } from '../lib/ipc';
 import { useAppStore } from '../stores/appStore';
+import { formatHotkey } from './settings/HotkeyInput';
 import SettingsConfigTab from './settings/SettingsConfigTab';
 import VocabTab from './settings/VocabTab';
 
@@ -24,6 +25,7 @@ interface Config {
     append_space: boolean;
     refresh_command: string | null;
   };
+  hotkey?: { toggle: string | null };
 }
 
 interface DownloadedModel {
@@ -51,6 +53,7 @@ interface VocabTerm {
 export default function SettingsPanel() {
   const { toast } = useToast();
   const switchModel = useAppStore((s) => s.switchModel);
+  const [hotkeyApplying, setHotkeyApplying] = useState(false);
   const [config, setConfig] = useState<Config | null>(null);
   const [downloadedModels, setDownloadedModels] = useState<DownloadedModel[]>([]);
   const [audioDevices, setAudioDevices] = useState<AudioDevice[]>([]);
@@ -230,6 +233,28 @@ export default function SettingsPanel() {
     }
   };
 
+  // The daemon registers the hotkey at startup, so restart it (if running) to apply
+  const handleHotkeyChange = async (combo: string) => {
+    if (!config) return;
+    setHotkeyApplying(true);
+    try {
+      const updatedConfig = { ...config, hotkey: { ...(config.hotkey ?? {}), toggle: combo } };
+      await invoke('save_config', { config: updatedConfig });
+      setConfig(updatedConfig);
+      const status = await invoke<{ running: boolean }>('get_daemon_status');
+      if (status.running) {
+        await invoke('restart_daemon');
+      }
+      flashSaved('hotkey');
+      toast({ message: `Hotkey set to ${formatHotkey(combo)}`, variant: 'success' });
+    } catch (error) {
+      console.error('Failed to set hotkey:', error);
+      toast({ message: `Couldn't apply hotkey: ${error}`, variant: 'error' });
+    } finally {
+      setHotkeyApplying(false);
+    }
+  };
+
   const handleAudioClipsPathChange = async (path: string) => {
     if (!config) return;
     try {
@@ -384,6 +409,8 @@ export default function SettingsPanel() {
             onSaveAudioClipsToggle={handleSaveAudioClipsToggle}
             onAudioClipsPathChange={handleAudioClipsPathChange}
             onAdvancedToggle={toggleAdvancedSection}
+            onHotkeyChange={handleHotkeyChange}
+            hotkeyApplying={hotkeyApplying}
           />
         )}
       </div>
