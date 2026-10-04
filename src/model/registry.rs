@@ -3,8 +3,11 @@
 pub enum ModelFormat {
     /// `model.safetensors` (full precision)
     Safetensors,
-    /// `model.gguf` (quantized)
+    /// `model.gguf` (quantized, Candle)
     Gguf,
+    /// `model.bin` in whisper.cpp's GGML format (run by the whisper.cpp engine, which
+    /// can use any Vulkan GPU)
+    Ggml,
 }
 
 impl ModelFormat {
@@ -12,6 +15,7 @@ impl ModelFormat {
         match self {
             ModelFormat::Safetensors => "safetensors",
             ModelFormat::Gguf => "gguf",
+            ModelFormat::Ggml => "ggml",
         }
     }
 }
@@ -19,7 +23,8 @@ impl ModelFormat {
 /// A Whisper model that can be downloaded from HuggingFace and loaded by the Candle engine.
 ///
 /// Each model is stored as a directory (`dir_name`) under the models directory containing
-/// `config.json`, `tokenizer.json`, and `model.safetensors` or `model.gguf`.
+/// `config.json`, `tokenizer.json`, and `model.safetensors` or `model.gguf`; GGML models
+/// are a single self-contained `model.bin`.
 #[derive(Debug, Clone)]
 pub struct ModelInfo {
     pub name: &'static str,
@@ -33,8 +38,8 @@ pub struct ModelInfo {
     pub repo_id: &'static str,
     /// GGUF only: repo to fetch config.json and tokenizer.json from
     pub base_repo_id: Option<&'static str>,
-    /// GGUF only: weights filename inside `repo_id`
-    pub gguf_file: Option<&'static str>,
+    /// GGUF/GGML: weights filename inside `repo_id`
+    pub remote_file: Option<&'static str>,
 }
 
 /// One file to fetch for a model
@@ -73,7 +78,7 @@ pub const MODEL_REGISTRY: &[ModelInfo] = &[
         format: ModelFormat::Safetensors,
         repo_id: "openai/whisper-large-v3-turbo",
         base_repo_id: None,
-        gguf_file: None,
+        remote_file: None,
     },
     // Distil-Whisper (Faster, English-optimized)
     ModelInfo {
@@ -85,7 +90,7 @@ pub const MODEL_REGISTRY: &[ModelInfo] = &[
         format: ModelFormat::Safetensors,
         repo_id: "distil-whisper/distil-large-v3.5",
         base_repo_id: None,
-        gguf_file: None,
+        remote_file: None,
     },
     ModelInfo {
         name: "distil-large-v3",
@@ -96,7 +101,7 @@ pub const MODEL_REGISTRY: &[ModelInfo] = &[
         format: ModelFormat::Safetensors,
         repo_id: "distil-whisper/distil-large-v3",
         base_repo_id: None,
-        gguf_file: None,
+        remote_file: None,
     },
     ModelInfo {
         name: "distil-large-v2",
@@ -107,7 +112,7 @@ pub const MODEL_REGISTRY: &[ModelInfo] = &[
         format: ModelFormat::Safetensors,
         repo_id: "distil-whisper/distil-large-v2",
         base_repo_id: None,
-        gguf_file: None,
+        remote_file: None,
     },
     ModelInfo {
         name: "distil-small.en",
@@ -118,7 +123,7 @@ pub const MODEL_REGISTRY: &[ModelInfo] = &[
         format: ModelFormat::Safetensors,
         repo_id: "distil-whisper/distil-small.en",
         base_repo_id: None,
-        gguf_file: None,
+        remote_file: None,
     },
     // Large V3
     ModelInfo {
@@ -130,7 +135,7 @@ pub const MODEL_REGISTRY: &[ModelInfo] = &[
         format: ModelFormat::Safetensors,
         repo_id: "openai/whisper-large-v3",
         base_repo_id: None,
-        gguf_file: None,
+        remote_file: None,
     },
     // Large V2
     ModelInfo {
@@ -142,7 +147,7 @@ pub const MODEL_REGISTRY: &[ModelInfo] = &[
         format: ModelFormat::Safetensors,
         repo_id: "openai/whisper-large-v2",
         base_repo_id: None,
-        gguf_file: None,
+        remote_file: None,
     },
     // Large V1
     ModelInfo {
@@ -154,7 +159,7 @@ pub const MODEL_REGISTRY: &[ModelInfo] = &[
         format: ModelFormat::Safetensors,
         repo_id: "openai/whisper-large",
         base_repo_id: None,
-        gguf_file: None,
+        remote_file: None,
     },
     // Medium
     ModelInfo {
@@ -166,7 +171,7 @@ pub const MODEL_REGISTRY: &[ModelInfo] = &[
         format: ModelFormat::Safetensors,
         repo_id: "openai/whisper-medium",
         base_repo_id: None,
-        gguf_file: None,
+        remote_file: None,
     },
     ModelInfo {
         name: "medium.en",
@@ -177,7 +182,7 @@ pub const MODEL_REGISTRY: &[ModelInfo] = &[
         format: ModelFormat::Safetensors,
         repo_id: "openai/whisper-medium.en",
         base_repo_id: None,
-        gguf_file: None,
+        remote_file: None,
     },
     // Small
     ModelInfo {
@@ -189,7 +194,7 @@ pub const MODEL_REGISTRY: &[ModelInfo] = &[
         format: ModelFormat::Safetensors,
         repo_id: "openai/whisper-small",
         base_repo_id: None,
-        gguf_file: None,
+        remote_file: None,
     },
     ModelInfo {
         name: "small.en",
@@ -200,7 +205,7 @@ pub const MODEL_REGISTRY: &[ModelInfo] = &[
         format: ModelFormat::Safetensors,
         repo_id: "openai/whisper-small.en",
         base_repo_id: None,
-        gguf_file: None,
+        remote_file: None,
     },
     // Base
     ModelInfo {
@@ -212,7 +217,7 @@ pub const MODEL_REGISTRY: &[ModelInfo] = &[
         format: ModelFormat::Safetensors,
         repo_id: "openai/whisper-base",
         base_repo_id: None,
-        gguf_file: None,
+        remote_file: None,
     },
     ModelInfo {
         name: "base.en",
@@ -223,7 +228,7 @@ pub const MODEL_REGISTRY: &[ModelInfo] = &[
         format: ModelFormat::Safetensors,
         repo_id: "openai/whisper-base.en",
         base_repo_id: None,
-        gguf_file: None,
+        remote_file: None,
     },
     // Tiny
     ModelInfo {
@@ -235,7 +240,7 @@ pub const MODEL_REGISTRY: &[ModelInfo] = &[
         format: ModelFormat::Safetensors,
         repo_id: "openai/whisper-tiny",
         base_repo_id: None,
-        gguf_file: None,
+        remote_file: None,
     },
     ModelInfo {
         name: "tiny.en",
@@ -246,7 +251,7 @@ pub const MODEL_REGISTRY: &[ModelInfo] = &[
         format: ModelFormat::Safetensors,
         repo_id: "openai/whisper-tiny.en",
         base_repo_id: None,
-        gguf_file: None,
+        remote_file: None,
     },
     // GGUF MODELS (Quantized - smaller & faster)
     // Note: These may or may not work with Candle's from_gguf() loader.
@@ -262,7 +267,7 @@ pub const MODEL_REGISTRY: &[ModelInfo] = &[
         format: ModelFormat::Gguf,
         repo_id: "Demonthos/candle-quantized-whisper-large-v3-turbo",
         base_repo_id: Some("openai/whisper-large-v3-turbo"),
-        gguf_file: Some("model.gguf"),
+        remote_file: Some("model.gguf"),
     },
     ModelInfo {
         name: "large-v3-turbo-q4",
@@ -273,7 +278,7 @@ pub const MODEL_REGISTRY: &[ModelInfo] = &[
         format: ModelFormat::Gguf,
         repo_id: "xkeyC/whisper-large-v3-turbo-gguf",
         base_repo_id: Some("openai/whisper-large-v3-turbo"),
-        gguf_file: Some("model_q4_1.gguf"),
+        remote_file: Some("model_q4_1.gguf"),
     },
     ModelInfo {
         name: "large-v3-turbo-q4k",
@@ -284,7 +289,7 @@ pub const MODEL_REGISTRY: &[ModelInfo] = &[
         format: ModelFormat::Gguf,
         repo_id: "xkeyC/whisper-large-v3-turbo-gguf",
         base_repo_id: Some("openai/whisper-large-v3-turbo"),
-        gguf_file: Some("model_q4_k.gguf"),
+        remote_file: Some("model_q4_k.gguf"),
     },
     // Large V3 GGUF variants
     ModelInfo {
@@ -296,7 +301,7 @@ pub const MODEL_REGISTRY: &[ModelInfo] = &[
         format: ModelFormat::Gguf,
         repo_id: "vonjack/whisper-large-v3-gguf",
         base_repo_id: Some("openai/whisper-large-v3"),
-        gguf_file: Some("whisper-large-v3-q8_0.gguf"),
+        remote_file: Some("whisper-large-v3-q8_0.gguf"),
     },
     ModelInfo {
         name: "large-v3-f16",
@@ -307,7 +312,7 @@ pub const MODEL_REGISTRY: &[ModelInfo] = &[
         format: ModelFormat::Gguf,
         repo_id: "vonjack/whisper-large-v3-gguf",
         base_repo_id: Some("openai/whisper-large-v3"),
-        gguf_file: Some("whisper-large-v3-f16.gguf"),
+        remote_file: Some("whisper-large-v3-f16.gguf"),
     },
     // Medium GGUF variants
     ModelInfo {
@@ -319,7 +324,87 @@ pub const MODEL_REGISTRY: &[ModelInfo] = &[
         format: ModelFormat::Gguf,
         repo_id: "OllmOne/whisper-medium-GGUF",
         base_repo_id: Some("openai/whisper-medium"),
-        gguf_file: Some("model-q4k.gguf"),
+        remote_file: Some("model-q4k.gguf"),
+    },
+    // ===========================================
+    // GGML MODELS (whisper.cpp engine; GPU via Vulkan on any vendor)
+    // ===========================================
+    ModelInfo {
+        name: "ggml-large-v3-turbo",
+        dir_name: "ggml-large-v3-turbo",
+        size_mb: 1624,
+        family: "Large V3 Turbo",
+        quantization: "Full",
+        format: ModelFormat::Ggml,
+        repo_id: "ggerganov/whisper.cpp",
+        base_repo_id: None,
+        remote_file: Some("ggml-large-v3-turbo.bin"),
+    },
+    ModelInfo {
+        name: "ggml-large-v3-turbo-q8_0",
+        dir_name: "ggml-large-v3-turbo-q8_0",
+        size_mb: 874,
+        family: "Large V3 Turbo",
+        quantization: "Q8_0",
+        format: ModelFormat::Ggml,
+        repo_id: "ggerganov/whisper.cpp",
+        base_repo_id: None,
+        remote_file: Some("ggml-large-v3-turbo-q8_0.bin"),
+    },
+    ModelInfo {
+        name: "ggml-large-v3-turbo-q5_0",
+        dir_name: "ggml-large-v3-turbo-q5_0",
+        size_mb: 574,
+        family: "Large V3 Turbo",
+        quantization: "Q5_0",
+        format: ModelFormat::Ggml,
+        repo_id: "ggerganov/whisper.cpp",
+        base_repo_id: None,
+        remote_file: Some("ggml-large-v3-turbo-q5_0.bin"),
+    },
+    ModelInfo {
+        name: "ggml-distil-large-v3.5",
+        dir_name: "ggml-distil-large-v3.5",
+        size_mb: 1519,
+        family: "Distil",
+        quantization: "Full",
+        format: ModelFormat::Ggml,
+        repo_id: "distil-whisper/distil-large-v3.5-ggml",
+        base_repo_id: None,
+        remote_file: Some("ggml-model.bin"),
+    },
+    ModelInfo {
+        name: "ggml-medium.en",
+        dir_name: "ggml-medium-en",
+        size_mb: 1533,
+        family: "Medium",
+        quantization: "Full",
+        format: ModelFormat::Ggml,
+        repo_id: "ggerganov/whisper.cpp",
+        base_repo_id: None,
+        remote_file: Some("ggml-medium.en.bin"),
+    },
+    ModelInfo {
+        name: "ggml-small.en",
+        dir_name: "ggml-small-en",
+        size_mb: 488,
+        family: "Small",
+        quantization: "Full",
+        format: ModelFormat::Ggml,
+        repo_id: "ggerganov/whisper.cpp",
+        base_repo_id: None,
+        remote_file: Some("ggml-small.en.bin"),
+    },
+    ModelInfo {
+        name: "ggml-base.en",
+        dir_name: "ggml-base-en",
+        size_mb: 148,
+        family: "Base",
+        quantization: "Full",
+        format: ModelFormat::Ggml,
+        repo_id: "ggerganov/whisper.cpp",
+        base_repo_id: None,
+        remote_file: Some("ggml-base.en.bin"),
     },
 ];
 
@@ -341,11 +426,19 @@ impl ModelInfo {
 
     /// Files that make up this model, and where to fetch each one
     pub fn files(&self) -> Vec<ModelFile> {
+        if self.format == ModelFormat::Ggml {
+            // Self-contained: weights, vocabulary and config in one file
+            return vec![ModelFile {
+                local_name: "model.bin",
+                repo_id: self.repo_id,
+                remote_name: self.remote_file.unwrap_or("model.bin"),
+            }];
+        }
         let (weights_name, weights_remote, meta_repo) = match self.format {
             ModelFormat::Safetensors => ("model.safetensors", "model.safetensors", self.repo_id),
-            ModelFormat::Gguf => (
+            ModelFormat::Gguf | ModelFormat::Ggml => (
                 "model.gguf",
-                self.gguf_file.unwrap_or("model.gguf"),
+                self.remote_file.unwrap_or("model.gguf"),
                 self.base_repo_id.unwrap_or(self.repo_id),
             ),
         };
@@ -394,7 +487,26 @@ mod tests {
             .filter(|m| m.format == ModelFormat::Gguf)
         {
             assert!(m.base_repo_id.is_some(), "{} missing base_repo_id", m.name);
-            assert!(m.gguf_file.is_some(), "{} missing gguf_file", m.name);
+            assert!(m.remote_file.is_some(), "{} missing remote_file", m.name);
+        }
+    }
+
+    #[test]
+    fn ggml_models_are_a_single_bin_file() {
+        let m = ModelInfo::find("ggml-large-v3-turbo").unwrap();
+        assert_eq!(
+            m.files(),
+            vec![ModelFile {
+                local_name: "model.bin",
+                repo_id: "ggerganov/whisper.cpp",
+                remote_name: "ggml-large-v3-turbo.bin",
+            }]
+        );
+        for m in MODEL_REGISTRY
+            .iter()
+            .filter(|m| m.format == ModelFormat::Ggml)
+        {
+            assert!(m.remote_file.is_some(), "{} missing remote_file", m.name);
         }
     }
 

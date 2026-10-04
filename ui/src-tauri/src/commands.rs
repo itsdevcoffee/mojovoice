@@ -637,31 +637,24 @@ pub async fn download_model(model_name: String, window: tauri::Window) -> Result
         return Err(format!("Invalid repo_id format (must be org/model): {}", model.repo_id));
     }
 
-    // Determine required files and their source repos based on format
-    // For GGUF: model.gguf from repo_id, config/tokenizer from base_model_id
+    // Files and their source repos come from the shared registry (safetensors, GGUF
+    // and GGML models are laid out differently)
     struct FileSource {
         local_name: &'static str,  // What we save the file as locally
         remote_name: String,        // What the file is called in the HuggingFace repo
         repo_id: String,
     }
 
-    let file_sources: Vec<FileSource> = if model.format == "gguf" {
-        let base_repo = model.base_model_id.clone()
-            .ok_or_else(|| format!("GGUF model '{}' missing base_model_id for config/tokenizer", model.name))?;
-        let gguf_remote = model.gguf_file.clone()
-            .ok_or_else(|| format!("GGUF model '{}' missing gguf_file (remote filename)", model.name))?;
-        vec![
-            FileSource { local_name: "model.gguf", remote_name: gguf_remote, repo_id: model.repo_id.clone() },
-            FileSource { local_name: "config.json", remote_name: "config.json".into(), repo_id: base_repo.clone() },
-            FileSource { local_name: "tokenizer.json", remote_name: "tokenizer.json".into(), repo_id: base_repo },
-        ]
-    } else {
-        vec![
-            FileSource { local_name: "model.safetensors", remote_name: "model.safetensors".into(), repo_id: model.repo_id.clone() },
-            FileSource { local_name: "config.json", remote_name: "config.json".into(), repo_id: model.repo_id.clone() },
-            FileSource { local_name: "tokenizer.json", remote_name: "tokenizer.json".into(), repo_id: model.repo_id.clone() },
-        ]
-    };
+    let file_sources: Vec<FileSource> = mojovoice::model::ModelInfo::find(&model_name)
+        .ok_or_else(|| format!("Model '{}' not found in registry", model_name))?
+        .files()
+        .into_iter()
+        .map(|f| FileSource {
+            local_name: f.local_name,
+            remote_name: f.remote_name.to_string(),
+            repo_id: f.repo_id.to_string(),
+        })
+        .collect();
 
     let required_files: Vec<&str> = file_sources.iter().map(|f| f.local_name).collect();
 
@@ -1161,13 +1154,19 @@ pub struct PathValidation {
 }
 
 /// Find the mojovoice CLI: bundled next to the app, in ~/.local/bin, or on PATH.
-/// On Windows the installer bundles a CUDA build too, used when the CUDA runtime is
-/// installed (it can't even start without those DLLs).
+/// On Windows the installer bundles GPU builds too, which can't even start without
+/// their DLLs: the CUDA build (NVIDIA + CUDA 12 runtime) and the Vulkan build
+/// (whisper.cpp; any GPU driver with Vulkan). Prefer CUDA, then Vulkan, then CPU.
 fn find_mojovoice_binary() -> Option<String> {
     let mut names = Vec::new();
     #[cfg(windows)]
-    if cuda_runtime_available() {
-        names.push(format!("mojovoice-cuda{}", std::env::consts::EXE_SUFFIX));
+    {
+        if dlls_loadable(&CUDA_BUILD_DLLS) {
+            names.push(format!("mojovoice-cuda{}", std::env::consts::EXE_SUFFIX));
+        }
+        if dlls_loadable(&VULKAN_BUILD_DLLS) {
+            names.push(format!("mojovoice-vulkan{}", std::env::consts::EXE_SUFFIX));
+        }
     }
     names.push(format!("mojovoice{}", std::env::consts::EXE_SUFFIX));
 
@@ -1193,26 +1192,36 @@ fn find_cli(exe_name: &str) -> Option<String> {
         .map(|path| path.to_string_lossy().into_owned())
 }
 
-/// Whether the DLLs the CUDA build imports can be loaded: nvcuda (NVIDIA driver),
-/// cuBLAS/cuBLASLt and cuRAND (CUDA 12 toolkit/runtime, usually on PATH)
+/// DLLs the CUDA build imports: nvcuda (NVIDIA driver), cuBLAS/cuBLASLt and cuRAND
+/// (CUDA 12 toolkit/runtime, usually on PATH). It also imports vulkan-1.dll for
+/// whisper.cpp, which every NVIDIA driver installs.
 #[cfg(windows)]
-fn cuda_runtime_available() -> bool {
+const CUDA_BUILD_DLLS: [&str; 5] = [
+    "nvcuda.dll",
+    "cublas64_12.dll",
+    "cublasLt64_12.dll",
+    "curand64_10.dll",
+    "vulkan-1.dll",
+];
+
+/// The Vulkan loader, installed by AMD, Intel and NVIDIA graphics drivers
+#[cfg(windows)]
+const VULKAN_BUILD_DLLS: [&str; 1] = ["vulkan-1.dll"];
+
+/// Whether every DLL can be loaded with the normal search order (the same one the
+/// exe loader uses)
+#[cfg(windows)]
+fn dlls_loadable(dlls: &[&str]) -> bool {
     use windows_sys::Win32::Foundation::FreeLibrary;
     use windows_sys::Win32::System::LibraryLoader::LoadLibraryW;
 
-    const REQUIRED: [&str; 4] = [
-        "nvcuda.dll",
-        "cublas64_12.dll",
-        "cublasLt64_12.dll",
-        "curand64_10.dll",
-    ];
-    REQUIRED.iter().all(|dll| {
+    dlls.iter().all(|dll| {
         let wide: Vec<u16> = dll.encode_utf16().chain(std::iter::once(0)).collect();
         // SAFETY: null-terminated UTF-16 name; the handle is freed right away
         unsafe {
             let handle = LoadLibraryW(wide.as_ptr());
             if handle.is_null() {
-                eprintln!("CUDA runtime not available: {} not found", dll);
+                eprintln!("{} not found", dll);
                 return false;
             }
             FreeLibrary(handle);
@@ -1252,17 +1261,11 @@ pub struct RegistryModel {
     pub size_mb: u32,
     pub family: String,
     pub quantization: String,
-    /// Model format: "safetensors" or "gguf"
+    /// Model format: "safetensors", "gguf" or "ggml"
     pub format: String,
     /// HuggingFace model ID (e.g., "openai/whisper-large-v3-turbo")
     #[serde(skip_serializing)]
     pub repo_id: String,
-    /// For GGUF models: HuggingFace model ID to fetch config/tokenizer from
-    #[serde(skip_serializing)]
-    pub base_model_id: Option<String>,
-    /// For GGUF models: actual filename in the HuggingFace repo (e.g., "whisper-large-v3-q8_0.gguf")
-    #[serde(skip_serializing)]
-    pub gguf_file: Option<String>,
 }
 
 /// Model that's been downloaded locally
@@ -1288,8 +1291,6 @@ fn get_model_registry() -> Vec<RegistryModel> {
             quantization: m.quantization.into(),
             format: m.format.as_str().into(),
             repo_id: m.repo_id.into(),
-            base_model_id: m.base_repo_id.map(Into::into),
-            gguf_file: m.gguf_file.map(Into::into),
         })
         .collect()
 }
@@ -1440,8 +1441,10 @@ pub async fn list_downloaded_models() -> Result<Vec<DownloadedModel>, String> {
                     let is_gguf = path.join("model.gguf").exists()
                         && path.join("config.json").exists()
                         && path.join("tokenizer.json").exists();
+                    // GGML (whisper.cpp): a single self-contained model.bin
+                    let is_ggml = path.join("model.bin").exists();
 
-                    if is_safetensors || is_gguf {
+                    if is_safetensors || is_gguf || is_ggml {
                         // Match against registry to get metadata
                         if let Some(reg_model) = registry.iter().find(|m| m.filename == dirname) {
                             downloaded.push(DownloadedModel {
