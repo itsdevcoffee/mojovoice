@@ -103,7 +103,8 @@ export default function ModelHeroCard({
             No model installed
           </p>
           <p className="font-mono text-[11px] text-[var(--text-tertiary)] mt-0.5 mb-2">
-            Download a model to start transcribing. Without a GPU, start with base.en or small.
+            Download a model to start transcribing. AMD or Intel GPU: pick a ggml-… model
+            (whisper.cpp, runs on the GPU via Vulkan). No GPU: start with base.en or small.
           </p>
           <button
             type="button"

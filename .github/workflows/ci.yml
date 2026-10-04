@@ -202,6 +202,14 @@ jobs:
       - name: Set up MSVC environment
         uses: ilammy/msvc-dev-cmd@v1
 
+      # whisper.cpp's Vulkan backend needs the Vulkan headers and glslc at build time
+      - name: Install Vulkan SDK
+        uses: jakoch/install-vulkan-sdk-action@v1
+        with:
+          vulkan_version: latest
+          install_runtime: true
+          cache: true
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -219,14 +227,19 @@ jobs:
             . -> target
             ui/src-tauri -> target
 
+      # CPU build: Candle + whisper.cpp (CPU) for GGML models
       - name: Build CLI
-        run: cargo build --release
+        run: cargo build --release --features whisper-cpp
+
+      # whisper.cpp on Vulkan for AMD/Intel GPUs; needs vulkan-1.dll (GPU driver) at launch
+      - name: Build CLI with Vulkan
+        run: cargo build --release --features whisper-vulkan --target-dir target-vulkan
 
       # Needs the CUDA 12 runtime at launch; the app only uses it when that's installed
       - name: Build CLI with CUDA
         env:
           CUDA_COMPUTE_CAP: "80"
-        run: cargo build --release --features cuda --target-dir target-cuda
+        run: cargo build --release --features cuda,whisper-vulkan --target-dir target-cuda
 
       # Bundled into the installer next to the app (tauri.windows.conf.json externalBin)
       - name: Stage CLIs as Tauri sidecars
@@ -234,6 +247,7 @@ jobs:
         run: |
           mkdir -p ui/src-tauri/binaries
           cp target/release/mojovoice.exe ui/src-tauri/binaries/mojovoice-x86_64-pc-windows-msvc.exe
+          cp target-vulkan/release/mojovoice.exe ui/src-tauri/binaries/mojovoice-vulkan-x86_64-pc-windows-msvc.exe
           cp target-cuda/release/mojovoice.exe ui/src-tauri/binaries/mojovoice-cuda-x86_64-pc-windows-msvc.exe
 
       - name: Install frontend dependencies

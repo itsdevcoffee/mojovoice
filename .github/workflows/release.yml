@@ -220,6 +220,14 @@ jobs:
       - name: Set up MSVC environment
         uses: ilammy/msvc-dev-cmd@v1
 
+      # whisper.cpp's Vulkan backend needs the Vulkan headers and glslc at build time
+      - name: Install Vulkan SDK
+        uses: jakoch/install-vulkan-sdk-action@v1
+        with:
+          vulkan_version: latest
+          install_runtime: true
+          cache: true
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -235,8 +243,9 @@ jobs:
         shell: bash
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
 
+      # CPU build: Candle + whisper.cpp (CPU) for GGML models
       - name: Build CLI
-        run: cargo build --release
+        run: cargo build --release --features whisper-cpp
 
       - name: Smoke test transcription
         shell: bash
@@ -246,10 +255,14 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path target/release/mojovoice.exe, README.md, LICENSE -DestinationPath mojovoice-windows-x64.zip
 
+      # whisper.cpp on Vulkan for AMD/Intel GPUs; needs vulkan-1.dll (GPU driver) at launch
+      - name: Build CLI with Vulkan
+        run: cargo build --release --features whisper-vulkan --target-dir target-vulkan
+
       - name: Build CLI with CUDA
         env:
           CUDA_COMPUTE_CAP: "80"
-        run: cargo build --release --features cuda --target-dir target-cuda
+        run: cargo build --release --features cuda,whisper-vulkan --target-dir target-cuda
 
       - name: Package CUDA CLI
         shell: pwsh
@@ -261,6 +274,7 @@ jobs:
         run: |
           mkdir -p ui/src-tauri/binaries
           cp target/release/mojovoice.exe ui/src-tauri/binaries/mojovoice-x86_64-pc-windows-msvc.exe
+          cp target-vulkan/release/mojovoice.exe ui/src-tauri/binaries/mojovoice-vulkan-x86_64-pc-windows-msvc.exe
           cp target-cuda/release/mojovoice.exe ui/src-tauri/binaries/mojovoice-cuda-x86_64-pc-windows-msvc.exe
 
       - name: Install frontend dependencies

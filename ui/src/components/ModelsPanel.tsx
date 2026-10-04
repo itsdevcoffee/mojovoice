@@ -243,6 +243,8 @@ function ModelRow({
         <span className="font-mono text-[10px] text-[var(--text-tertiary)]">
           {formatBytes(model.sizeMb * 1_048_576)}
           {model.format === 'gguf' && ` · ${model.quantization}`}
+          {model.format === 'ggml' &&
+            ` · whisper.cpp${model.quantization !== 'Full' ? ` ${model.quantization}` : ''} · GPU via Vulkan`}
         </span>
         {progress?.status === 'error' && (
           <span
