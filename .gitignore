@@ -42,3 +42,6 @@ logs/
 /*.png
 /*.jpeg
 
+
+# Tauri sidecar binaries (staged by CI from the CLI build)
+ui/src-tauri/binaries/

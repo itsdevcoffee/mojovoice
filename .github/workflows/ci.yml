@@ -184,6 +184,60 @@ jobs:
         shell: bash
         run: ./scripts/smoke-transcribe.sh target/release/mojovoice.exe
 
+  windows-desktop:
+    name: Windows desktop installer
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          cache: 'npm'
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            ui/src-tauri -> target
+
+      - name: Build CLI
+        run: cargo build --release
+
+      # Bundled into the installer next to the app (tauri.windows.conf.json externalBin)
+      - name: Stage CLI as Tauri sidecar
+        shell: bash
+        run: |
+          mkdir -p ui/src-tauri/binaries
+          cp target/release/mojovoice.exe ui/src-tauri/binaries/mojovoice-x86_64-pc-windows-msvc.exe
+
+      - name: Install frontend dependencies
+        working-directory: ui
+        run: npm ci
+
+      - name: Build installer
+        working-directory: ui
+        run: npm run tauri build
+
+      - name: Package CLI
+        shell: pwsh
+        run: Compress-Archive -Path target/release/mojovoice.exe, README.md, LICENSE -DestinationPath mojovoice-windows-x64.zip
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mojovoice-windows-x64
+          path: |
+            ui/src-tauri/target/release/bundle/nsis/*-setup.exe
+            mojovoice-windows-x64.zip
+          retention-days: 30
+
   build-cuda:
     name: Build CUDA (Linux)
     runs-on: ubuntu-latest
