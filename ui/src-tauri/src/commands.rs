@@ -956,69 +956,9 @@ fn format_platform() -> String {
     }
 }
 
-/// Configuration structure matching config.toml
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct AppConfig {
-    pub model: ModelConfig,
-    pub audio: AudioConfig,
-    pub output: OutputConfig,
-    #[serde(default)]
-    pub ui: UiConfig,
-    #[serde(default)]
-    pub history: HistoryConfig,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ModelConfig {
-    pub path: String,
-    pub model_id: String,
-    pub draft_model_path: Option<String>,
-    pub language: String,
-    pub prompt: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct AudioConfig {
-    pub sample_rate: u32,
-    pub timeout_secs: u32,
-    pub save_audio_clips: bool,
-    pub audio_clips_path: String,
-    pub device_name: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct OutputConfig {
-    pub append_space: bool,
-    pub refresh_command: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct UiConfig {
-    pub scale_preset: String,
-    pub custom_scale: f32,
-}
-
-impl Default for UiConfig {
-    fn default() -> Self {
-        Self {
-            scale_preset: "medium".to_string(),
-            custom_scale: 1.0,
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct HistoryConfig {
-    pub max_entries: Option<u32>,
-}
-
-impl Default for HistoryConfig {
-    fn default() -> Self {
-        Self {
-            max_entries: Some(500),
-        }
-    }
-}
+/// The config.toml schema, shared with the CLI so the app reads older files (serde
+/// defaults) and doesn't drop fields it doesn't display (e.g. output.display_server)
+pub type AppConfig = mojovoice::config::Config;
 
 /// Get current configuration
 #[tauri::command]
@@ -1028,8 +968,10 @@ pub async fn get_config() -> Result<AppConfig, String> {
     let config_str = std::fs::read_to_string(&config_path)
         .map_err(|e| format!("Failed to read config: {}", e))?;
 
-    let config: AppConfig = toml::from_str(&config_str)
+    let mut config: AppConfig = toml::from_str(&config_str)
         .map_err(|e| format!("Failed to parse config: {}", e))?;
+    config.ui.validate();
+    config.history.validate();
 
     Ok(config)
 }
@@ -1416,7 +1358,7 @@ pub async fn list_available_models() -> Result<Vec<RegistryModel>, String> {
 pub async fn list_downloaded_models() -> Result<Vec<DownloadedModel>, String> {
     let models_dir = get_models_dir()?;
     let config = get_config().await?;
-    let active_path = config.model.path;
+    let active_path = config.model.path.to_string_lossy().into_owned();
 
     let mut downloaded = Vec::new();
 
@@ -1514,7 +1456,7 @@ pub async fn delete_model(filename: String) -> Result<(), String> {
 
     // Prevent deleting active model
     let config = get_config().await?;
-    if is_active_model(&config.model.path, &filename) {
+    if is_active_model(&config.model.path.to_string_lossy(), &filename) {
         return Err("Cannot delete the currently active model. Switch to a different model first.".to_string());
     }
 
@@ -1545,7 +1487,8 @@ pub async fn switch_model(filename: String) -> Result<(), String> {
 
     // Update config with new model path (directory path for safetensors)
     let mut config = get_config().await?;
-    config.model.path = model_path.to_string_lossy().to_string();
+    // Store the plain path: canonicalize() adds a \\?\ prefix on Windows
+    config.model.path = models_dir.join(&filename);
 
     // Look up repo_id from registry
     let registry = get_model_registry();
