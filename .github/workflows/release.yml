@@ -202,6 +202,74 @@ jobs:
           asset_name: MojoVoice-linux-x64.deb
           asset_content_type: application/vnd.debian.binary-package
 
+  build-windows:
+    name: Build Windows (CLI + installer)
+    needs: create-release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          cache: 'npm'
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Get version without v prefix
+        id: version
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Build CLI
+        run: cargo build --release
+
+      - name: Smoke test transcription
+        shell: bash
+        run: ./scripts/smoke-transcribe.sh target/release/mojovoice.exe
+
+      - name: Package CLI
+        shell: pwsh
+        run: Compress-Archive -Path target/release/mojovoice.exe, README.md, LICENSE -DestinationPath mojovoice-windows-x64.zip
+
+      # Bundled into the installer next to the app (tauri.windows.conf.json externalBin)
+      - name: Stage CLI as Tauri sidecar
+        shell: bash
+        run: |
+          mkdir -p ui/src-tauri/binaries
+          cp target/release/mojovoice.exe ui/src-tauri/binaries/mojovoice-x86_64-pc-windows-msvc.exe
+
+      - name: Install frontend dependencies
+        working-directory: ui
+        run: npm ci
+
+      - name: Build installer
+        working-directory: ui
+        run: npm run tauri build
+
+      - name: Upload CLI
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./mojovoice-windows-x64.zip
+          asset_name: mojovoice-windows-x64.zip
+          asset_content_type: application/zip
+
+      - name: Upload installer
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./ui/src-tauri/target/release/bundle/nsis/mojovoice_${{ steps.version.outputs.VERSION }}_x64-setup.exe
+          asset_name: MojoVoice-windows-x64-setup.exe
+          asset_content_type: application/octet-stream
+
   build-tauri-macos-arm:
     name: Build Desktop App (macOS ARM)
     needs: create-release
