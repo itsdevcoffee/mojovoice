@@ -245,7 +245,8 @@ jobs:
 
   windows-cuda:
     name: Windows CUDA build
-    runs-on: windows-latest
+    # CUDA 12.x only supports host compilers up to Visual Studio 2022
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
 
