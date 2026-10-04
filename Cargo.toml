@@ -50,6 +50,9 @@ rubato = "0.16"
 # Daemon IPC: Unix sockets / Windows named pipes
 interprocess = "2.4"
 
+# whisper.cpp bindings (optional engine, see features)
+whisper-rs = { version = "0.16", optional = true }
+
 # FFT for the Whisper mel spectrogram
 realfft = "3.5"
 
@@ -76,6 +79,10 @@ default = []
 cuda = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda"]
 metal = ["candle-core/metal", "candle-nn/metal", "candle-transformers/metal"]
 # rocm/hip and vulkan are currently experimental in Candle v0.9+; disabled for stability
+# whisper.cpp engine for GGML models (CPU), optionally with its Vulkan GPU backend
+# (AMD/Intel/NVIDIA GPUs via the graphics driver)
+whisper-cpp = ["dep:whisper-rs", "whisper-rs/tracing_backend"]
+whisper-vulkan = ["whisper-cpp", "whisper-rs/vulkan"]
 
 # =============================================================================
 # Platform-specific dependencies

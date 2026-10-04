@@ -425,8 +425,6 @@ fn cmd_start_recording(timeout_secs: u32) -> Result<()> {
 
 /// Fixed duration recording mode
 fn cmd_start_fixed(model_override: Option<String>, duration: u32, clipboard: bool) -> Result<()> {
-    use transcribe::Transcriber;
-
     info!("Loading configuration...");
     let mut cfg = config::load()?;
     if let Some(model_path) = model_override {
@@ -451,14 +449,8 @@ fn cmd_start_fixed(model_override: Option<String>, duration: u32, clipboard: boo
         .unwrap_or(None);
 
     info!("Loading whisper model...");
-    let mut transcriber = transcribe::candle_engine::CandleEngine::with_options(
-        cfg.model
-            .path
-            .to_str()
-            .ok_or_else(|| anyhow::anyhow!("Invalid model path"))?,
-        &cfg.model.language,
-        vocab_prompt,
-    )?;
+    let mut transcriber =
+        transcribe::load_engine(&cfg.model.path, &cfg.model.language, vocab_prompt)?;
     info!("Model loaded successfully");
 
     info!("Recording for {} seconds...", duration);

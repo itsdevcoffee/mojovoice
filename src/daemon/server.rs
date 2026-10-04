@@ -92,21 +92,15 @@ impl DaemonServer {
             .and_then(|s| s.get_prompt_string(224))
             .unwrap_or(None);
 
-        // Use CandleEngine (new Candle-based implementation)
-        let transcriber = crate::transcribe::candle_engine::CandleEngine::with_options(
-            config
-                .model
-                .path
-                .to_str()
-                .ok_or_else(|| anyhow::anyhow!("Invalid model path"))?,
+        let transcriber = crate::transcribe::load_engine(
+            &config.model.path,
             &config.model.language,
             vocab_prompt,
         )?;
 
-        info!("Model loaded and resident in GPU VRAM");
-
-        // Detect GPU status for status reporting
-        let (gpu_enabled, gpu_name) = Self::detect_gpu();
+        // GPU status for status reporting, from the engine actually in use
+        let (gpu_enabled, gpu_name) = transcriber.device_label();
+        info!("Model loaded ({})", gpu_name);
 
         // Extract model name from path basename (unique per model variant)
         // We use path instead of model_id because model_id is the HuggingFace repo
@@ -120,7 +114,7 @@ impl DaemonServer {
             .to_string();
 
         Ok(Self {
-            transcriber: Arc::new(Mutex::new(Box::new(transcriber))),
+            transcriber: Arc::new(Mutex::new(transcriber)),
             recording_state: Arc::new(Mutex::new(RecordingState {
                 handle: None,
                 audio: None,
@@ -131,22 +125,6 @@ impl DaemonServer {
             gpu_name,
             start_time: std::time::Instant::now(),
         })
-    }
-
-    /// Detect GPU availability and name
-    fn detect_gpu() -> (bool, String) {
-        // Try CUDA first
-        if candle_core::utils::cuda_is_available() {
-            return (true, "CUDA".to_string());
-        }
-
-        // Try Metal (macOS)
-        if candle_core::utils::metal_is_available() {
-            return (true, "Metal".to_string());
-        }
-
-        // Fallback to CPU
-        (false, "CPU".to_string())
     }
 
     /// Save audio recording as WAV file with timestamp
