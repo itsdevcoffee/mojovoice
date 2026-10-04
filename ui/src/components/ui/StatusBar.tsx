@@ -11,14 +11,15 @@ interface DaemonStatus {
   uptimeSecs?: number;
 }
 
+/** config.toml sections from `get_config` (keys stay snake_case, as in the file) */
 interface AppConfig {
   model: {
     path: string;
-    modelId: string;
+    model_id: string;
     language: string;
   };
   audio: {
-    deviceName?: string;
+    device_name?: string | null;
   };
 }
 
@@ -110,9 +111,9 @@ export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
   };
 
   // Extract model display name from config
-  const currentModelName = config?.model.modelId || 'No model loaded';
+  const currentModelName = config?.model.model_id || 'No model loaded';
   const currentLanguage = config?.model.language || 'auto';
-  const currentMicrophone = config?.audio.deviceName || 'Default';
+  const currentMicrophone = config?.audio.device_name || 'Default';
 
   return (
     <div
@@ -227,7 +228,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
                       hover:bg-[var(--bg-elevated)]
                       transition-colors duration-150
                       ${
-                        model.filename === config?.model.path
+                        model.isActive
                           ? 'bg-blue-500/20 text-[var(--accent-primary)]'
                           : 'text-[var(--text-primary)]'
                       }

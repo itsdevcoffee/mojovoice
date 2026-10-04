@@ -85,7 +85,27 @@ export function useModelDownload() {
       return next;
     });
 
-    await invoke('download_model', { modelName });
+    // Resolves when the download finishes. Errors raised before the backend's first
+    // progress event would otherwise leave the row stuck in "downloading".
+    try {
+      await invoke('download_model', { modelName });
+      return true;
+    } catch (error) {
+      console.error('[useModelDownload] Download failed:', error);
+      setDownloads(prev => {
+        const next = new Map(prev);
+        next.set(modelName, {
+          modelName,
+          downloadedBytes: 0,
+          totalBytes: 0,
+          speedBps: 0,
+          status: 'error',
+          error: String(error),
+        });
+        return next;
+      });
+      return false;
+    }
   }, []);
 
   const isDownloading = useCallback((modelName: string) => {

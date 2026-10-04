@@ -3,22 +3,24 @@ import { Play, Square, RotateCcw } from 'lucide-react';
 import SectionHeader from './SectionHeader';
 import { invoke } from '../../lib/ipc';
 
+/** From `get_system_info` (Rust SystemInfo, camelCase) */
 interface SystemInfo {
-  cpu_cores: number;
-  total_ram_gb: number;
-  used_ram_gb: number;
-  gpu_available: boolean;
-  gpu_name: string | null;
-  gpu_vram_mb: number | null;
+  cpuCores: number;
+  totalRamGb: number;
+  usedRamGb: number;
+  gpuAvailable: boolean;
+  gpuName: string | null;
+  gpuVramMb: number | null;
   platform: string;
 }
 
+/** From `get_daemon_status` (Rust DaemonStatus, camelCase) */
 interface DaemonStatus {
   running: boolean;
-  model_loaded: boolean;
-  gpu_enabled: boolean;
-  gpu_name: string | null;
-  uptime_secs: number | null;
+  modelLoaded: boolean;
+  gpuEnabled: boolean;
+  gpuName: string | null;
+  uptimeSecs: number | null;
 }
 
 export function SystemStatus() {
@@ -96,11 +98,11 @@ export function SystemStatus() {
     return `${mb} MB`;
   };
 
-  const ramUsedGb = systemInfo?.used_ram_gb ?? 0;
-  const ramTotalGb = systemInfo?.total_ram_gb ?? 0;
+  const ramUsedGb = systemInfo?.usedRamGb ?? 0;
+  const ramTotalGb = systemInfo?.totalRamGb ?? 0;
   const ramPercent = ramTotalGb > 0 ? (ramUsedGb / ramTotalGb) * 100 : 0;
   const isRunning = daemonStatus?.running ?? false;
-  const isModelLoaded = daemonStatus?.model_loaded ?? false;
+  const isModelLoaded = daemonStatus?.modelLoaded ?? false;
 
   return (
     <section className="mt-12">
@@ -126,7 +128,7 @@ export function SystemStatus() {
             {/* CPU */}
             <ReadoutCell
               label="CPU"
-              value={systemInfo ? `${systemInfo.cpu_cores} cores` : '...'}
+              value={systemInfo ? `${systemInfo.cpuCores} cores` : '...'}
             />
 
             {/* Memory — with progress bar */}
@@ -160,16 +162,16 @@ export function SystemStatus() {
             <ReadoutCell
               label="GPU"
               value={
-                systemInfo?.gpu_name
-                  ?? (daemonStatus?.gpu_name
-                    ?? (systemInfo?.gpu_available ? 'Available' : 'None'))
+                systemInfo?.gpuName
+                  ?? (daemonStatus?.gpuName
+                    ?? (systemInfo?.gpuAvailable ? 'Available' : 'None'))
               }
             />
 
             {/* VRAM */}
             <ReadoutCell
               label="VRAM"
-              value={formatVram(systemInfo?.gpu_vram_mb ?? null)}
+              value={formatVram(systemInfo?.gpuVramMb ?? null)}
             />
 
             {/* Platform */}
@@ -181,7 +183,7 @@ export function SystemStatus() {
             {/* Uptime */}
             <ReadoutCell
               label="Uptime"
-              value={formatUptime(daemonStatus?.uptime_secs ?? null)}
+              value={formatUptime(daemonStatus?.uptimeSecs ?? null)}
             />
           </div>
 
