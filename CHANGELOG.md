@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.12] - 2026-10-03
+
+### Fixed
+Now that the desktop app talks to the real backend (v0.5.11), several views built against mock data broke on real responses:
+- **Models panel went blank:** the storage bar read fields the backend doesn't send and threw while rendering. It now shows real disk usage, download/active state and sizes, and refreshes after downloads and deletes.
+- **Deleting a model always failed:** the request sent the wrong argument.
+- **System status** showed "undefined cores", 0 GB RAM and "Not Loaded"; **status bar** showed "No model loaded" and the default microphone regardless of settings.
+- **Settings stuck on loading** for config files from older versions, and **saving settings deleted** `output.display_server`. The app now reads the config with the CLI's schema.
+- **Failed downloads** stayed on "downloading"; they now show the error.
+
 ## [0.5.11] - 2026-10-03
 
 ### Fixed
