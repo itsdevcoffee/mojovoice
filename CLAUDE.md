@@ -122,7 +122,7 @@ Expected assets:
 
 **Dev server:** `cd ui && npm run dev` (runs at http://localhost:1420)
 
-The UI supports browser-only development with mock data (`ui/src/lib/ipc.ts`). When `window.__TAURI__` is absent, all Tauri API calls return mock data. This allows:
+The UI supports browser-only development with mock data (`ui/src/lib/ipc.ts`). When not running inside Tauri (`isTauri()` from `@tauri-apps/api/core` is false), all Tauri API calls return mock data. This allows:
 - Rapid UI iteration with Vite HMR
 - Playwright MCP testing without the Rust backend
 - Visual validation of all components
