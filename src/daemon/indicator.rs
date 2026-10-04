@@ -605,13 +605,18 @@ pub mod tray {
                 let pad = PADDING.load(Ordering::SeqCst) as i32;
                 rect.left += pad;
                 rect.right -= pad;
-                DrawTextW(
-                    hdc,
-                    text.as_mut_ptr(),
-                    text.len() as i32,
-                    &mut rect,
-                    DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS,
-                );
+                // Windows can paint the window before any text is set; DrawTextW reads
+                // through the buffer pointer even for zero length, and an empty Vec's
+                // pointer is dangling (crashed in user32 with an access violation)
+                if !text.is_empty() {
+                    DrawTextW(
+                        hdc,
+                        text.as_mut_ptr(),
+                        text.len() as i32,
+                        &mut rect,
+                        DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS,
+                    );
+                }
                 if !previous.is_null() {
                     SelectObject(hdc, previous);
                 }
